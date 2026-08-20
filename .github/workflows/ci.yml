@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  business-api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/business-api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - run: mvn --batch-mode --update-snapshots verify
+      - run: mvn --batch-mode org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom
+      - uses: actions/upload-artifact@v4
+        with:
+          name: java-sbom
+          path: services/business-api/target/bom.json
+
+  inference-service:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/inference-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: services/inference-service/requirements.txt
+      - run: pip install -r requirements.txt pip-licenses
+      - run: python -m pytest
+      - run: mkdir -p ../../artifacts && pip-licenses --format=json --output-file ../../artifacts/python-licenses.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-licenses
+          path: artifacts/python-licenses.json
+
+  admin-web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/admin-web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: apps/admin-web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm build
+      - run: mkdir -p ../../artifacts && pnpm licenses list --json > ../../artifacts/node-licenses.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: node-licenses
+          path: artifacts/node-licenses.json
+
+  mobile:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      # Native shell is generated until a Flutter-equipped workstation commits
+      # the reviewed Android project files.
+      - run: flutter create --platforms=android --org com.smartfarm.inventory --project-name smart_pig_inventory .
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+      - run: dart format --output=none --set-exit-if-changed lib test
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter build apk --debug
+      - run: mkdir -p ../../artifacts && flutter pub deps --json > ../../artifacts/flutter-dependencies.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flutter-dependencies
+          path: artifacts/flutter-dependencies.json
+
+  contracts-and-compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cp .env.example .env
+      - run: docker compose config --quiet
+      - uses: stoplightio/spectral-action@latest
+        with:
+          file_glob: contracts/openapi.yaml

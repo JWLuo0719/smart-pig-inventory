@@ -1,0 +1,356 @@
+openapi: 3.1.0
+info:
+  title: Smart Pig Inventory Business API
+  version: 0.2.0
+  description: >-
+    路线 B+ 的业务合同基线。所有写操作接受 X-Idempotency-Key，所有时间使用 ISO 8601；
+    离线采集必须完成 package/blob/manifest/commit 后才创建正式推理任务。
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+tags:
+  - {name: System}
+  - {name: MasterData}
+  - {name: Upload}
+  - {name: Inventory}
+  - {name: Review}
+paths:
+  /system/capabilities:
+    get:
+      tags: [System]
+      security: []
+      summary: 查询服务器可用能力及降级状态
+      operationId: getCapabilities
+      responses:
+        '200':
+          description: 能力快照
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ApiEnvelope'}
+  /master-data/changes:
+    get:
+      tags: [MasterData]
+      summary: 按同步游标增量拉取组织、栋舍和栏舍
+      operationId: getMasterDataChanges
+      parameters:
+        - name: cursor
+          in: query
+          schema: {type: string}
+      responses:
+        '200':
+          description: 增量主数据及新游标
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MasterDataChanges'}
+  /upload-packages:
+    post:
+      tags: [Upload]
+      summary: 创建或恢复离线采集包
+      operationId: createUploadPackage
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateUploadPackage'}
+      responses:
+        '200':
+          description: 已存在采集包及服务器已有文件
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UploadPackage'}
+        '201':
+          description: 新建采集包
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UploadPackage'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /upload-packages/{packageId}/blobs/{assetId}:
+    put:
+      tags: [Upload]
+      summary: 幂等上传一张完整照片
+      operationId: putUploadBlob
+      parameters:
+        - {$ref: '#/components/parameters/PackageId'}
+        - {$ref: '#/components/parameters/AssetId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - name: X-Content-SHA256
+          in: header
+          required: true
+          schema: {type: string, pattern: '^[a-f0-9]{64}$'}
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: {type: string, format: binary}
+      responses:
+        '200': {description: 文件已存在且校验一致}
+        '201': {description: 文件保存并完成校验}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /upload-packages/{packageId}/manifest:
+    put:
+      tags: [Upload]
+      summary: 验证采集清单
+      operationId: putUploadManifest
+      parameters:
+        - {$ref: '#/components/parameters/PackageId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CaptureManifest'}
+      responses:
+        '200': {description: 清单已存在且一致}
+        '201': {description: 清单通过验证}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /upload-packages/{packageId}/commit:
+    post:
+      tags: [Upload]
+      summary: 提交采集包并创建唯一盘点与推理任务
+      operationId: commitUploadPackage
+      parameters:
+        - {$ref: '#/components/parameters/PackageId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '200':
+          description: 重放请求返回原任务
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CommitResult'}
+        '201':
+          description: 首次提交成功
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CommitResult'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /inventory-sessions/{sessionId}:
+    get:
+      tags: [Inventory]
+      summary: 获取盘点状态、结果与告警
+      operationId: getInventorySession
+      parameters:
+        - {$ref: '#/components/parameters/SessionId'}
+      responses:
+        '200':
+          description: 盘点详情
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InventorySession'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /inventory-sessions/{sessionId}/confirm:
+    post:
+      tags: [Review]
+      summary: 人工确认或修正盘点结果并锁定证据
+      operationId: confirmInventorySession
+      parameters:
+        - {$ref: '#/components/parameters/SessionId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ConfirmInventory'}
+      responses:
+        '200':
+          description: 已确认并记录审计
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InventorySession'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /media-assets/{assetId}/override-delete:
+    post:
+      tags: [Review]
+      summary: 管理员带原因软删除媒体
+      operationId: overrideDeleteMedia
+      parameters:
+        - {$ref: '#/components/parameters/AssetId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: {type: string, minLength: 8, maxLength: 500}
+      responses:
+        '200': {description: 已软删除并保留审计证据}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    IdempotencyKey:
+      name: X-Idempotency-Key
+      in: header
+      required: true
+      schema: {type: string, format: uuid}
+    PackageId:
+      name: packageId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    AssetId:
+      name: assetId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  responses:
+    Conflict:
+      description: 状态冲突、幂等键冲突、媒体已锁定或重复图片
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    ValidationError:
+      description: 数据或业务规则校验失败
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    Forbidden:
+      description: 无权执行
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    NotFound:
+      description: 资源不存在或不属于当前组织
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    ApiEnvelope:
+      type: object
+      required: [data, correlationId, timestamp]
+      properties:
+        data: {type: object, additionalProperties: true}
+        correlationId: {type: string}
+        timestamp: {type: string, format: date-time}
+    MasterDataChanges:
+      type: object
+      required: [cursor, organizations, buildings, pens]
+      properties:
+        cursor: {type: string}
+        organizations: {type: array, items: {$ref: '#/components/schemas/NamedEntity'}}
+        buildings: {type: array, items: {$ref: '#/components/schemas/NamedEntity'}}
+        pens: {type: array, items: {$ref: '#/components/schemas/NamedEntity'}}
+        deletedIds: {type: array, items: {type: string, format: uuid}}
+    NamedEntity:
+      type: object
+      required: [id, code, name, enabled, syncVersion]
+      properties:
+        id: {type: string, format: uuid}
+        parentId: {type: [string, 'null'], format: uuid}
+        code: {type: string}
+        name: {type: string}
+        enabled: {type: boolean}
+        erpExternalId: {type: [string, 'null']}
+        syncVersion: {type: integer, format: int64}
+    CreateUploadPackage:
+      type: object
+      required: [clientPackageId, organizationId, penId, businessDate, captureKind]
+      properties:
+        clientPackageId: {type: string, format: uuid}
+        organizationId: {type: string, format: uuid}
+        penId: {type: string, format: uuid}
+        businessDate: {type: string, format: date}
+        captureKind: {type: string, enum: [single, left_center_right]}
+    UploadPackage:
+      type: object
+      required: [id, clientPackageId, state, existingAssets]
+      properties:
+        id: {type: string, format: uuid}
+        clientPackageId: {type: string, format: uuid}
+        state: {type: string, enum: [awaiting_blobs, awaiting_manifest, ready_to_commit, committed]}
+        existingAssets: {type: array, items: {type: string, format: uuid}}
+    CaptureManifest:
+      type: object
+      required: [captureSetId, captureKind, penId, assets]
+      properties:
+        captureSetId: {type: string, format: uuid}
+        captureKind: {type: string, enum: [single, left_center_right]}
+        penId: {type: string, format: uuid}
+        assets:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items: {$ref: '#/components/schemas/ManifestAsset'}
+    ManifestAsset:
+      type: object
+      required: [assetId, viewPosition, sha256, byteSize, mediaType]
+      properties:
+        assetId: {type: string, format: uuid}
+        viewPosition: {type: string, enum: [single, left, center, right]}
+        sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+        perceptualHash: {type: [string, 'null']}
+        byteSize: {type: integer, minimum: 1}
+        mediaType: {type: string, enum: [image/jpeg, image/png, image/heic]}
+        roi: {$ref: '#/components/schemas/Roi'}
+    Roi:
+      type: [object, 'null']
+      required: [x, y, width, height]
+      properties:
+        x: {type: number, minimum: 0, maximum: 1}
+        y: {type: number, minimum: 0, maximum: 1}
+        width: {type: number, exclusiveMinimum: 0, maximum: 1}
+        height: {type: number, exclusiveMinimum: 0, maximum: 1}
+    CommitResult:
+      type: object
+      required: [packageId, sessionId, inferenceJobId, status]
+      properties:
+        packageId: {type: string, format: uuid}
+        sessionId: {type: string, format: uuid}
+        inferenceJobId: {type: string, format: uuid}
+        status: {type: string, enum: [submitted, processing, review_required]}
+    InventorySession:
+      type: object
+      required: [id, penId, businessDate, status]
+      properties:
+        id: {type: string, format: uuid}
+        penId: {type: string, format: uuid}
+        businessDate: {type: string, format: date}
+        status: {type: string, enum: [draft, submitted, processing, review_required, confirmed]}
+        count: {type: [integer, 'null'], minimum: 0}
+        rawModelCount: {type: [integer, 'null'], minimum: 0}
+        inferenceSource: {type: [string, 'null'], enum: [server, device, manual, null]}
+        model: {$ref: '#/components/schemas/ModelIdentity'}
+        warnings: {type: array, items: {type: string}}
+    ModelIdentity:
+      type: [object, 'null']
+      required: [modelKey, version, checksum, adapterVersion]
+      properties:
+        modelKey: {type: string}
+        version: {type: string}
+        checksum: {type: string}
+        adapterVersion: {type: string}
+    ConfirmInventory:
+      type: object
+      required: [confirmedCount]
+      properties:
+        confirmedCount: {type: integer, minimum: 0}
+        reason: {type: [string, 'null'], minLength: 8, maxLength: 500}
+    Problem:
+      type: object
+      required: [type, title, status, correlationId]
+      properties:
+        type: {type: string, format: uri-reference}
+        title: {type: string}
+        status: {type: integer}
+        detail: {type: string}
+        code: {type: string}
+        correlationId: {type: string}

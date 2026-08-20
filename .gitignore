@@ -1,0 +1,38 @@
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+db.sqlite3
+media/
+staticfiles/
+node_modules/
+.next/
+pnpm-debug.log*
+*.tsbuildinfo
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+android/.gradle/
+android/local.properties
+*.iml
+.idea/
+.vscode/
+
+# 学长代码是本地只读参照物，包含权属与潜在敏感配置风险，不进入本仓库历史。
+/eg/
+
+# 构建产物与本地工具缓存
+target/
+.mvn/
+*.log
+
+# 本地开发初始化和从外部研究数据集生成的清单。原始猪场图片绝不提交。
+/test-assets/generated/
+/test-assets/private/
