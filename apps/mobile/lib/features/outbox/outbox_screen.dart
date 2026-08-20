@@ -20,7 +20,9 @@ class OutboxScreen extends ConsumerWidget {
             itemCount: rows.length,
             itemBuilder: (BuildContext context, int index) {
               final dynamic row = rows[index];
-              return ListTile(title: Text(row.packageId as String), subtitle: Text(row.state as String));
+              return ListTile(
+                  title: Text(row.packageId as String),
+                  subtitle: Text(row.state as String));
             },
           );
         },
@@ -28,4 +30,3 @@ class OutboxScreen extends ConsumerWidget {
     );
   }
 }
-

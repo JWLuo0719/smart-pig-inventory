@@ -28,6 +28,8 @@
 - 建立工作站初始化/核验脚本、随机本机 `.env` 生成流程和测试数据治理规则。
 - 已对外部 YOLO 研究集生成本机忽略的完整性清单：500 张图像、12,421 个标注目标，图像—标签配对问题为 0；这不是业务金标或产品分发授权证明。
 - 已建立本地 Git 首次基线；尚未配置远端仓库或向外部服务推送任何内容。
+- 已安装 Flutter 3.44.7、Android SDK 36、Build Tools 36.0.0 和 platform-tools；Android SDK 许可证已接受，Android 原生壳与 Drift 生成代码已入工程。
+- 已安装 Docker Desktop 4.87.0（per-user、WSL 2、Linux containers），并将 WSL 数据根设置为 `D:\DockerDesktop\wsl-data`。
 
 ## 已验证证据
 
@@ -39,12 +41,13 @@
 | OpenAPI | openapi-spec-validator 0.7.2 passed |
 | 推理 JSON Schema | JSON 语法与 Python 序列化键集合测试通过 |
 | 外部 YOLO 数据清单 | 500 图像、12,421 标注目标、0 图像—标签配对问题；本机生成且 Git 忽略 |
-| Compose | YAML 语法通过；Docker 运行验证未执行 |
+| Flutter Android | `flutter analyze` 通过；2 项测试通过；`assembleDebug` 成功，debug APK 已生成 |
+| Docker Desktop 安装 | 签名为 Docker Inc.；客户端/服务端首次版本校验通过；D 盘数据根已创建 |
+| Compose | `docker compose config --quiet` 通过；完整栈启动待 Docker WSL 引擎稳定后复验 |
 
 ## 未验证与阻塞
 
-- Flutter SDK 已安装并固定；Android SDK/许可证尚未完成，无法生成原生 Android 壳、Drift 代码或验证 APK。
-- 本机尚未安装 Docker Desktop；需由用户确认 Docker 许可并选择其 WSL 数据目录后，才能执行 `docker compose config`、镜像构建、MySQL Flyway 实跑和健康检查。
+- Docker Desktop 4.87.0 在首次拉取后重启 WSL 引擎时返回 `DockerDesktop/Wsl/ExecError`（`0xc00000fd`）；未创建项目容器或卷。需修复 Docker Desktop/WSL 运行时后再执行完整栈、Flyway 和健康检查，不将此问题归因于 Compose。
 - P0 上传包 Controller/Service/Mapper、真实持久 Outbox 派发、登录/RBAC、真实页面数据接线尚未实现。
 - 金蝶正式 API、线上 YOLOv13 权重、模型许可证、金标基准和部署服务器规格尚未提供。
 - 低端 Android 候选机是否可获得，以及首批试点猪场、边缘服务器规格仍待确认。

@@ -101,7 +101,8 @@ class AppDatabase extends _$AppDatabase {
 
   static Future<AppDatabase> open() async {
     final Directory documents = await getApplicationDocumentsDirectory();
-    final File databaseFile = File(path.join(documents.path, 'pig_inventory.sqlite'));
+    final File databaseFile =
+        File(path.join(documents.path, 'pig_inventory.sqlite'));
     return AppDatabase(NativeDatabase.createInBackground(databaseFile));
   }
 
@@ -131,7 +132,8 @@ class AppDatabase extends _$AppDatabase {
     required String manifestJson,
   }) async {
     final DateTime now = DateTime.now();
-    await into(outboxEntries).insertOnConflictUpdate(OutboxEntriesCompanion.insert(
+    await into(outboxEntries)
+        .insertOnConflictUpdate(OutboxEntriesCompanion.insert(
       packageId: packageId,
       draftId: draftId,
       idempotencyKey: idempotencyKey,
@@ -142,8 +144,13 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<void> markState(String packageId, String state, {String? error}) {
-    return (update(outboxEntries)..where((entry) => entry.packageId.equals(packageId))).write(
-      OutboxEntriesCompanion(state: Value<String>(state), error: Value<String?>(error), updatedAt: Value<DateTime>(DateTime.now())),
+    return (update(outboxEntries)
+          ..where((entry) => entry.packageId.equals(packageId)))
+        .write(
+      OutboxEntriesCompanion(
+          state: Value<String>(state),
+          error: Value<String?>(error),
+          updatedAt: Value<DateTime>(DateTime.now())),
     );
   }
 }

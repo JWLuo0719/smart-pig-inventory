@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart';
 import 'package:uuid/uuid.dart';
 
 enum CaptureKind { single, leftCenterRight }
+
 enum ViewPosition { single, left, center, right }
 
 extension CaptureKindWire on CaptureKind {
@@ -69,19 +70,22 @@ class CapturePackageDraft {
   final List<LocalMediaDraft> media;
 
   Future<Map<String, Object?>> toManifest() async {
-    final List<Map<String, Object?>> entries = await Future.wait(media.map((LocalMediaDraft item) => item.toManifestEntry()));
+    final List<Map<String, Object?>> entries = await Future.wait(
+        media.map((LocalMediaDraft item) => item.toManifestEntry()));
     return <String, Object?>{
       'captureSetId': captureSetId,
       'captureKind': kind.wireName,
       'penId': penId,
-      'assets': entries.map((Map<String, Object?> entry) => <String, Object?>{
-            'assetId': entry['asset_id'],
-            'viewPosition': entry['view_position'],
-            'sha256': entry['sha256'],
-            'byteSize': entry['byte_size'],
-            'mediaType': entry['media_type'],
-            'roi': entry['roi'],
-          }).toList(),
+      'assets': entries
+          .map((Map<String, Object?> entry) => <String, Object?>{
+                'assetId': entry['asset_id'],
+                'viewPosition': entry['view_position'],
+                'sha256': entry['sha256'],
+                'byteSize': entry['byte_size'],
+                'mediaType': entry['media_type'],
+                'roi': entry['roi'],
+              })
+          .toList(),
     };
   }
 

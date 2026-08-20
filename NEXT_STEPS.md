@@ -2,8 +2,8 @@
 
 ## Iteration 1：可运行开发底座
 
-1. 完成 Android SDK 安装及许可证确认后，在 `apps/mobile` 执行 `flutter create`，评审并提交 Android 原生壳；生成 Drift 代码，跑 analyze/test/debug APK。工作站规则见 `docs/development/workstation-setup.md`。
-2. 用户确认 Docker Desktop 许可和 WSL 数据目录后，安装 Docker Desktop，运行 Compose 配置、镜像、MySQL Flyway、MinIO 私有桶和各健康检查。首个试点部署基线见 `docs/deployment/pilot-baseline.md`。
+1. 已完成 Android 原生壳、Drift 生成、analyze/test 与 debug APK；后续在真实 Android 设备验证相机、权限和后台上传。工作站规则见 `docs/development/workstation-setup.md`。
+2. 修复 Docker Desktop 4.87.0 的 WSL 引擎 `0xc00000fd` 后，运行 Compose 镜像、MySQL Flyway、MinIO 私有桶和各健康检查。安装已采用 per-user + WSL 2，数据根在 `D:\DockerDesktop\wsl-data`；首个试点部署基线见 `docs/deployment/pilot-baseline.md`。
 3. 为 Spring 增加本地开发身份服务方案或连接现有 OIDC；生产 Profile 保持强制 JWT。
 4. 增加 Testcontainers MySQL 集成测试，锁定 BINARY UUID、JSON、CHECK、唯一索引和并发语义。
 

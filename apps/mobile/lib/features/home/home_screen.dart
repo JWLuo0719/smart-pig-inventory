@@ -22,9 +22,11 @@ class HomeScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Text('智慧猪场场主 · F001 示范猪场', style: Theme.of(context).textTheme.bodySmall),
+                        Text('智慧猪场场主 · F001 示范猪场',
+                            style: Theme.of(context).textTheme.bodySmall),
                         const SizedBox(height: 3),
-                        Text('今天先完成现场采集', style: Theme.of(context).textTheme.headlineSmall),
+                        Text('今天先完成现场采集',
+                            style: Theme.of(context).textTheme.headlineSmall),
                       ],
                     ),
                   ),
@@ -45,7 +47,8 @@ class HomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFF4D8),
                   border: Border.all(color: const Color(0xFFEAD39A)),
@@ -53,7 +56,10 @@ class HomeScreen extends StatelessWidget {
                 ),
                 child: const Text(
                   '页面框架预览 · 当前栏舍、数量和时间均为演示数据',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF684600)),
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF684600)),
                 ),
               ),
               const SizedBox(height: 16),
@@ -61,19 +67,33 @@ class HomeScreen extends StatelessWidget {
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(color: AppColors.barnBlue, borderRadius: BorderRadius.circular(16)),
+                decoration: BoxDecoration(
+                    color: AppColors.barnBlue,
+                    borderRadius: BorderRadius.circular(16)),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    const Text('继续上次作业', style: TextStyle(color: Color(0xFFB9CFDC), fontSize: 12, fontWeight: FontWeight.w700)),
+                    const Text('继续上次作业',
+                        style: TextStyle(
+                            color: Color(0xFFB9CFDC),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700)),
                     const SizedBox(height: 5),
-                    const Text('B01 育肥一栋 · 03栏', style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w800)),
+                    const Text('B01 育肥一栋 · 03栏',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 19,
+                            fontWeight: FontWeight.w800)),
                     const SizedBox(height: 4),
-                    const Text('已保存左、中两张；还需拍摄右侧', style: TextStyle(color: Color(0xFFD9E5EB), fontSize: 12)),
+                    const Text('已保存左、中两张；还需拍摄右侧',
+                        style:
+                            TextStyle(color: Color(0xFFD9E5EB), fontSize: 12)),
                     const SizedBox(height: 15),
                     FilledButton.icon(
                       onPressed: () => context.push('/capture'),
-                      style: FilledButton.styleFrom(backgroundColor: AppColors.straw, foregroundColor: AppColors.ink),
+                      style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.straw,
+                          foregroundColor: AppColors.ink),
                       icon: const Icon(Icons.arrow_forward),
                       label: const Text('继续拍摄右侧'),
                     ),
@@ -81,7 +101,10 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 22),
-              _SectionTitle(title: '最近栏舍', action: '选择栏舍', onTap: () => context.push('/pens')),
+              _SectionTitle(
+                  title: '最近栏舍',
+                  action: '选择栏舍',
+                  onTap: () => context.push('/pens')),
               const SizedBox(height: 10),
             ],
           ),
@@ -94,8 +117,19 @@ class HomeScreen extends StatelessWidget {
             crossAxisSpacing: 10,
             childAspectRatio: .92,
             children: <Widget>[
-              PenPlate(building: 'B02 育肥二栋', pen: '08栏', state: PenWorkState.confirmed, detail: '08:42 已确认', count: 126, onTap: () {}),
-              PenPlate(building: 'B01 育肥一栋', pen: '03栏', state: PenWorkState.queued, detail: '2/3 张已保存', onTap: () => context.push('/capture')),
+              PenPlate(
+                  building: 'B02 育肥二栋',
+                  pen: '08栏',
+                  state: PenWorkState.confirmed,
+                  detail: '08:42 已确认',
+                  count: 126,
+                  onTap: () {}),
+              PenPlate(
+                  building: 'B01 育肥一栋',
+                  pen: '03栏',
+                  state: PenWorkState.queued,
+                  detail: '2/3 张已保存',
+                  onTap: () => context.push('/capture')),
             ],
           ),
         ),
@@ -124,7 +158,8 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: <Widget>[
-        Expanded(child: Text(title, style: Theme.of(context).textTheme.titleLarge)),
+        Expanded(
+            child: Text(title, style: Theme.of(context).textTheme.titleLarge)),
         TextButton(onPressed: onTap, child: Text(action)),
       ],
     );
@@ -143,14 +178,21 @@ class _ProgressCard extends StatelessWidget {
           children: <Widget>[
             ClipRRect(
               borderRadius: BorderRadius.circular(999),
-              child: const LinearProgressIndicator(value: .43, minHeight: 9, color: AppColors.herdTeal, backgroundColor: Color(0xFFE4ECEF)),
+              child: const LinearProgressIndicator(
+                  value: .43,
+                  minHeight: 9,
+                  color: AppColors.herdTeal,
+                  backgroundColor: Color(0xFFE4ECEF)),
             ),
             const SizedBox(height: 15),
-            const _ProgressRow(label: 'B01 育肥一栋', value: '8 / 16', note: '1 个包待上传'),
+            const _ProgressRow(
+                label: 'B01 育肥一栋', value: '8 / 16', note: '1 个包待上传'),
             const Divider(height: 22),
-            const _ProgressRow(label: 'B02 育肥二栋', value: '7 / 14', note: '2 个结果待复核'),
+            const _ProgressRow(
+                label: 'B02 育肥二栋', value: '7 / 14', note: '2 个结果待复核'),
             const Divider(height: 22),
-            const _ProgressRow(label: 'B03 保育栋', value: '3 / 12', note: '推理已降级'),
+            const _ProgressRow(
+                label: 'B03 保育栋', value: '3 / 12', note: '推理已降级'),
           ],
         ),
       ),
@@ -159,19 +201,25 @@ class _ProgressCard extends StatelessWidget {
 }
 
 class _ProgressRow extends StatelessWidget {
-  const _ProgressRow({required this.label, required this.value, required this.note});
+  const _ProgressRow(
+      {required this.label, required this.value, required this.note});
   final String label;
   final String value;
   final String note;
   @override
   Widget build(BuildContext context) {
     return Row(children: <Widget>[
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-        Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 3),
-        Text(note, style: Theme.of(context).textTheme.bodySmall),
-      ])),
-      Text(value, style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.barnBlue)),
+      Expanded(
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+            Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 3),
+            Text(note, style: Theme.of(context).textTheme.bodySmall),
+          ])),
+      Text(value,
+          style: const TextStyle(
+              fontWeight: FontWeight.w800, color: AppColors.barnBlue)),
     ]);
   }
 }

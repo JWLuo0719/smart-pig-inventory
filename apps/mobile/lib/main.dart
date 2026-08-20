@@ -19,7 +19,9 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Workmanager().initialize(outboxCallbackDispatcher);
   final database = await AppDatabase.open();
-  runApp(ProviderScope(overrides: [appDatabaseProvider.overrideWithValue(database)], child: const PigInventoryApp()));
+  runApp(ProviderScope(
+      overrides: [appDatabaseProvider.overrideWithValue(database)],
+      child: const PigInventoryApp()));
 }
 
 class PigInventoryApp extends StatelessWidget {
@@ -27,8 +29,10 @@ class PigInventoryApp extends StatelessWidget {
 
   static final GoRouter _router = GoRouter(routes: <RouteBase>[
     GoRoute(path: '/', builder: (context, state) => const AppShell()),
-    GoRoute(path: '/pens', builder: (context, state) => const PenPickerScreen()),
-    GoRoute(path: '/capture', builder: (context, state) => const CaptureScreen()),
+    GoRoute(
+        path: '/pens', builder: (context, state) => const PenPickerScreen()),
+    GoRoute(
+        path: '/capture', builder: (context, state) => const CaptureScreen()),
     GoRoute(path: '/outbox', builder: (context, state) => const OutboxScreen()),
   ]);
 

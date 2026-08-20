@@ -44,10 +44,13 @@ class PenPlate extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: onTap != null,
-      label: '$building $pen，$_label，${count == null ? '暂无确认数量' : '确认 $count 头'}，$detail',
+      label:
+          '$building $pen，$_label，${count == null ? '暂无确认数量' : '确认 $count 头'}，$detail',
       child: Material(
         color: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: AppColors.line)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: const BorderSide(color: AppColors.line)),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
@@ -64,24 +67,42 @@ class PenPlate extends StatelessWidget {
                       children: <Widget>[
                         Row(
                           children: <Widget>[
-                            Expanded(child: Text(building, style: Theme.of(context).textTheme.bodySmall)),
-                            Text(pen, style: const TextStyle(color: AppColors.barnBlue, fontWeight: FontWeight.w800, fontSize: 16)),
+                            Expanded(
+                                child: Text(building,
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall)),
+                            Text(pen,
+                                style: const TextStyle(
+                                    color: AppColors.barnBlue,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 16)),
                           ],
                         ),
                         const SizedBox(height: 12),
-                        Text(_label, style: TextStyle(color: _color, fontSize: 12, fontWeight: FontWeight.w800)),
+                        Text(_label,
+                            style: TextStyle(
+                                color: _color,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800)),
                         const SizedBox(height: 3),
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.baseline,
                           textBaseline: TextBaseline.alphabetic,
                           children: <Widget>[
-                            Text(count?.toString() ?? '—', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                            Text(count?.toString() ?? '—',
+                                style: const TextStyle(
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.ink)),
                             const SizedBox(width: 5),
-                            const Text('头', style: TextStyle(fontSize: 12, color: AppColors.muted)),
+                            const Text('头',
+                                style: TextStyle(
+                                    fontSize: 12, color: AppColors.muted)),
                           ],
                         ),
                         const SizedBox(height: 3),
-                        Text(detail, style: Theme.of(context).textTheme.bodySmall),
+                        Text(detail,
+                            style: Theme.of(context).textTheme.bodySmall),
                       ],
                     ),
                   ),
@@ -94,4 +115,3 @@ class PenPlate extends StatelessWidget {
     );
   }
 }
-

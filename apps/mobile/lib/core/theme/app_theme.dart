@@ -34,11 +34,25 @@ abstract final class AppTheme {
         'Microsoft YaHei',
       ],
       textTheme: const TextTheme(
-        headlineSmall: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: AppColors.ink, height: 1.2),
-        titleLarge: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink),
-        titleMedium: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.ink),
-        bodyMedium: TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: AppColors.ink, height: 1.5),
-        bodySmall: TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: AppColors.muted, height: 1.45),
+        headlineSmall: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+            color: AppColors.ink,
+            height: 1.2),
+        titleLarge: TextStyle(
+            fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink),
+        titleMedium: TextStyle(
+            fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.ink),
+        bodyMedium: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w400,
+            color: AppColors.ink,
+            height: 1.5),
+        bodySmall: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w400,
+            color: AppColors.muted,
+            height: 1.45),
         labelLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
       ),
       cardTheme: const CardThemeData(
@@ -55,14 +69,16 @@ abstract final class AppTheme {
         scrolledUnderElevation: 0,
         backgroundColor: AppColors.mist,
         foregroundColor: AppColors.ink,
-        titleTextStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink),
+        titleTextStyle: TextStyle(
+            fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           minimumSize: const Size.fromHeight(52),
           backgroundColor: AppColors.barnBlue,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -70,14 +86,16 @@ abstract final class AppTheme {
           minimumSize: const Size.fromHeight(52),
           foregroundColor: AppColors.barnBlue,
           side: const BorderSide(color: AppColors.line),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       ),
       navigationBarTheme: const NavigationBarThemeData(
         height: 72,
         backgroundColor: Colors.white,
         indicatorColor: Color(0x1F0B7A75),
-        labelTextStyle: WidgetStatePropertyAll(TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+        labelTextStyle: WidgetStatePropertyAll(
+            TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
       ),
     );
   }

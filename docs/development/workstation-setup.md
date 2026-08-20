@@ -9,7 +9,7 @@
 | JDK | 21 |
 | Flutter | 3.44.7 stable，`D:\ProgrammingLanguage\Flutter\flutter` |
 | Node.js | 已安装的 LTS；使用仓库锁定的 pnpm |
-| 容器运行时 | Docker Desktop per-user + WSL 2 Linux containers |
+| 容器运行时 | Docker Desktop 4.87.0 per-user + WSL 2 Linux containers；数据根 `D:\DockerDesktop\wsl-data` |
 | 服务端 | Spring Boot/Maven、Python 虚拟环境、Docker Compose |
 
 Flutter SDK 必须放在没有空格、非管理员权限的目录。首次打开新终端后执行：
@@ -47,3 +47,7 @@ docker compose up --build
 2. `flutter analyze`、`flutter test`、`flutter build apk --debug` 在 `apps/mobile` 成功。
 3. `docker compose config --quiet` 与 `docker compose up --build` 成功，MySQL、Redis、MinIO、业务 API、推理 API 和网关健康。
 4. `.env` 不含模板密码，MinIO 桶未公开。
+
+## 当前机器的已知运行时问题
+
+Docker Desktop 已完成安装和 D 盘数据根配置，但在第一次 Compose 镜像拉取后重启时，WSL 引擎返回 `DockerDesktop/Wsl/ExecError` / `0xc00000fd`。这不影响 Android 开发环境；在该问题修复并通过 `docker version` 的服务器端检查前，不得把 Compose、Flyway 或 MinIO 的运行验证标为通过。
