@@ -35,6 +35,8 @@ app:
     enabled: ${SECURITY_ENABLED:true}
   object-storage:
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    access-key: ${MINIO_ACCESS_KEY:minioadmin}
+    secret-key: ${MINIO_SECRET_KEY}
     bucket: ${MINIO_BUCKET:pig-inventory}
   inference:
     base-url: ${INFERENCE_BASE_URL:http://localhost:8100}

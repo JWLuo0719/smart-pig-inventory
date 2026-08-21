@@ -1,17 +1,19 @@
 # 下一步
 
+完整实施顺序和阶段退出门禁见 `docs/development/mobile-development-sequence.md`；需要负责人确认的事项统一登记在 `docs/product/open-decisions.md`。后续实现必须按合同 -> 迁移 -> Domain/Application -> Infrastructure -> UI -> 验证的顺序执行。
+
 ## Iteration 1：可运行开发底座
 
 1. 已完成 Android 原生壳、Drift 生成、analyze/test 与 debug APK；后续在真实 Android 设备验证相机、权限和后台上传。工作站规则见 `docs/development/workstation-setup.md`。
-2. 修复 Docker Desktop 4.87.0 的 WSL 引擎 `0xc00000fd` 后，运行 Compose 镜像、MySQL Flyway、MinIO 私有桶和各健康检查。安装已采用 per-user + WSL 2，数据根在 `D:\DockerDesktop\wsl-data`；首个试点部署基线见 `docs/deployment/pilot-baseline.md`。
-3. 为 Spring 增加本地开发身份服务方案或连接现有 OIDC；生产 Profile 保持强制 JWT。
-4. 增加 Testcontainers MySQL 集成测试，锁定 BINARY UUID、JSON、CHECK、唯一索引和并发语义。
+2. 已恢复 Docker Desktop WSL 引擎并完成完整 Compose、MySQL Flyway V1/V2、私有 MinIO 桶和网关健康验证；后续持续保留 Compose smoke test。首个试点部署基线见 `docs/deployment/pilot-baseline.md`。
+3. 按 ADR-0003 为 Spring 增加科研阶段本地账号、可撤销刷新令牌和 JWT；后续通过身份适配器接入金蝶账号。
+4. 已增加 Testcontainers MySQL Flyway 集成测试；持续保留该门禁。下一步扩展至 BINARY UUID、JSON、CHECK、唯一索引、对象写入和并发语义，并补充 MinIO 集成测试。
 
 ## Iteration 2：AC-01 至 AC-04
 
 1. 实现主数据增量同步和组织隔离。
-2. 实现采集包 create/blob/manifest/commit 的 Controller、Application Service、Mapper 和事务 Outbox。
-3. Flutter 完成真实媒体物化、SHA-256、草稿恢复、Repository/UseCase 和前后台 Outbox。
+2. 已实现采集包 create/blob/manifest/commit 的 Controller、Application Service、JDBC Infrastructure、MinIO 暂存提升和事务 Outbox；下一步实现 Outbox 派发至推理服务并补充并发 Commit/MinIO HTTP 集成测试。
+3. Flutter 已完成媒体物化、流式 SHA-256、单图/三图草稿、ROI 口径和本地完整采集组入队；下一步实现草稿恢复 UI、主数据接线及前后台真实同步。
 4. 通过断网三图、杀进程、弱网恢复、并发 Commit 和精确重复 E2E。
 
 ## Iteration 3：AC-05 至 AC-12
@@ -33,5 +35,8 @@
 
 ## 仍需确认
 
+- 离线 Token 最长时限暂定 7 天，组织切换 UI 后置；正式试点前需复审。
+- 首次本地管理员初始化参数、生产 JWT 密钥轮换流程和后续金蝶账号接入时机。
 - 首批试点猪场、低端 Android 候选机是否可获得，以及边缘服务器规格。
 - 数据保留年限、备份恢复目标是否接受当前 NFR 草案。
+- 详细问题、临时假设和影响见 `docs/product/open-decisions.md`。

@@ -1,20 +1,23 @@
 openapi: 3.1.0
 info:
   title: Smart Pig Inventory Business API
-  version: 0.2.0
+  version: 0.3.0
   description: >-
     路线 B+ 的业务合同基线。所有写操作接受 X-Idempotency-Key，所有时间使用 ISO 8601；
-    离线采集必须完成 package/blob/manifest/commit 后才创建正式推理任务。
+    离线采集必须完成 package/blob/manifest/commit 后才创建正式推理任务。ROI 使用完成
+    EXIF 方向纠正后的图像坐标，并归一化到 0..1。
 servers:
   - url: /api/v1
 security:
   - bearerAuth: []
 tags:
   - {name: System}
+  - {name: Identity}
   - {name: MasterData}
   - {name: Upload}
   - {name: Inventory}
   - {name: Review}
+  - {name: InternalInference}
 paths:
   /system/capabilities:
     get:
@@ -28,6 +31,76 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/ApiEnvelope'}
+  /auth/login:
+    post:
+      tags: [Identity]
+      security: []
+      summary: 科研组账号登录
+      operationId: login
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LoginRequest'}
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TokenPair'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  /auth/refresh:
+    post:
+      tags: [Identity]
+      security: []
+      summary: 轮换访问令牌和刷新令牌
+      operationId: refreshToken
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RefreshTokenRequest'}
+      responses:
+        '200':
+          description: 令牌轮换成功；旧刷新令牌立即失效
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TokenPair'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  /auth/logout:
+    post:
+      tags: [Identity]
+      summary: 撤销当前刷新会话
+      operationId: logout
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RefreshTokenRequest'}
+      responses:
+        '204': {description: 会话已撤销或此前已经撤销}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /me:
+    get:
+      tags: [Identity]
+      summary: 查询当前认证用户、激活组织和角色
+      operationId: getCurrentUser
+      responses:
+        '200':
+          description: 当前用户上下文
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CurrentUser'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
   /master-data/changes:
     get:
       tags: [MasterData]
@@ -67,6 +140,20 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/UploadPackage'}
         '409': {$ref: '#/components/responses/Conflict'}
+  /upload-packages/{packageId}:
+    get:
+      tags: [Upload]
+      summary: 查询上传包状态并恢复已完成 Blob
+      operationId: getUploadPackage
+      parameters:
+        - {$ref: '#/components/parameters/PackageId'}
+      responses:
+        '200':
+          description: 上传包当前状态
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UploadPackage'}
+        '404': {$ref: '#/components/responses/NotFound'}
   /upload-packages/{packageId}/blobs/{assetId}:
     put:
       tags: [Upload]
@@ -164,6 +251,30 @@ paths:
               schema: {$ref: '#/components/schemas/InventorySession'}
         '409': {$ref: '#/components/responses/Conflict'}
         '422': {$ref: '#/components/responses/ValidationError'}
+  /inference-jobs/{jobId}/result:
+    put:
+      tags: [InternalInference]
+      summary: 推理服务幂等回传最终结果
+      description: >-
+        仅允许受信任的推理服务身份调用。相同任务和相同结果重复回传视为成功；
+        相同任务回传不同最终结果返回 409。Spring 数据库是任务状态的唯一业务事实来源。
+      operationId: putInferenceJobResult
+      parameters:
+        - {$ref: '#/components/parameters/JobId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/InferenceJobResult'}
+      responses:
+        '200': {description: 结果已经以相同内容处理}
+        '204': {description: 结果首次处理成功}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
   /media-assets/{assetId}/override-delete:
     post:
       tags: [Review]
@@ -212,7 +323,25 @@ components:
       in: path
       required: true
       schema: {type: string, format: uuid}
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
   responses:
+    Unauthorized:
+      description: 未提供有效身份、凭据错误或访问令牌已经失效
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    TooManyRequests:
+      description: 请求过于频繁
+      headers:
+        Retry-After:
+          schema: {type: integer, minimum: 1}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
     Conflict:
       description: 状态冲突、幂等键冲突、媒体已锁定或重复图片
       content:
@@ -241,15 +370,74 @@ components:
         data: {type: object, additionalProperties: true}
         correlationId: {type: string}
         timestamp: {type: string, format: date-time}
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username: {type: string, minLength: 1, maxLength: 128}
+        password: {type: string, minLength: 8, maxLength: 256, format: password}
+    RefreshTokenRequest:
+      type: object
+      additionalProperties: false
+      required: [refreshToken]
+      properties:
+        refreshToken: {type: string, minLength: 32, maxLength: 2048}
+    TokenPair:
+      type: object
+      additionalProperties: false
+      required: [accessToken, refreshToken, tokenType, accessTokenExpiresAt, refreshTokenExpiresAt]
+      properties:
+        accessToken: {type: string, minLength: 1}
+        refreshToken: {type: string, minLength: 32}
+        tokenType: {type: string, const: Bearer}
+        accessTokenExpiresAt: {type: string, format: date-time}
+        refreshTokenExpiresAt: {type: string, format: date-time}
+    CurrentUser:
+      type: object
+      required: [subjectId, displayName, activeOrganizationId, memberships]
+      properties:
+        subjectId: {type: string, minLength: 1, maxLength: 128}
+        displayName: {type: string, minLength: 1, maxLength: 128}
+        activeOrganizationId: {type: string, format: uuid}
+        memberships:
+          type: array
+          minItems: 1
+          items: {$ref: '#/components/schemas/OrganizationMembership'}
+    OrganizationMembership:
+      type: object
+      additionalProperties: false
+      required: [organizationId, organizationCode, organizationName, roles]
+      properties:
+        organizationId: {type: string, format: uuid}
+        organizationCode: {type: string, minLength: 1, maxLength: 64}
+        organizationName: {type: string, minLength: 1, maxLength: 128}
+        roles:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {type: string, enum: [OPERATOR, REVIEWER, FARM_ADMIN, SYSTEM_ADMIN]}
     MasterDataChanges:
       type: object
-      required: [cursor, organizations, buildings, pens]
+      required: [cursor, fullResyncRequired, organizations, buildings, pens, deletedEntities]
       properties:
         cursor: {type: string}
+        fullResyncRequired:
+          type: boolean
+          description: 为 true 时客户端必须在同一事务中以本响应替换当前组织的主数据缓存。
         organizations: {type: array, items: {$ref: '#/components/schemas/NamedEntity'}}
         buildings: {type: array, items: {$ref: '#/components/schemas/NamedEntity'}}
         pens: {type: array, items: {$ref: '#/components/schemas/NamedEntity'}}
-        deletedIds: {type: array, items: {type: string, format: uuid}}
+        deletedEntities:
+          type: array
+          items: {$ref: '#/components/schemas/DeletedEntity'}
+    DeletedEntity:
+      type: object
+      required: [entityType, id, syncVersion]
+      properties:
+        entityType: {type: string, enum: [organization, building, pen]}
+        id: {type: string, format: uuid}
+        syncVersion: {type: integer, format: int64, minimum: 0}
     NamedEntity:
       type: object
       required: [id, code, name, enabled, syncVersion]
@@ -292,17 +480,47 @@ components:
           items: {$ref: '#/components/schemas/ManifestAsset'}
     ManifestAsset:
       type: object
-      required: [assetId, viewPosition, sha256, byteSize, mediaType]
+      additionalProperties: false
+      required: [assetId, viewPosition, capturedAt, originalName, width, height, sha256, byteSize, mediaType, exif, roi]
       properties:
         assetId: {type: string, format: uuid}
         viewPosition: {type: string, enum: [single, left, center, right]}
+        capturedAt:
+          type: string
+          format: date-time
+          description: 客户端记录的采集时刻，必须包含时区偏移；服务端同时记录接收时间。
+        originalName: {type: string, minLength: 1, maxLength: 255}
+        width:
+          type: integer
+          minimum: 1
+          description: 完成 EXIF 方向纠正后的像素宽度。
+        height:
+          type: integer
+          minimum: 1
+          description: 完成 EXIF 方向纠正后的像素高度。
         sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
         perceptualHash: {type: [string, 'null']}
         byteSize: {type: integer, minimum: 1}
         mediaType: {type: string, enum: [image/jpeg, image/png, image/heic]}
+        exif: {$ref: '#/components/schemas/SafeExif'}
         roi: {$ref: '#/components/schemas/Roi'}
+    SafeExif:
+      type: object
+      additionalProperties: false
+      description: 只允许业务需要且经过隐私筛选的 EXIF；不得上传 GPS、设备所有者或自由文本字段。
+      properties:
+        orientation: {type: [integer, 'null'], minimum: 1, maximum: 8}
+        make: {type: [string, 'null'], maxLength: 128}
+        model: {type: [string, 'null'], maxLength: 128}
+        focalLengthMm: {type: [number, 'null'], exclusiveMinimum: 0}
+        exposureTimeSeconds: {type: [number, 'null'], exclusiveMinimum: 0}
+        iso: {type: [integer, 'null'], minimum: 0}
     Roi:
       type: [object, 'null']
+      additionalProperties: false
+      description: >-
+        基于 EXIF 纠正后图像的归一化坐标。服务端必须额外验证 x + width <= 1
+        且 y + height <= 1；null 表示整张图像。
       required: [x, y, width, height]
       properties:
         x: {type: number, minimum: 0, maximum: 1}
@@ -344,6 +562,42 @@ components:
       properties:
         confirmedCount: {type: integer, minimum: 0}
         reason: {type: [string, 'null'], minLength: 8, maxLength: 500}
+    InferenceJobResult:
+      type: object
+      additionalProperties: false
+      required: [status, count, detections, warnings, modelKey, modelVersion, modelChecksum, adapterVersion, inferenceSource, latencyMs]
+      properties:
+        status: {type: string, enum: [succeeded, review_required, failed]}
+        count: {type: [integer, 'null'], minimum: 0}
+        detections:
+          type: array
+          items: {$ref: '#/components/schemas/Detection'}
+        warnings: {type: array, items: {type: string, maxLength: 500}}
+        modelKey: {type: string, minLength: 1}
+        modelVersion: {type: string, minLength: 1}
+        modelChecksum: {type: string, minLength: 1}
+        adapterVersion: {type: string, minLength: 1}
+        inferenceSource: {type: string, minLength: 1}
+        latencyMs: {type: integer, minimum: 0}
+        failureCode: {type: [string, 'null'], maxLength: 128}
+        failureMessage: {type: [string, 'null'], maxLength: 1000}
+    Detection:
+      type: object
+      additionalProperties: false
+      required: [assetId, bbox, confidence, classId]
+      properties:
+        assetId: {type: string, format: uuid}
+        bbox:
+          type: array
+          prefixItems:
+            - {type: number}
+            - {type: number}
+            - {type: number}
+            - {type: number}
+          minItems: 4
+          maxItems: 4
+        confidence: {type: number, minimum: 0, maximum: 1}
+        classId: {type: integer}
     Problem:
       type: object
       required: [type, title, status, correlationId]

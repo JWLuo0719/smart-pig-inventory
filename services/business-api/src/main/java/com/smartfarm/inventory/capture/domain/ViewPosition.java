@@ -5,6 +5,20 @@ public enum ViewPosition {
     LEFT,
     CENTER,
     RIGHT,
-    VIDEO
+    VIDEO;
+
+    public static ViewPosition fromWire(String value) {
+        return switch (value) {
+            case "single" -> SINGLE;
+            case "left" -> LEFT;
+            case "center" -> CENTER;
+            case "right" -> RIGHT;
+            default -> throw new IllegalArgumentException("Unsupported view position: " + value);
+        };
+    }
+
+    public String wireValue() {
+        return name().toLowerCase(java.util.Locale.ROOT);
+    }
 }
 

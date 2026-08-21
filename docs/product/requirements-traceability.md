@@ -4,15 +4,16 @@
 
 | 需求 | 权威设计 | 主要实现位置 | 验收 | 当前状态 |
 |---|---|---|---|---|
-| 组织/栋舍/栏舍离线同步 | PRD 3.1 | Flutter master-data；Spring organization | AC-01、AC-11 | 草案 |
-| 单图与三视图采集 | PRD 3.2 | Flutter capture；Spring capture | AC-01、AC-08 | 开发中（页面/策略） |
-| ROI | PRD 3.2/3.4 | Flutter capture；推理合同 | AC-01、AC-07 | 草案 |
-| 草稿恢复与本地媒体 | PRD 3.2 | Drift CaptureDrafts/LocalMediaAssets | AC-01 | 开发中（表结构） |
-| Outbox 与续传 | PRD 3.3 | Drift OutboxEntries；Upload API | AC-02 | 开发中（骨架） |
-| 幂等上传包 | OpenAPI Upload | Spring media/capture | AC-02、AC-03 | 草案 |
-| SHA-256 精确去重 | PRD 3.3 | Flutter hash；MySQL 唯一索引 | AC-04 | 开发中（服务端索引） |
+| 科研阶段登录/令牌刷新 | PRD P0；ADR-0003 | Flutter auth；Spring identity | AC-11、AC-12 | 开发中（决策、OpenAPI、数据库迁移） |
+| 组织/栋舍/栏舍离线同步 | PRD 3.1 | Flutter master-data；Spring organization | AC-01、AC-11 | 开发中（增量合同已补充） |
+| 单图与三视图采集 | PRD 3.2 | Flutter capture；Spring capture | AC-01、AC-08 | 开发中（单图/三图本地采集、方向唯一和页面接线已测试；服务端上传清单校验已测试） |
+| ROI | PRD 3.2/3.4 | Flutter ROI domain；推理合同 | AC-01、AC-07 | 开发中（边界校验和草稿持久化已测试；服务端 Manifest 边界校验已测试，推理中心点口径待实现） |
+| 草稿恢复与本地媒体 | PRD 3.2 | Drift v5 CaptureDrafts/CaptureSets/LocalMediaAssets；MediaMaterializer | AC-01 | 开发中（流式物化、EXIF 方向/尺寸、原子持久化、数据库重开恢复已测试） |
+| Outbox 与续传 | PRD 3.3 | Drift v5 OutboxEntries/UploadAssetEntries；QueueCaptureDraft；Upload API；Spring capture | AC-02 | 开发中（完整采集组入队、逐 Blob 表结构、稳定幂等键和流式上传；服务端 create/blob/manifest/commit 与事务 Outbox 已集成测试） |
+| 幂等上传包 | OpenAPI Upload | Spring capture application/infrastructure/UI | AC-02、AC-03 | 已验证（Testcontainers MySQL 覆盖 create、Blob、Manifest、Commit 重放及唯一任务） |
+| SHA-256 精确去重 | PRD 3.3 | Flutter hash；Spring capture；MySQL 唯一索引 | AC-04 | 已验证（同组织精确重复在 Manifest 阶段阻断的 MySQL 集成测试） |
 | 感知哈希审核 | PRD 3.4 | Spring review；管理端 | AC-05 | 草案 |
-| 推理安全降级 | 架构 7 | Python UnavailableProvider；Spring Provider | AC-06 | 开发中（实现已落地，待本机验证） |
+| 推理安全降级 | 架构 7；ADR-0003 | Python UnavailableProvider；Spring Provider/结果回调 | AC-06 | 开发中（降级实现、回调合同） |
 | 三视图禁止简单相加 | PRD 3.4 | CaptureSetPolicy；Provider | AC-08 | 开发中（策略测试） |
 | 人工确认和媒体锁定 | PRD 3.5 | Spring inventory/media/audit | AC-09 | 数据库草案 |
 | 综合平均 | PRD 3.5/6 | InventoryAggregationPolicy | AC-10 | 开发中（策略测试） |

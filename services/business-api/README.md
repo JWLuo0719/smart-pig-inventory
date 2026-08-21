@@ -8,5 +8,5 @@ Run locally:
 mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
-The current baseline contains schema, security boundaries, health/capability endpoints and tested domain policies. Upload persistence controllers are intentionally not claimed complete until AC-01 through AC-12 are implemented.
+The service implements the P0 upload chain: create/recover package, idempotent complete Blob upload with SHA-256 verification, manifest validation, and transactional commit of the session, evidence references, inference job and outbox event. MinIO credentials are required through `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY`; objects are staged before promotion to the private evidence namespace.
 
