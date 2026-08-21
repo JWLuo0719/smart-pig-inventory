@@ -17,9 +17,13 @@ void main() {
       kind: CaptureKind.single,
       media: <LocalMediaDraft>[
         LocalMediaDraft(
-            file: image,
-            position: ViewPosition.single,
-            contentType: 'image/jpeg')
+          file: image,
+          position: ViewPosition.single,
+          contentType: 'image/jpeg',
+          capturedAt: DateTime.utc(2026, 8, 18, 8, 30),
+          width: 1920,
+          height: 1080,
+        )
       ],
     );
 
@@ -30,6 +34,12 @@ void main() {
     final Map<String, Object?> secondMedia =
         (second['assets']! as List<Map<String, Object?>>).single;
     expect(firstMedia['assetId'], secondMedia['assetId']);
+    expect(firstMedia['sha256'], secondMedia['sha256']);
+    expect(firstMedia['capturedAt'], '2026-08-18T08:30:00.000Z');
+    expect(firstMedia['originalName'], 'photo.jpg');
+    expect(firstMedia['width'], 1920);
+    expect(firstMedia['height'], 1080);
+    expect(firstMedia['roi'], isNull);
     expect(first['captureSetId'], second['captureSetId']);
   });
 }

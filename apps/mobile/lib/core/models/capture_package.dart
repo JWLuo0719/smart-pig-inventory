@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:path/path.dart' as path;
 import 'package:uuid/uuid.dart';
 
 enum CaptureKind { single, leftCenterRight }
@@ -24,24 +25,41 @@ class LocalMediaDraft {
     required this.file,
     required this.position,
     required this.contentType,
-    this.roi = const <String, Object?>{},
+    required this.capturedAt,
+    required this.width,
+    required this.height,
+    this.exif = const <String, Object?>{},
+    this.roi,
+    String? originalName,
     String? assetId,
-  }) : assetId = assetId ?? Uuid().v4();
+  })  : originalName = originalName ?? path.basename(file.path),
+        assetId = assetId ?? Uuid().v4();
 
   final String assetId;
   final File file;
   final ViewPosition position;
   final String contentType;
-  final Map<String, Object?> roi;
+  final DateTime capturedAt;
+  final String originalName;
+  final int width;
+  final int height;
+  final Map<String, Object?> exif;
+  final Map<String, Object?>? roi;
 
   Future<Map<String, Object?>> toManifestEntry() async {
-    final List<int> bytes = await file.readAsBytes();
+    final Digest digest = await sha256.bind(file.openRead()).first;
+    final int byteSize = await file.length();
     return <String, Object?>{
       'asset_id': assetId,
       'view_position': position.wireName,
-      'sha256': sha256.convert(bytes).toString(),
-      'byte_size': bytes.length,
+      'captured_at': capturedAt.toUtc().toIso8601String(),
+      'original_name': originalName,
+      'width': width,
+      'height': height,
+      'sha256': digest.toString(),
+      'byte_size': byteSize,
       'media_type': contentType,
+      'exif': exif,
       'roi': roi,
       // pHash is advisory and can be added by a future local plugin; SHA-256 is mandatory.
     };
@@ -80,9 +98,14 @@ class CapturePackageDraft {
           .map((Map<String, Object?> entry) => <String, Object?>{
                 'assetId': entry['asset_id'],
                 'viewPosition': entry['view_position'],
+                'capturedAt': entry['captured_at'],
+                'originalName': entry['original_name'],
+                'width': entry['width'],
+                'height': entry['height'],
                 'sha256': entry['sha256'],
                 'byteSize': entry['byte_size'],
                 'mediaType': entry['media_type'],
+                'exif': entry['exif'],
                 'roi': entry['roi'],
               })
           .toList(),

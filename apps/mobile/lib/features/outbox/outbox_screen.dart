@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../main.dart';
+import '../../core/storage/database_provider.dart';
 
 class OutboxScreen extends ConsumerWidget {
   const OutboxScreen({super.key});

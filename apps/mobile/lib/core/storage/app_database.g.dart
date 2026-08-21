@@ -1055,6 +1055,243 @@ class CachedPensCompanion extends UpdateCompanion<CachedPen> {
   }
 }
 
+class $SyncCursorsTable extends SyncCursors
+    with TableInfo<$SyncCursorsTable, SyncCursor> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SyncCursorsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _organizationIdMeta =
+      const VerificationMeta('organizationId');
+  @override
+  late final GeneratedColumn<String> organizationId = GeneratedColumn<String>(
+      'organization_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _cursorMeta = const VerificationMeta('cursor');
+  @override
+  late final GeneratedColumn<String> cursor = GeneratedColumn<String>(
+      'cursor', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _syncedAtMeta =
+      const VerificationMeta('syncedAt');
+  @override
+  late final GeneratedColumn<DateTime> syncedAt = GeneratedColumn<DateTime>(
+      'synced_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [organizationId, cursor, syncedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sync_cursors';
+  @override
+  VerificationContext validateIntegrity(Insertable<SyncCursor> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('organization_id')) {
+      context.handle(
+          _organizationIdMeta,
+          organizationId.isAcceptableOrUnknown(
+              data['organization_id']!, _organizationIdMeta));
+    } else if (isInserting) {
+      context.missing(_organizationIdMeta);
+    }
+    if (data.containsKey('cursor')) {
+      context.handle(_cursorMeta,
+          cursor.isAcceptableOrUnknown(data['cursor']!, _cursorMeta));
+    } else if (isInserting) {
+      context.missing(_cursorMeta);
+    }
+    if (data.containsKey('synced_at')) {
+      context.handle(_syncedAtMeta,
+          syncedAt.isAcceptableOrUnknown(data['synced_at']!, _syncedAtMeta));
+    } else if (isInserting) {
+      context.missing(_syncedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {organizationId};
+  @override
+  SyncCursor map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SyncCursor(
+      organizationId: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}organization_id'])!,
+      cursor: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}cursor'])!,
+      syncedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}synced_at'])!,
+    );
+  }
+
+  @override
+  $SyncCursorsTable createAlias(String alias) {
+    return $SyncCursorsTable(attachedDatabase, alias);
+  }
+}
+
+class SyncCursor extends DataClass implements Insertable<SyncCursor> {
+  final String organizationId;
+  final String cursor;
+  final DateTime syncedAt;
+  const SyncCursor(
+      {required this.organizationId,
+      required this.cursor,
+      required this.syncedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['organization_id'] = Variable<String>(organizationId);
+    map['cursor'] = Variable<String>(cursor);
+    map['synced_at'] = Variable<DateTime>(syncedAt);
+    return map;
+  }
+
+  SyncCursorsCompanion toCompanion(bool nullToAbsent) {
+    return SyncCursorsCompanion(
+      organizationId: Value(organizationId),
+      cursor: Value(cursor),
+      syncedAt: Value(syncedAt),
+    );
+  }
+
+  factory SyncCursor.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SyncCursor(
+      organizationId: serializer.fromJson<String>(json['organizationId']),
+      cursor: serializer.fromJson<String>(json['cursor']),
+      syncedAt: serializer.fromJson<DateTime>(json['syncedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'organizationId': serializer.toJson<String>(organizationId),
+      'cursor': serializer.toJson<String>(cursor),
+      'syncedAt': serializer.toJson<DateTime>(syncedAt),
+    };
+  }
+
+  SyncCursor copyWith(
+          {String? organizationId, String? cursor, DateTime? syncedAt}) =>
+      SyncCursor(
+        organizationId: organizationId ?? this.organizationId,
+        cursor: cursor ?? this.cursor,
+        syncedAt: syncedAt ?? this.syncedAt,
+      );
+  SyncCursor copyWithCompanion(SyncCursorsCompanion data) {
+    return SyncCursor(
+      organizationId: data.organizationId.present
+          ? data.organizationId.value
+          : this.organizationId,
+      cursor: data.cursor.present ? data.cursor.value : this.cursor,
+      syncedAt: data.syncedAt.present ? data.syncedAt.value : this.syncedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncCursor(')
+          ..write('organizationId: $organizationId, ')
+          ..write('cursor: $cursor, ')
+          ..write('syncedAt: $syncedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(organizationId, cursor, syncedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SyncCursor &&
+          other.organizationId == this.organizationId &&
+          other.cursor == this.cursor &&
+          other.syncedAt == this.syncedAt);
+}
+
+class SyncCursorsCompanion extends UpdateCompanion<SyncCursor> {
+  final Value<String> organizationId;
+  final Value<String> cursor;
+  final Value<DateTime> syncedAt;
+  final Value<int> rowid;
+  const SyncCursorsCompanion({
+    this.organizationId = const Value.absent(),
+    this.cursor = const Value.absent(),
+    this.syncedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SyncCursorsCompanion.insert({
+    required String organizationId,
+    required String cursor,
+    required DateTime syncedAt,
+    this.rowid = const Value.absent(),
+  })  : organizationId = Value(organizationId),
+        cursor = Value(cursor),
+        syncedAt = Value(syncedAt);
+  static Insertable<SyncCursor> custom({
+    Expression<String>? organizationId,
+    Expression<String>? cursor,
+    Expression<DateTime>? syncedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (organizationId != null) 'organization_id': organizationId,
+      if (cursor != null) 'cursor': cursor,
+      if (syncedAt != null) 'synced_at': syncedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SyncCursorsCompanion copyWith(
+      {Value<String>? organizationId,
+      Value<String>? cursor,
+      Value<DateTime>? syncedAt,
+      Value<int>? rowid}) {
+    return SyncCursorsCompanion(
+      organizationId: organizationId ?? this.organizationId,
+      cursor: cursor ?? this.cursor,
+      syncedAt: syncedAt ?? this.syncedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (organizationId.present) {
+      map['organization_id'] = Variable<String>(organizationId.value);
+    }
+    if (cursor.present) {
+      map['cursor'] = Variable<String>(cursor.value);
+    }
+    if (syncedAt.present) {
+      map['synced_at'] = Variable<DateTime>(syncedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncCursorsCompanion(')
+          ..write('organizationId: $organizationId, ')
+          ..write('cursor: $cursor, ')
+          ..write('syncedAt: $syncedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $CaptureDraftsTable extends CaptureDrafts
     with TableInfo<$CaptureDraftsTable, CaptureDraft> {
   @override
@@ -1492,6 +1729,275 @@ class CaptureDraftsCompanion extends UpdateCompanion<CaptureDraft> {
   }
 }
 
+class $CaptureSetsTable extends CaptureSets
+    with TableInfo<$CaptureSetsTable, CaptureSet> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CaptureSetsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+      'id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _draftIdMeta =
+      const VerificationMeta('draftId');
+  @override
+  late final GeneratedColumn<String> draftId = GeneratedColumn<String>(
+      'draft_id', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: true,
+      defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'));
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+      'kind', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [id, draftId, kind, createdAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'capture_sets';
+  @override
+  VerificationContext validateIntegrity(Insertable<CaptureSet> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('draft_id')) {
+      context.handle(_draftIdMeta,
+          draftId.isAcceptableOrUnknown(data['draft_id']!, _draftIdMeta));
+    } else if (isInserting) {
+      context.missing(_draftIdMeta);
+    }
+    if (data.containsKey('kind')) {
+      context.handle(
+          _kindMeta, kind.isAcceptableOrUnknown(data['kind']!, _kindMeta));
+    } else if (isInserting) {
+      context.missing(_kindMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CaptureSet map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CaptureSet(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}id'])!,
+      draftId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}draft_id'])!,
+      kind: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}kind'])!,
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+    );
+  }
+
+  @override
+  $CaptureSetsTable createAlias(String alias) {
+    return $CaptureSetsTable(attachedDatabase, alias);
+  }
+}
+
+class CaptureSet extends DataClass implements Insertable<CaptureSet> {
+  final String id;
+  final String draftId;
+  final String kind;
+  final DateTime createdAt;
+  const CaptureSet(
+      {required this.id,
+      required this.draftId,
+      required this.kind,
+      required this.createdAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['draft_id'] = Variable<String>(draftId);
+    map['kind'] = Variable<String>(kind);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  CaptureSetsCompanion toCompanion(bool nullToAbsent) {
+    return CaptureSetsCompanion(
+      id: Value(id),
+      draftId: Value(draftId),
+      kind: Value(kind),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory CaptureSet.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CaptureSet(
+      id: serializer.fromJson<String>(json['id']),
+      draftId: serializer.fromJson<String>(json['draftId']),
+      kind: serializer.fromJson<String>(json['kind']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'draftId': serializer.toJson<String>(draftId),
+      'kind': serializer.toJson<String>(kind),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  CaptureSet copyWith(
+          {String? id, String? draftId, String? kind, DateTime? createdAt}) =>
+      CaptureSet(
+        id: id ?? this.id,
+        draftId: draftId ?? this.draftId,
+        kind: kind ?? this.kind,
+        createdAt: createdAt ?? this.createdAt,
+      );
+  CaptureSet copyWithCompanion(CaptureSetsCompanion data) {
+    return CaptureSet(
+      id: data.id.present ? data.id.value : this.id,
+      draftId: data.draftId.present ? data.draftId.value : this.draftId,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CaptureSet(')
+          ..write('id: $id, ')
+          ..write('draftId: $draftId, ')
+          ..write('kind: $kind, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, draftId, kind, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CaptureSet &&
+          other.id == this.id &&
+          other.draftId == this.draftId &&
+          other.kind == this.kind &&
+          other.createdAt == this.createdAt);
+}
+
+class CaptureSetsCompanion extends UpdateCompanion<CaptureSet> {
+  final Value<String> id;
+  final Value<String> draftId;
+  final Value<String> kind;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const CaptureSetsCompanion({
+    this.id = const Value.absent(),
+    this.draftId = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CaptureSetsCompanion.insert({
+    required String id,
+    required String draftId,
+    required String kind,
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  })  : id = Value(id),
+        draftId = Value(draftId),
+        kind = Value(kind),
+        createdAt = Value(createdAt);
+  static Insertable<CaptureSet> custom({
+    Expression<String>? id,
+    Expression<String>? draftId,
+    Expression<String>? kind,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (draftId != null) 'draft_id': draftId,
+      if (kind != null) 'kind': kind,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CaptureSetsCompanion copyWith(
+      {Value<String>? id,
+      Value<String>? draftId,
+      Value<String>? kind,
+      Value<DateTime>? createdAt,
+      Value<int>? rowid}) {
+    return CaptureSetsCompanion(
+      id: id ?? this.id,
+      draftId: draftId ?? this.draftId,
+      kind: kind ?? this.kind,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (draftId.present) {
+      map['draft_id'] = Variable<String>(draftId.value);
+    }
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CaptureSetsCompanion(')
+          ..write('id: $id, ')
+          ..write('draftId: $draftId, ')
+          ..write('kind: $kind, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $LocalMediaAssetsTable extends LocalMediaAssets
     with TableInfo<$LocalMediaAssetsTable, LocalMediaAsset> {
   @override
@@ -1560,6 +2066,22 @@ class $LocalMediaAssetsTable extends LocalMediaAssets
       type: DriftSqlType.string,
       requiredDuringInsert: false,
       defaultValue: const Constant('{}'));
+  static const VerificationMeta _capturedAtMeta =
+      const VerificationMeta('capturedAt');
+  @override
+  late final GeneratedColumn<DateTime> capturedAt = GeneratedColumn<DateTime>(
+      'captured_at', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _widthMeta = const VerificationMeta('width');
+  @override
+  late final GeneratedColumn<int> width = GeneratedColumn<int>(
+      'width', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _heightMeta = const VerificationMeta('height');
+  @override
+  late final GeneratedColumn<int> height = GeneratedColumn<int>(
+      'height', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
   static const VerificationMeta _createdAtMeta =
       const VerificationMeta('createdAt');
   @override
@@ -1578,6 +2100,9 @@ class $LocalMediaAssetsTable extends LocalMediaAssets
         sha256,
         roiJson,
         exifJson,
+        capturedAt,
+        width,
+        height,
         createdAt
       ];
   @override
@@ -1653,6 +2178,20 @@ class $LocalMediaAssetsTable extends LocalMediaAssets
       context.handle(_exifJsonMeta,
           exifJson.isAcceptableOrUnknown(data['exif_json']!, _exifJsonMeta));
     }
+    if (data.containsKey('captured_at')) {
+      context.handle(
+          _capturedAtMeta,
+          capturedAt.isAcceptableOrUnknown(
+              data['captured_at']!, _capturedAtMeta));
+    }
+    if (data.containsKey('width')) {
+      context.handle(
+          _widthMeta, width.isAcceptableOrUnknown(data['width']!, _widthMeta));
+    }
+    if (data.containsKey('height')) {
+      context.handle(_heightMeta,
+          height.isAcceptableOrUnknown(data['height']!, _heightMeta));
+    }
     if (data.containsKey('created_at')) {
       context.handle(_createdAtMeta,
           createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
@@ -1664,6 +2203,10 @@ class $LocalMediaAssetsTable extends LocalMediaAssets
 
   @override
   Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+        {draftId, viewPosition},
+      ];
   @override
   LocalMediaAsset map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
@@ -1688,6 +2231,12 @@ class $LocalMediaAssetsTable extends LocalMediaAssets
           .read(DriftSqlType.string, data['${effectivePrefix}roi_json'])!,
       exifJson: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}exif_json'])!,
+      capturedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}captured_at']),
+      width: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}width']),
+      height: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}height']),
       createdAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
     );
@@ -1710,6 +2259,9 @@ class LocalMediaAsset extends DataClass implements Insertable<LocalMediaAsset> {
   final String sha256;
   final String roiJson;
   final String exifJson;
+  final DateTime? capturedAt;
+  final int? width;
+  final int? height;
   final DateTime createdAt;
   const LocalMediaAsset(
       {required this.id,
@@ -1722,6 +2274,9 @@ class LocalMediaAsset extends DataClass implements Insertable<LocalMediaAsset> {
       required this.sha256,
       required this.roiJson,
       required this.exifJson,
+      this.capturedAt,
+      this.width,
+      this.height,
       required this.createdAt});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1736,6 +2291,15 @@ class LocalMediaAsset extends DataClass implements Insertable<LocalMediaAsset> {
     map['sha256'] = Variable<String>(sha256);
     map['roi_json'] = Variable<String>(roiJson);
     map['exif_json'] = Variable<String>(exifJson);
+    if (!nullToAbsent || capturedAt != null) {
+      map['captured_at'] = Variable<DateTime>(capturedAt);
+    }
+    if (!nullToAbsent || width != null) {
+      map['width'] = Variable<int>(width);
+    }
+    if (!nullToAbsent || height != null) {
+      map['height'] = Variable<int>(height);
+    }
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
   }
@@ -1752,6 +2316,13 @@ class LocalMediaAsset extends DataClass implements Insertable<LocalMediaAsset> {
       sha256: Value(sha256),
       roiJson: Value(roiJson),
       exifJson: Value(exifJson),
+      capturedAt: capturedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(capturedAt),
+      width:
+          width == null && nullToAbsent ? const Value.absent() : Value(width),
+      height:
+          height == null && nullToAbsent ? const Value.absent() : Value(height),
       createdAt: Value(createdAt),
     );
   }
@@ -1770,6 +2341,9 @@ class LocalMediaAsset extends DataClass implements Insertable<LocalMediaAsset> {
       sha256: serializer.fromJson<String>(json['sha256']),
       roiJson: serializer.fromJson<String>(json['roiJson']),
       exifJson: serializer.fromJson<String>(json['exifJson']),
+      capturedAt: serializer.fromJson<DateTime?>(json['capturedAt']),
+      width: serializer.fromJson<int?>(json['width']),
+      height: serializer.fromJson<int?>(json['height']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -1787,6 +2361,9 @@ class LocalMediaAsset extends DataClass implements Insertable<LocalMediaAsset> {
       'sha256': serializer.toJson<String>(sha256),
       'roiJson': serializer.toJson<String>(roiJson),
       'exifJson': serializer.toJson<String>(exifJson),
+      'capturedAt': serializer.toJson<DateTime?>(capturedAt),
+      'width': serializer.toJson<int?>(width),
+      'height': serializer.toJson<int?>(height),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -1802,6 +2379,9 @@ class LocalMediaAsset extends DataClass implements Insertable<LocalMediaAsset> {
           String? sha256,
           String? roiJson,
           String? exifJson,
+          Value<DateTime?> capturedAt = const Value.absent(),
+          Value<int?> width = const Value.absent(),
+          Value<int?> height = const Value.absent(),
           DateTime? createdAt}) =>
       LocalMediaAsset(
         id: id ?? this.id,
@@ -1814,6 +2394,9 @@ class LocalMediaAsset extends DataClass implements Insertable<LocalMediaAsset> {
         sha256: sha256 ?? this.sha256,
         roiJson: roiJson ?? this.roiJson,
         exifJson: exifJson ?? this.exifJson,
+        capturedAt: capturedAt.present ? capturedAt.value : this.capturedAt,
+        width: width.present ? width.value : this.width,
+        height: height.present ? height.value : this.height,
         createdAt: createdAt ?? this.createdAt,
       );
   LocalMediaAsset copyWithCompanion(LocalMediaAssetsCompanion data) {
@@ -1835,6 +2418,10 @@ class LocalMediaAsset extends DataClass implements Insertable<LocalMediaAsset> {
       sha256: data.sha256.present ? data.sha256.value : this.sha256,
       roiJson: data.roiJson.present ? data.roiJson.value : this.roiJson,
       exifJson: data.exifJson.present ? data.exifJson.value : this.exifJson,
+      capturedAt:
+          data.capturedAt.present ? data.capturedAt.value : this.capturedAt,
+      width: data.width.present ? data.width.value : this.width,
+      height: data.height.present ? data.height.value : this.height,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -1852,6 +2439,9 @@ class LocalMediaAsset extends DataClass implements Insertable<LocalMediaAsset> {
           ..write('sha256: $sha256, ')
           ..write('roiJson: $roiJson, ')
           ..write('exifJson: $exifJson, ')
+          ..write('capturedAt: $capturedAt, ')
+          ..write('width: $width, ')
+          ..write('height: $height, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -1869,6 +2459,9 @@ class LocalMediaAsset extends DataClass implements Insertable<LocalMediaAsset> {
       sha256,
       roiJson,
       exifJson,
+      capturedAt,
+      width,
+      height,
       createdAt);
   @override
   bool operator ==(Object other) =>
@@ -1884,6 +2477,9 @@ class LocalMediaAsset extends DataClass implements Insertable<LocalMediaAsset> {
           other.sha256 == this.sha256 &&
           other.roiJson == this.roiJson &&
           other.exifJson == this.exifJson &&
+          other.capturedAt == this.capturedAt &&
+          other.width == this.width &&
+          other.height == this.height &&
           other.createdAt == this.createdAt);
 }
 
@@ -1898,6 +2494,9 @@ class LocalMediaAssetsCompanion extends UpdateCompanion<LocalMediaAsset> {
   final Value<String> sha256;
   final Value<String> roiJson;
   final Value<String> exifJson;
+  final Value<DateTime?> capturedAt;
+  final Value<int?> width;
+  final Value<int?> height;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
   const LocalMediaAssetsCompanion({
@@ -1911,6 +2510,9 @@ class LocalMediaAssetsCompanion extends UpdateCompanion<LocalMediaAsset> {
     this.sha256 = const Value.absent(),
     this.roiJson = const Value.absent(),
     this.exifJson = const Value.absent(),
+    this.capturedAt = const Value.absent(),
+    this.width = const Value.absent(),
+    this.height = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -1925,6 +2527,9 @@ class LocalMediaAssetsCompanion extends UpdateCompanion<LocalMediaAsset> {
     required String sha256,
     this.roiJson = const Value.absent(),
     this.exifJson = const Value.absent(),
+    this.capturedAt = const Value.absent(),
+    this.width = const Value.absent(),
+    this.height = const Value.absent(),
     required DateTime createdAt,
     this.rowid = const Value.absent(),
   })  : id = Value(id),
@@ -1947,6 +2552,9 @@ class LocalMediaAssetsCompanion extends UpdateCompanion<LocalMediaAsset> {
     Expression<String>? sha256,
     Expression<String>? roiJson,
     Expression<String>? exifJson,
+    Expression<DateTime>? capturedAt,
+    Expression<int>? width,
+    Expression<int>? height,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
   }) {
@@ -1961,6 +2569,9 @@ class LocalMediaAssetsCompanion extends UpdateCompanion<LocalMediaAsset> {
       if (sha256 != null) 'sha256': sha256,
       if (roiJson != null) 'roi_json': roiJson,
       if (exifJson != null) 'exif_json': exifJson,
+      if (capturedAt != null) 'captured_at': capturedAt,
+      if (width != null) 'width': width,
+      if (height != null) 'height': height,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
     });
@@ -1977,6 +2588,9 @@ class LocalMediaAssetsCompanion extends UpdateCompanion<LocalMediaAsset> {
       Value<String>? sha256,
       Value<String>? roiJson,
       Value<String>? exifJson,
+      Value<DateTime?>? capturedAt,
+      Value<int?>? width,
+      Value<int?>? height,
       Value<DateTime>? createdAt,
       Value<int>? rowid}) {
     return LocalMediaAssetsCompanion(
@@ -1990,6 +2604,9 @@ class LocalMediaAssetsCompanion extends UpdateCompanion<LocalMediaAsset> {
       sha256: sha256 ?? this.sha256,
       roiJson: roiJson ?? this.roiJson,
       exifJson: exifJson ?? this.exifJson,
+      capturedAt: capturedAt ?? this.capturedAt,
+      width: width ?? this.width,
+      height: height ?? this.height,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
     );
@@ -2028,6 +2645,15 @@ class LocalMediaAssetsCompanion extends UpdateCompanion<LocalMediaAsset> {
     if (exifJson.present) {
       map['exif_json'] = Variable<String>(exifJson.value);
     }
+    if (capturedAt.present) {
+      map['captured_at'] = Variable<DateTime>(capturedAt.value);
+    }
+    if (width.present) {
+      map['width'] = Variable<int>(width.value);
+    }
+    if (height.present) {
+      map['height'] = Variable<int>(height.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -2050,6 +2676,9 @@ class LocalMediaAssetsCompanion extends UpdateCompanion<LocalMediaAsset> {
           ..write('sha256: $sha256, ')
           ..write('roiJson: $roiJson, ')
           ..write('exifJson: $exifJson, ')
+          ..write('capturedAt: $capturedAt, ')
+          ..write('width: $width, ')
+          ..write('height: $height, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -2074,7 +2703,9 @@ class $OutboxEntriesTable extends OutboxEntries
   @override
   late final GeneratedColumn<String> draftId = GeneratedColumn<String>(
       'draft_id', aliasedName, false,
-      type: DriftSqlType.string, requiredDuringInsert: true);
+      type: DriftSqlType.string,
+      requiredDuringInsert: true,
+      defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'));
   static const VerificationMeta _idempotencyKeyMeta =
       const VerificationMeta('idempotencyKey');
   @override
@@ -2099,6 +2730,50 @@ class $OutboxEntriesTable extends OutboxEntries
   late final GeneratedColumn<String> error = GeneratedColumn<String>(
       'error', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _serverPackageIdMeta =
+      const VerificationMeta('serverPackageId');
+  @override
+  late final GeneratedColumn<String> serverPackageId = GeneratedColumn<String>(
+      'server_package_id', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _sessionIdMeta =
+      const VerificationMeta('sessionId');
+  @override
+  late final GeneratedColumn<String> sessionId = GeneratedColumn<String>(
+      'session_id', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _inferenceJobIdMeta =
+      const VerificationMeta('inferenceJobId');
+  @override
+  late final GeneratedColumn<String> inferenceJobId = GeneratedColumn<String>(
+      'inference_job_id', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _attemptCountMeta =
+      const VerificationMeta('attemptCount');
+  @override
+  late final GeneratedColumn<int> attemptCount = GeneratedColumn<int>(
+      'attempt_count', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _nextAttemptAtMeta =
+      const VerificationMeta('nextAttemptAt');
+  @override
+  late final GeneratedColumn<DateTime> nextAttemptAt =
+      GeneratedColumn<DateTime>('next_attempt_at', aliasedName, true,
+          type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _leaseOwnerMeta =
+      const VerificationMeta('leaseOwner');
+  @override
+  late final GeneratedColumn<String> leaseOwner = GeneratedColumn<String>(
+      'lease_owner', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _leaseExpiresAtMeta =
+      const VerificationMeta('leaseExpiresAt');
+  @override
+  late final GeneratedColumn<DateTime> leaseExpiresAt =
+      GeneratedColumn<DateTime>('lease_expires_at', aliasedName, true,
+          type: DriftSqlType.dateTime, requiredDuringInsert: false);
   static const VerificationMeta _createdAtMeta =
       const VerificationMeta('createdAt');
   @override
@@ -2119,6 +2794,13 @@ class $OutboxEntriesTable extends OutboxEntries
         state,
         manifestJson,
         error,
+        serverPackageId,
+        sessionId,
+        inferenceJobId,
+        attemptCount,
+        nextAttemptAt,
+        leaseOwner,
+        leaseExpiresAt,
         createdAt,
         updatedAt
       ];
@@ -2168,6 +2850,46 @@ class $OutboxEntriesTable extends OutboxEntries
       context.handle(
           _errorMeta, error.isAcceptableOrUnknown(data['error']!, _errorMeta));
     }
+    if (data.containsKey('server_package_id')) {
+      context.handle(
+          _serverPackageIdMeta,
+          serverPackageId.isAcceptableOrUnknown(
+              data['server_package_id']!, _serverPackageIdMeta));
+    }
+    if (data.containsKey('session_id')) {
+      context.handle(_sessionIdMeta,
+          sessionId.isAcceptableOrUnknown(data['session_id']!, _sessionIdMeta));
+    }
+    if (data.containsKey('inference_job_id')) {
+      context.handle(
+          _inferenceJobIdMeta,
+          inferenceJobId.isAcceptableOrUnknown(
+              data['inference_job_id']!, _inferenceJobIdMeta));
+    }
+    if (data.containsKey('attempt_count')) {
+      context.handle(
+          _attemptCountMeta,
+          attemptCount.isAcceptableOrUnknown(
+              data['attempt_count']!, _attemptCountMeta));
+    }
+    if (data.containsKey('next_attempt_at')) {
+      context.handle(
+          _nextAttemptAtMeta,
+          nextAttemptAt.isAcceptableOrUnknown(
+              data['next_attempt_at']!, _nextAttemptAtMeta));
+    }
+    if (data.containsKey('lease_owner')) {
+      context.handle(
+          _leaseOwnerMeta,
+          leaseOwner.isAcceptableOrUnknown(
+              data['lease_owner']!, _leaseOwnerMeta));
+    }
+    if (data.containsKey('lease_expires_at')) {
+      context.handle(
+          _leaseExpiresAtMeta,
+          leaseExpiresAt.isAcceptableOrUnknown(
+              data['lease_expires_at']!, _leaseExpiresAtMeta));
+    }
     if (data.containsKey('created_at')) {
       context.handle(_createdAtMeta,
           createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
@@ -2201,6 +2923,20 @@ class $OutboxEntriesTable extends OutboxEntries
           .read(DriftSqlType.string, data['${effectivePrefix}manifest_json'])!,
       error: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}error']),
+      serverPackageId: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}server_package_id']),
+      sessionId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}session_id']),
+      inferenceJobId: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}inference_job_id']),
+      attemptCount: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}attempt_count'])!,
+      nextAttemptAt: attachedDatabase.typeMapping.read(
+          DriftSqlType.dateTime, data['${effectivePrefix}next_attempt_at']),
+      leaseOwner: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}lease_owner']),
+      leaseExpiresAt: attachedDatabase.typeMapping.read(
+          DriftSqlType.dateTime, data['${effectivePrefix}lease_expires_at']),
       createdAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
       updatedAt: attachedDatabase.typeMapping
@@ -2221,6 +2957,13 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
   final String state;
   final String manifestJson;
   final String? error;
+  final String? serverPackageId;
+  final String? sessionId;
+  final String? inferenceJobId;
+  final int attemptCount;
+  final DateTime? nextAttemptAt;
+  final String? leaseOwner;
+  final DateTime? leaseExpiresAt;
   final DateTime createdAt;
   final DateTime updatedAt;
   const OutboxEntry(
@@ -2230,6 +2973,13 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
       required this.state,
       required this.manifestJson,
       this.error,
+      this.serverPackageId,
+      this.sessionId,
+      this.inferenceJobId,
+      required this.attemptCount,
+      this.nextAttemptAt,
+      this.leaseOwner,
+      this.leaseExpiresAt,
       required this.createdAt,
       required this.updatedAt});
   @override
@@ -2242,6 +2992,25 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
     map['manifest_json'] = Variable<String>(manifestJson);
     if (!nullToAbsent || error != null) {
       map['error'] = Variable<String>(error);
+    }
+    if (!nullToAbsent || serverPackageId != null) {
+      map['server_package_id'] = Variable<String>(serverPackageId);
+    }
+    if (!nullToAbsent || sessionId != null) {
+      map['session_id'] = Variable<String>(sessionId);
+    }
+    if (!nullToAbsent || inferenceJobId != null) {
+      map['inference_job_id'] = Variable<String>(inferenceJobId);
+    }
+    map['attempt_count'] = Variable<int>(attemptCount);
+    if (!nullToAbsent || nextAttemptAt != null) {
+      map['next_attempt_at'] = Variable<DateTime>(nextAttemptAt);
+    }
+    if (!nullToAbsent || leaseOwner != null) {
+      map['lease_owner'] = Variable<String>(leaseOwner);
+    }
+    if (!nullToAbsent || leaseExpiresAt != null) {
+      map['lease_expires_at'] = Variable<DateTime>(leaseExpiresAt);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -2257,6 +3026,25 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
       manifestJson: Value(manifestJson),
       error:
           error == null && nullToAbsent ? const Value.absent() : Value(error),
+      serverPackageId: serverPackageId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(serverPackageId),
+      sessionId: sessionId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sessionId),
+      inferenceJobId: inferenceJobId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(inferenceJobId),
+      attemptCount: Value(attemptCount),
+      nextAttemptAt: nextAttemptAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(nextAttemptAt),
+      leaseOwner: leaseOwner == null && nullToAbsent
+          ? const Value.absent()
+          : Value(leaseOwner),
+      leaseExpiresAt: leaseExpiresAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(leaseExpiresAt),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -2272,6 +3060,13 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
       state: serializer.fromJson<String>(json['state']),
       manifestJson: serializer.fromJson<String>(json['manifestJson']),
       error: serializer.fromJson<String?>(json['error']),
+      serverPackageId: serializer.fromJson<String?>(json['serverPackageId']),
+      sessionId: serializer.fromJson<String?>(json['sessionId']),
+      inferenceJobId: serializer.fromJson<String?>(json['inferenceJobId']),
+      attemptCount: serializer.fromJson<int>(json['attemptCount']),
+      nextAttemptAt: serializer.fromJson<DateTime?>(json['nextAttemptAt']),
+      leaseOwner: serializer.fromJson<String?>(json['leaseOwner']),
+      leaseExpiresAt: serializer.fromJson<DateTime?>(json['leaseExpiresAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -2286,6 +3081,13 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
       'state': serializer.toJson<String>(state),
       'manifestJson': serializer.toJson<String>(manifestJson),
       'error': serializer.toJson<String?>(error),
+      'serverPackageId': serializer.toJson<String?>(serverPackageId),
+      'sessionId': serializer.toJson<String?>(sessionId),
+      'inferenceJobId': serializer.toJson<String?>(inferenceJobId),
+      'attemptCount': serializer.toJson<int>(attemptCount),
+      'nextAttemptAt': serializer.toJson<DateTime?>(nextAttemptAt),
+      'leaseOwner': serializer.toJson<String?>(leaseOwner),
+      'leaseExpiresAt': serializer.toJson<DateTime?>(leaseExpiresAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -2298,6 +3100,13 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
           String? state,
           String? manifestJson,
           Value<String?> error = const Value.absent(),
+          Value<String?> serverPackageId = const Value.absent(),
+          Value<String?> sessionId = const Value.absent(),
+          Value<String?> inferenceJobId = const Value.absent(),
+          int? attemptCount,
+          Value<DateTime?> nextAttemptAt = const Value.absent(),
+          Value<String?> leaseOwner = const Value.absent(),
+          Value<DateTime?> leaseExpiresAt = const Value.absent(),
           DateTime? createdAt,
           DateTime? updatedAt}) =>
       OutboxEntry(
@@ -2307,6 +3116,18 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
         state: state ?? this.state,
         manifestJson: manifestJson ?? this.manifestJson,
         error: error.present ? error.value : this.error,
+        serverPackageId: serverPackageId.present
+            ? serverPackageId.value
+            : this.serverPackageId,
+        sessionId: sessionId.present ? sessionId.value : this.sessionId,
+        inferenceJobId:
+            inferenceJobId.present ? inferenceJobId.value : this.inferenceJobId,
+        attemptCount: attemptCount ?? this.attemptCount,
+        nextAttemptAt:
+            nextAttemptAt.present ? nextAttemptAt.value : this.nextAttemptAt,
+        leaseOwner: leaseOwner.present ? leaseOwner.value : this.leaseOwner,
+        leaseExpiresAt:
+            leaseExpiresAt.present ? leaseExpiresAt.value : this.leaseExpiresAt,
         createdAt: createdAt ?? this.createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
       );
@@ -2322,6 +3143,24 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
           ? data.manifestJson.value
           : this.manifestJson,
       error: data.error.present ? data.error.value : this.error,
+      serverPackageId: data.serverPackageId.present
+          ? data.serverPackageId.value
+          : this.serverPackageId,
+      sessionId: data.sessionId.present ? data.sessionId.value : this.sessionId,
+      inferenceJobId: data.inferenceJobId.present
+          ? data.inferenceJobId.value
+          : this.inferenceJobId,
+      attemptCount: data.attemptCount.present
+          ? data.attemptCount.value
+          : this.attemptCount,
+      nextAttemptAt: data.nextAttemptAt.present
+          ? data.nextAttemptAt.value
+          : this.nextAttemptAt,
+      leaseOwner:
+          data.leaseOwner.present ? data.leaseOwner.value : this.leaseOwner,
+      leaseExpiresAt: data.leaseExpiresAt.present
+          ? data.leaseExpiresAt.value
+          : this.leaseExpiresAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -2336,6 +3175,13 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
           ..write('state: $state, ')
           ..write('manifestJson: $manifestJson, ')
           ..write('error: $error, ')
+          ..write('serverPackageId: $serverPackageId, ')
+          ..write('sessionId: $sessionId, ')
+          ..write('inferenceJobId: $inferenceJobId, ')
+          ..write('attemptCount: $attemptCount, ')
+          ..write('nextAttemptAt: $nextAttemptAt, ')
+          ..write('leaseOwner: $leaseOwner, ')
+          ..write('leaseExpiresAt: $leaseExpiresAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -2343,8 +3189,22 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
   }
 
   @override
-  int get hashCode => Object.hash(packageId, draftId, idempotencyKey, state,
-      manifestJson, error, createdAt, updatedAt);
+  int get hashCode => Object.hash(
+      packageId,
+      draftId,
+      idempotencyKey,
+      state,
+      manifestJson,
+      error,
+      serverPackageId,
+      sessionId,
+      inferenceJobId,
+      attemptCount,
+      nextAttemptAt,
+      leaseOwner,
+      leaseExpiresAt,
+      createdAt,
+      updatedAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -2355,6 +3215,13 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
           other.state == this.state &&
           other.manifestJson == this.manifestJson &&
           other.error == this.error &&
+          other.serverPackageId == this.serverPackageId &&
+          other.sessionId == this.sessionId &&
+          other.inferenceJobId == this.inferenceJobId &&
+          other.attemptCount == this.attemptCount &&
+          other.nextAttemptAt == this.nextAttemptAt &&
+          other.leaseOwner == this.leaseOwner &&
+          other.leaseExpiresAt == this.leaseExpiresAt &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -2366,6 +3233,13 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
   final Value<String> state;
   final Value<String> manifestJson;
   final Value<String?> error;
+  final Value<String?> serverPackageId;
+  final Value<String?> sessionId;
+  final Value<String?> inferenceJobId;
+  final Value<int> attemptCount;
+  final Value<DateTime?> nextAttemptAt;
+  final Value<String?> leaseOwner;
+  final Value<DateTime?> leaseExpiresAt;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -2376,6 +3250,13 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
     this.state = const Value.absent(),
     this.manifestJson = const Value.absent(),
     this.error = const Value.absent(),
+    this.serverPackageId = const Value.absent(),
+    this.sessionId = const Value.absent(),
+    this.inferenceJobId = const Value.absent(),
+    this.attemptCount = const Value.absent(),
+    this.nextAttemptAt = const Value.absent(),
+    this.leaseOwner = const Value.absent(),
+    this.leaseExpiresAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -2387,6 +3268,13 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
     this.state = const Value.absent(),
     required String manifestJson,
     this.error = const Value.absent(),
+    this.serverPackageId = const Value.absent(),
+    this.sessionId = const Value.absent(),
+    this.inferenceJobId = const Value.absent(),
+    this.attemptCount = const Value.absent(),
+    this.nextAttemptAt = const Value.absent(),
+    this.leaseOwner = const Value.absent(),
+    this.leaseExpiresAt = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
     this.rowid = const Value.absent(),
@@ -2403,6 +3291,13 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
     Expression<String>? state,
     Expression<String>? manifestJson,
     Expression<String>? error,
+    Expression<String>? serverPackageId,
+    Expression<String>? sessionId,
+    Expression<String>? inferenceJobId,
+    Expression<int>? attemptCount,
+    Expression<DateTime>? nextAttemptAt,
+    Expression<String>? leaseOwner,
+    Expression<DateTime>? leaseExpiresAt,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -2414,6 +3309,13 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
       if (state != null) 'state': state,
       if (manifestJson != null) 'manifest_json': manifestJson,
       if (error != null) 'error': error,
+      if (serverPackageId != null) 'server_package_id': serverPackageId,
+      if (sessionId != null) 'session_id': sessionId,
+      if (inferenceJobId != null) 'inference_job_id': inferenceJobId,
+      if (attemptCount != null) 'attempt_count': attemptCount,
+      if (nextAttemptAt != null) 'next_attempt_at': nextAttemptAt,
+      if (leaseOwner != null) 'lease_owner': leaseOwner,
+      if (leaseExpiresAt != null) 'lease_expires_at': leaseExpiresAt,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -2427,6 +3329,13 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
       Value<String>? state,
       Value<String>? manifestJson,
       Value<String?>? error,
+      Value<String?>? serverPackageId,
+      Value<String?>? sessionId,
+      Value<String?>? inferenceJobId,
+      Value<int>? attemptCount,
+      Value<DateTime?>? nextAttemptAt,
+      Value<String?>? leaseOwner,
+      Value<DateTime?>? leaseExpiresAt,
       Value<DateTime>? createdAt,
       Value<DateTime>? updatedAt,
       Value<int>? rowid}) {
@@ -2437,6 +3346,13 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
       state: state ?? this.state,
       manifestJson: manifestJson ?? this.manifestJson,
       error: error ?? this.error,
+      serverPackageId: serverPackageId ?? this.serverPackageId,
+      sessionId: sessionId ?? this.sessionId,
+      inferenceJobId: inferenceJobId ?? this.inferenceJobId,
+      attemptCount: attemptCount ?? this.attemptCount,
+      nextAttemptAt: nextAttemptAt ?? this.nextAttemptAt,
+      leaseOwner: leaseOwner ?? this.leaseOwner,
+      leaseExpiresAt: leaseExpiresAt ?? this.leaseExpiresAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -2464,6 +3380,27 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
     if (error.present) {
       map['error'] = Variable<String>(error.value);
     }
+    if (serverPackageId.present) {
+      map['server_package_id'] = Variable<String>(serverPackageId.value);
+    }
+    if (sessionId.present) {
+      map['session_id'] = Variable<String>(sessionId.value);
+    }
+    if (inferenceJobId.present) {
+      map['inference_job_id'] = Variable<String>(inferenceJobId.value);
+    }
+    if (attemptCount.present) {
+      map['attempt_count'] = Variable<int>(attemptCount.value);
+    }
+    if (nextAttemptAt.present) {
+      map['next_attempt_at'] = Variable<DateTime>(nextAttemptAt.value);
+    }
+    if (leaseOwner.present) {
+      map['lease_owner'] = Variable<String>(leaseOwner.value);
+    }
+    if (leaseExpiresAt.present) {
+      map['lease_expires_at'] = Variable<DateTime>(leaseExpiresAt.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -2485,7 +3422,414 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
           ..write('state: $state, ')
           ..write('manifestJson: $manifestJson, ')
           ..write('error: $error, ')
+          ..write('serverPackageId: $serverPackageId, ')
+          ..write('sessionId: $sessionId, ')
+          ..write('inferenceJobId: $inferenceJobId, ')
+          ..write('attemptCount: $attemptCount, ')
+          ..write('nextAttemptAt: $nextAttemptAt, ')
+          ..write('leaseOwner: $leaseOwner, ')
+          ..write('leaseExpiresAt: $leaseExpiresAt, ')
           ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $UploadAssetEntriesTable extends UploadAssetEntries
+    with TableInfo<$UploadAssetEntriesTable, UploadAssetEntry> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $UploadAssetEntriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _packageIdMeta =
+      const VerificationMeta('packageId');
+  @override
+  late final GeneratedColumn<String> packageId = GeneratedColumn<String>(
+      'package_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _assetIdMeta =
+      const VerificationMeta('assetId');
+  @override
+  late final GeneratedColumn<String> assetId = GeneratedColumn<String>(
+      'asset_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _stateMeta = const VerificationMeta('state');
+  @override
+  late final GeneratedColumn<String> state = GeneratedColumn<String>(
+      'state', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('pending'));
+  static const VerificationMeta _attemptCountMeta =
+      const VerificationMeta('attemptCount');
+  @override
+  late final GeneratedColumn<int> attemptCount = GeneratedColumn<int>(
+      'attempt_count', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _errorCodeMeta =
+      const VerificationMeta('errorCode');
+  @override
+  late final GeneratedColumn<String> errorCode = GeneratedColumn<String>(
+      'error_code', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _uploadedAtMeta =
+      const VerificationMeta('uploadedAt');
+  @override
+  late final GeneratedColumn<DateTime> uploadedAt = GeneratedColumn<DateTime>(
+      'uploaded_at', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _updatedAtMeta =
+      const VerificationMeta('updatedAt');
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+      'updated_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [
+        packageId,
+        assetId,
+        state,
+        attemptCount,
+        errorCode,
+        uploadedAt,
+        updatedAt
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'upload_asset_entries';
+  @override
+  VerificationContext validateIntegrity(Insertable<UploadAssetEntry> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('package_id')) {
+      context.handle(_packageIdMeta,
+          packageId.isAcceptableOrUnknown(data['package_id']!, _packageIdMeta));
+    } else if (isInserting) {
+      context.missing(_packageIdMeta);
+    }
+    if (data.containsKey('asset_id')) {
+      context.handle(_assetIdMeta,
+          assetId.isAcceptableOrUnknown(data['asset_id']!, _assetIdMeta));
+    } else if (isInserting) {
+      context.missing(_assetIdMeta);
+    }
+    if (data.containsKey('state')) {
+      context.handle(
+          _stateMeta, state.isAcceptableOrUnknown(data['state']!, _stateMeta));
+    }
+    if (data.containsKey('attempt_count')) {
+      context.handle(
+          _attemptCountMeta,
+          attemptCount.isAcceptableOrUnknown(
+              data['attempt_count']!, _attemptCountMeta));
+    }
+    if (data.containsKey('error_code')) {
+      context.handle(_errorCodeMeta,
+          errorCode.isAcceptableOrUnknown(data['error_code']!, _errorCodeMeta));
+    }
+    if (data.containsKey('uploaded_at')) {
+      context.handle(
+          _uploadedAtMeta,
+          uploadedAt.isAcceptableOrUnknown(
+              data['uploaded_at']!, _uploadedAtMeta));
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(_updatedAtMeta,
+          updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta));
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {packageId, assetId};
+  @override
+  UploadAssetEntry map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return UploadAssetEntry(
+      packageId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}package_id'])!,
+      assetId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}asset_id'])!,
+      state: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}state'])!,
+      attemptCount: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}attempt_count'])!,
+      errorCode: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}error_code']),
+      uploadedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}uploaded_at']),
+      updatedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}updated_at'])!,
+    );
+  }
+
+  @override
+  $UploadAssetEntriesTable createAlias(String alias) {
+    return $UploadAssetEntriesTable(attachedDatabase, alias);
+  }
+}
+
+class UploadAssetEntry extends DataClass
+    implements Insertable<UploadAssetEntry> {
+  final String packageId;
+  final String assetId;
+  final String state;
+  final int attemptCount;
+  final String? errorCode;
+  final DateTime? uploadedAt;
+  final DateTime updatedAt;
+  const UploadAssetEntry(
+      {required this.packageId,
+      required this.assetId,
+      required this.state,
+      required this.attemptCount,
+      this.errorCode,
+      this.uploadedAt,
+      required this.updatedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['package_id'] = Variable<String>(packageId);
+    map['asset_id'] = Variable<String>(assetId);
+    map['state'] = Variable<String>(state);
+    map['attempt_count'] = Variable<int>(attemptCount);
+    if (!nullToAbsent || errorCode != null) {
+      map['error_code'] = Variable<String>(errorCode);
+    }
+    if (!nullToAbsent || uploadedAt != null) {
+      map['uploaded_at'] = Variable<DateTime>(uploadedAt);
+    }
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  UploadAssetEntriesCompanion toCompanion(bool nullToAbsent) {
+    return UploadAssetEntriesCompanion(
+      packageId: Value(packageId),
+      assetId: Value(assetId),
+      state: Value(state),
+      attemptCount: Value(attemptCount),
+      errorCode: errorCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(errorCode),
+      uploadedAt: uploadedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(uploadedAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory UploadAssetEntry.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return UploadAssetEntry(
+      packageId: serializer.fromJson<String>(json['packageId']),
+      assetId: serializer.fromJson<String>(json['assetId']),
+      state: serializer.fromJson<String>(json['state']),
+      attemptCount: serializer.fromJson<int>(json['attemptCount']),
+      errorCode: serializer.fromJson<String?>(json['errorCode']),
+      uploadedAt: serializer.fromJson<DateTime?>(json['uploadedAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'packageId': serializer.toJson<String>(packageId),
+      'assetId': serializer.toJson<String>(assetId),
+      'state': serializer.toJson<String>(state),
+      'attemptCount': serializer.toJson<int>(attemptCount),
+      'errorCode': serializer.toJson<String?>(errorCode),
+      'uploadedAt': serializer.toJson<DateTime?>(uploadedAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  UploadAssetEntry copyWith(
+          {String? packageId,
+          String? assetId,
+          String? state,
+          int? attemptCount,
+          Value<String?> errorCode = const Value.absent(),
+          Value<DateTime?> uploadedAt = const Value.absent(),
+          DateTime? updatedAt}) =>
+      UploadAssetEntry(
+        packageId: packageId ?? this.packageId,
+        assetId: assetId ?? this.assetId,
+        state: state ?? this.state,
+        attemptCount: attemptCount ?? this.attemptCount,
+        errorCode: errorCode.present ? errorCode.value : this.errorCode,
+        uploadedAt: uploadedAt.present ? uploadedAt.value : this.uploadedAt,
+        updatedAt: updatedAt ?? this.updatedAt,
+      );
+  UploadAssetEntry copyWithCompanion(UploadAssetEntriesCompanion data) {
+    return UploadAssetEntry(
+      packageId: data.packageId.present ? data.packageId.value : this.packageId,
+      assetId: data.assetId.present ? data.assetId.value : this.assetId,
+      state: data.state.present ? data.state.value : this.state,
+      attemptCount: data.attemptCount.present
+          ? data.attemptCount.value
+          : this.attemptCount,
+      errorCode: data.errorCode.present ? data.errorCode.value : this.errorCode,
+      uploadedAt:
+          data.uploadedAt.present ? data.uploadedAt.value : this.uploadedAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('UploadAssetEntry(')
+          ..write('packageId: $packageId, ')
+          ..write('assetId: $assetId, ')
+          ..write('state: $state, ')
+          ..write('attemptCount: $attemptCount, ')
+          ..write('errorCode: $errorCode, ')
+          ..write('uploadedAt: $uploadedAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(packageId, assetId, state, attemptCount,
+      errorCode, uploadedAt, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is UploadAssetEntry &&
+          other.packageId == this.packageId &&
+          other.assetId == this.assetId &&
+          other.state == this.state &&
+          other.attemptCount == this.attemptCount &&
+          other.errorCode == this.errorCode &&
+          other.uploadedAt == this.uploadedAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class UploadAssetEntriesCompanion extends UpdateCompanion<UploadAssetEntry> {
+  final Value<String> packageId;
+  final Value<String> assetId;
+  final Value<String> state;
+  final Value<int> attemptCount;
+  final Value<String?> errorCode;
+  final Value<DateTime?> uploadedAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const UploadAssetEntriesCompanion({
+    this.packageId = const Value.absent(),
+    this.assetId = const Value.absent(),
+    this.state = const Value.absent(),
+    this.attemptCount = const Value.absent(),
+    this.errorCode = const Value.absent(),
+    this.uploadedAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  UploadAssetEntriesCompanion.insert({
+    required String packageId,
+    required String assetId,
+    this.state = const Value.absent(),
+    this.attemptCount = const Value.absent(),
+    this.errorCode = const Value.absent(),
+    this.uploadedAt = const Value.absent(),
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  })  : packageId = Value(packageId),
+        assetId = Value(assetId),
+        updatedAt = Value(updatedAt);
+  static Insertable<UploadAssetEntry> custom({
+    Expression<String>? packageId,
+    Expression<String>? assetId,
+    Expression<String>? state,
+    Expression<int>? attemptCount,
+    Expression<String>? errorCode,
+    Expression<DateTime>? uploadedAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (packageId != null) 'package_id': packageId,
+      if (assetId != null) 'asset_id': assetId,
+      if (state != null) 'state': state,
+      if (attemptCount != null) 'attempt_count': attemptCount,
+      if (errorCode != null) 'error_code': errorCode,
+      if (uploadedAt != null) 'uploaded_at': uploadedAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  UploadAssetEntriesCompanion copyWith(
+      {Value<String>? packageId,
+      Value<String>? assetId,
+      Value<String>? state,
+      Value<int>? attemptCount,
+      Value<String?>? errorCode,
+      Value<DateTime?>? uploadedAt,
+      Value<DateTime>? updatedAt,
+      Value<int>? rowid}) {
+    return UploadAssetEntriesCompanion(
+      packageId: packageId ?? this.packageId,
+      assetId: assetId ?? this.assetId,
+      state: state ?? this.state,
+      attemptCount: attemptCount ?? this.attemptCount,
+      errorCode: errorCode ?? this.errorCode,
+      uploadedAt: uploadedAt ?? this.uploadedAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (packageId.present) {
+      map['package_id'] = Variable<String>(packageId.value);
+    }
+    if (assetId.present) {
+      map['asset_id'] = Variable<String>(assetId.value);
+    }
+    if (state.present) {
+      map['state'] = Variable<String>(state.value);
+    }
+    if (attemptCount.present) {
+      map['attempt_count'] = Variable<int>(attemptCount.value);
+    }
+    if (errorCode.present) {
+      map['error_code'] = Variable<String>(errorCode.value);
+    }
+    if (uploadedAt.present) {
+      map['uploaded_at'] = Variable<DateTime>(uploadedAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('UploadAssetEntriesCompanion(')
+          ..write('packageId: $packageId, ')
+          ..write('assetId: $assetId, ')
+          ..write('state: $state, ')
+          ..write('attemptCount: $attemptCount, ')
+          ..write('errorCode: $errorCode, ')
+          ..write('uploadedAt: $uploadedAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -2501,10 +3845,14 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $CachedBuildingsTable cachedBuildings =
       $CachedBuildingsTable(this);
   late final $CachedPensTable cachedPens = $CachedPensTable(this);
+  late final $SyncCursorsTable syncCursors = $SyncCursorsTable(this);
   late final $CaptureDraftsTable captureDrafts = $CaptureDraftsTable(this);
+  late final $CaptureSetsTable captureSets = $CaptureSetsTable(this);
   late final $LocalMediaAssetsTable localMediaAssets =
       $LocalMediaAssetsTable(this);
   late final $OutboxEntriesTable outboxEntries = $OutboxEntriesTable(this);
+  late final $UploadAssetEntriesTable uploadAssetEntries =
+      $UploadAssetEntriesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2513,9 +3861,12 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         cachedOrganizations,
         cachedBuildings,
         cachedPens,
+        syncCursors,
         captureDrafts,
+        captureSets,
         localMediaAssets,
-        outboxEntries
+        outboxEntries,
+        uploadAssetEntries
       ];
 }
 
@@ -3083,6 +4434,145 @@ typedef $$CachedPensTableProcessedTableManager = ProcessedTableManager<
     (CachedPen, BaseReferences<_$AppDatabase, $CachedPensTable, CachedPen>),
     CachedPen,
     PrefetchHooks Function()>;
+typedef $$SyncCursorsTableCreateCompanionBuilder = SyncCursorsCompanion
+    Function({
+  required String organizationId,
+  required String cursor,
+  required DateTime syncedAt,
+  Value<int> rowid,
+});
+typedef $$SyncCursorsTableUpdateCompanionBuilder = SyncCursorsCompanion
+    Function({
+  Value<String> organizationId,
+  Value<String> cursor,
+  Value<DateTime> syncedAt,
+  Value<int> rowid,
+});
+
+class $$SyncCursorsTableFilterComposer
+    extends Composer<_$AppDatabase, $SyncCursorsTable> {
+  $$SyncCursorsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get organizationId => $composableBuilder(
+      column: $table.organizationId,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get cursor => $composableBuilder(
+      column: $table.cursor, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get syncedAt => $composableBuilder(
+      column: $table.syncedAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$SyncCursorsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SyncCursorsTable> {
+  $$SyncCursorsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get organizationId => $composableBuilder(
+      column: $table.organizationId,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get cursor => $composableBuilder(
+      column: $table.cursor, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get syncedAt => $composableBuilder(
+      column: $table.syncedAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$SyncCursorsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SyncCursorsTable> {
+  $$SyncCursorsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get organizationId => $composableBuilder(
+      column: $table.organizationId, builder: (column) => column);
+
+  GeneratedColumn<String> get cursor =>
+      $composableBuilder(column: $table.cursor, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get syncedAt =>
+      $composableBuilder(column: $table.syncedAt, builder: (column) => column);
+}
+
+class $$SyncCursorsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $SyncCursorsTable,
+    SyncCursor,
+    $$SyncCursorsTableFilterComposer,
+    $$SyncCursorsTableOrderingComposer,
+    $$SyncCursorsTableAnnotationComposer,
+    $$SyncCursorsTableCreateCompanionBuilder,
+    $$SyncCursorsTableUpdateCompanionBuilder,
+    (SyncCursor, BaseReferences<_$AppDatabase, $SyncCursorsTable, SyncCursor>),
+    SyncCursor,
+    PrefetchHooks Function()> {
+  $$SyncCursorsTableTableManager(_$AppDatabase db, $SyncCursorsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SyncCursorsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SyncCursorsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SyncCursorsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> organizationId = const Value.absent(),
+            Value<String> cursor = const Value.absent(),
+            Value<DateTime> syncedAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              SyncCursorsCompanion(
+            organizationId: organizationId,
+            cursor: cursor,
+            syncedAt: syncedAt,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String organizationId,
+            required String cursor,
+            required DateTime syncedAt,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              SyncCursorsCompanion.insert(
+            organizationId: organizationId,
+            cursor: cursor,
+            syncedAt: syncedAt,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$SyncCursorsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $SyncCursorsTable,
+    SyncCursor,
+    $$SyncCursorsTableFilterComposer,
+    $$SyncCursorsTableOrderingComposer,
+    $$SyncCursorsTableAnnotationComposer,
+    $$SyncCursorsTableCreateCompanionBuilder,
+    $$SyncCursorsTableUpdateCompanionBuilder,
+    (SyncCursor, BaseReferences<_$AppDatabase, $SyncCursorsTable, SyncCursor>),
+    SyncCursor,
+    PrefetchHooks Function()>;
 typedef $$CaptureDraftsTableCreateCompanionBuilder = CaptureDraftsCompanion
     Function({
   required String id,
@@ -3304,6 +4794,158 @@ typedef $$CaptureDraftsTableProcessedTableManager = ProcessedTableManager<
     ),
     CaptureDraft,
     PrefetchHooks Function()>;
+typedef $$CaptureSetsTableCreateCompanionBuilder = CaptureSetsCompanion
+    Function({
+  required String id,
+  required String draftId,
+  required String kind,
+  required DateTime createdAt,
+  Value<int> rowid,
+});
+typedef $$CaptureSetsTableUpdateCompanionBuilder = CaptureSetsCompanion
+    Function({
+  Value<String> id,
+  Value<String> draftId,
+  Value<String> kind,
+  Value<DateTime> createdAt,
+  Value<int> rowid,
+});
+
+class $$CaptureSetsTableFilterComposer
+    extends Composer<_$AppDatabase, $CaptureSetsTable> {
+  $$CaptureSetsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get draftId => $composableBuilder(
+      column: $table.draftId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get kind => $composableBuilder(
+      column: $table.kind, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$CaptureSetsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CaptureSetsTable> {
+  $$CaptureSetsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get draftId => $composableBuilder(
+      column: $table.draftId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get kind => $composableBuilder(
+      column: $table.kind, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$CaptureSetsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CaptureSetsTable> {
+  $$CaptureSetsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get draftId =>
+      $composableBuilder(column: $table.draftId, builder: (column) => column);
+
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$CaptureSetsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $CaptureSetsTable,
+    CaptureSet,
+    $$CaptureSetsTableFilterComposer,
+    $$CaptureSetsTableOrderingComposer,
+    $$CaptureSetsTableAnnotationComposer,
+    $$CaptureSetsTableCreateCompanionBuilder,
+    $$CaptureSetsTableUpdateCompanionBuilder,
+    (CaptureSet, BaseReferences<_$AppDatabase, $CaptureSetsTable, CaptureSet>),
+    CaptureSet,
+    PrefetchHooks Function()> {
+  $$CaptureSetsTableTableManager(_$AppDatabase db, $CaptureSetsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CaptureSetsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CaptureSetsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CaptureSetsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> id = const Value.absent(),
+            Value<String> draftId = const Value.absent(),
+            Value<String> kind = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              CaptureSetsCompanion(
+            id: id,
+            draftId: draftId,
+            kind: kind,
+            createdAt: createdAt,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String id,
+            required String draftId,
+            required String kind,
+            required DateTime createdAt,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              CaptureSetsCompanion.insert(
+            id: id,
+            draftId: draftId,
+            kind: kind,
+            createdAt: createdAt,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$CaptureSetsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $CaptureSetsTable,
+    CaptureSet,
+    $$CaptureSetsTableFilterComposer,
+    $$CaptureSetsTableOrderingComposer,
+    $$CaptureSetsTableAnnotationComposer,
+    $$CaptureSetsTableCreateCompanionBuilder,
+    $$CaptureSetsTableUpdateCompanionBuilder,
+    (CaptureSet, BaseReferences<_$AppDatabase, $CaptureSetsTable, CaptureSet>),
+    CaptureSet,
+    PrefetchHooks Function()>;
 typedef $$LocalMediaAssetsTableCreateCompanionBuilder
     = LocalMediaAssetsCompanion Function({
   required String id,
@@ -3316,6 +4958,9 @@ typedef $$LocalMediaAssetsTableCreateCompanionBuilder
   required String sha256,
   Value<String> roiJson,
   Value<String> exifJson,
+  Value<DateTime?> capturedAt,
+  Value<int?> width,
+  Value<int?> height,
   required DateTime createdAt,
   Value<int> rowid,
 });
@@ -3331,6 +4976,9 @@ typedef $$LocalMediaAssetsTableUpdateCompanionBuilder
   Value<String> sha256,
   Value<String> roiJson,
   Value<String> exifJson,
+  Value<DateTime?> capturedAt,
+  Value<int?> width,
+  Value<int?> height,
   Value<DateTime> createdAt,
   Value<int> rowid,
 });
@@ -3374,6 +5022,15 @@ class $$LocalMediaAssetsTableFilterComposer
 
   ColumnFilters<String> get exifJson => $composableBuilder(
       column: $table.exifJson, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get capturedAt => $composableBuilder(
+      column: $table.capturedAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get width => $composableBuilder(
+      column: $table.width, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get height => $composableBuilder(
+      column: $table.height, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnFilters(column));
@@ -3421,6 +5078,15 @@ class $$LocalMediaAssetsTableOrderingComposer
   ColumnOrderings<String> get exifJson => $composableBuilder(
       column: $table.exifJson, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<DateTime> get capturedAt => $composableBuilder(
+      column: $table.capturedAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get width => $composableBuilder(
+      column: $table.width, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get height => $composableBuilder(
+      column: $table.height, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnOrderings(column));
 }
@@ -3464,6 +5130,15 @@ class $$LocalMediaAssetsTableAnnotationComposer
   GeneratedColumn<String> get exifJson =>
       $composableBuilder(column: $table.exifJson, builder: (column) => column);
 
+  GeneratedColumn<DateTime> get capturedAt => $composableBuilder(
+      column: $table.capturedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get width =>
+      $composableBuilder(column: $table.width, builder: (column) => column);
+
+  GeneratedColumn<int> get height =>
+      $composableBuilder(column: $table.height, builder: (column) => column);
+
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 }
@@ -3505,6 +5180,9 @@ class $$LocalMediaAssetsTableTableManager extends RootTableManager<
             Value<String> sha256 = const Value.absent(),
             Value<String> roiJson = const Value.absent(),
             Value<String> exifJson = const Value.absent(),
+            Value<DateTime?> capturedAt = const Value.absent(),
+            Value<int?> width = const Value.absent(),
+            Value<int?> height = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
@@ -3519,6 +5197,9 @@ class $$LocalMediaAssetsTableTableManager extends RootTableManager<
             sha256: sha256,
             roiJson: roiJson,
             exifJson: exifJson,
+            capturedAt: capturedAt,
+            width: width,
+            height: height,
             createdAt: createdAt,
             rowid: rowid,
           ),
@@ -3533,6 +5214,9 @@ class $$LocalMediaAssetsTableTableManager extends RootTableManager<
             required String sha256,
             Value<String> roiJson = const Value.absent(),
             Value<String> exifJson = const Value.absent(),
+            Value<DateTime?> capturedAt = const Value.absent(),
+            Value<int?> width = const Value.absent(),
+            Value<int?> height = const Value.absent(),
             required DateTime createdAt,
             Value<int> rowid = const Value.absent(),
           }) =>
@@ -3547,6 +5231,9 @@ class $$LocalMediaAssetsTableTableManager extends RootTableManager<
             sha256: sha256,
             roiJson: roiJson,
             exifJson: exifJson,
+            capturedAt: capturedAt,
+            width: width,
+            height: height,
             createdAt: createdAt,
             rowid: rowid,
           ),
@@ -3580,6 +5267,13 @@ typedef $$OutboxEntriesTableCreateCompanionBuilder = OutboxEntriesCompanion
   Value<String> state,
   required String manifestJson,
   Value<String?> error,
+  Value<String?> serverPackageId,
+  Value<String?> sessionId,
+  Value<String?> inferenceJobId,
+  Value<int> attemptCount,
+  Value<DateTime?> nextAttemptAt,
+  Value<String?> leaseOwner,
+  Value<DateTime?> leaseExpiresAt,
   required DateTime createdAt,
   required DateTime updatedAt,
   Value<int> rowid,
@@ -3592,6 +5286,13 @@ typedef $$OutboxEntriesTableUpdateCompanionBuilder = OutboxEntriesCompanion
   Value<String> state,
   Value<String> manifestJson,
   Value<String?> error,
+  Value<String?> serverPackageId,
+  Value<String?> sessionId,
+  Value<String?> inferenceJobId,
+  Value<int> attemptCount,
+  Value<DateTime?> nextAttemptAt,
+  Value<String?> leaseOwner,
+  Value<DateTime?> leaseExpiresAt,
   Value<DateTime> createdAt,
   Value<DateTime> updatedAt,
   Value<int> rowid,
@@ -3624,6 +5325,30 @@ class $$OutboxEntriesTableFilterComposer
 
   ColumnFilters<String> get error => $composableBuilder(
       column: $table.error, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get serverPackageId => $composableBuilder(
+      column: $table.serverPackageId,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get sessionId => $composableBuilder(
+      column: $table.sessionId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get inferenceJobId => $composableBuilder(
+      column: $table.inferenceJobId,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get attemptCount => $composableBuilder(
+      column: $table.attemptCount, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get nextAttemptAt => $composableBuilder(
+      column: $table.nextAttemptAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get leaseOwner => $composableBuilder(
+      column: $table.leaseOwner, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get leaseExpiresAt => $composableBuilder(
+      column: $table.leaseExpiresAt,
+      builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnFilters(column));
@@ -3661,6 +5386,32 @@ class $$OutboxEntriesTableOrderingComposer
   ColumnOrderings<String> get error => $composableBuilder(
       column: $table.error, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get serverPackageId => $composableBuilder(
+      column: $table.serverPackageId,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get sessionId => $composableBuilder(
+      column: $table.sessionId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get inferenceJobId => $composableBuilder(
+      column: $table.inferenceJobId,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get attemptCount => $composableBuilder(
+      column: $table.attemptCount,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get nextAttemptAt => $composableBuilder(
+      column: $table.nextAttemptAt,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get leaseOwner => $composableBuilder(
+      column: $table.leaseOwner, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get leaseExpiresAt => $composableBuilder(
+      column: $table.leaseExpiresAt,
+      builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnOrderings(column));
 
@@ -3694,6 +5445,27 @@ class $$OutboxEntriesTableAnnotationComposer
 
   GeneratedColumn<String> get error =>
       $composableBuilder(column: $table.error, builder: (column) => column);
+
+  GeneratedColumn<String> get serverPackageId => $composableBuilder(
+      column: $table.serverPackageId, builder: (column) => column);
+
+  GeneratedColumn<String> get sessionId =>
+      $composableBuilder(column: $table.sessionId, builder: (column) => column);
+
+  GeneratedColumn<String> get inferenceJobId => $composableBuilder(
+      column: $table.inferenceJobId, builder: (column) => column);
+
+  GeneratedColumn<int> get attemptCount => $composableBuilder(
+      column: $table.attemptCount, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get nextAttemptAt => $composableBuilder(
+      column: $table.nextAttemptAt, builder: (column) => column);
+
+  GeneratedColumn<String> get leaseOwner => $composableBuilder(
+      column: $table.leaseOwner, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get leaseExpiresAt => $composableBuilder(
+      column: $table.leaseExpiresAt, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -3734,6 +5506,13 @@ class $$OutboxEntriesTableTableManager extends RootTableManager<
             Value<String> state = const Value.absent(),
             Value<String> manifestJson = const Value.absent(),
             Value<String?> error = const Value.absent(),
+            Value<String?> serverPackageId = const Value.absent(),
+            Value<String?> sessionId = const Value.absent(),
+            Value<String?> inferenceJobId = const Value.absent(),
+            Value<int> attemptCount = const Value.absent(),
+            Value<DateTime?> nextAttemptAt = const Value.absent(),
+            Value<String?> leaseOwner = const Value.absent(),
+            Value<DateTime?> leaseExpiresAt = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
             Value<DateTime> updatedAt = const Value.absent(),
             Value<int> rowid = const Value.absent(),
@@ -3745,6 +5524,13 @@ class $$OutboxEntriesTableTableManager extends RootTableManager<
             state: state,
             manifestJson: manifestJson,
             error: error,
+            serverPackageId: serverPackageId,
+            sessionId: sessionId,
+            inferenceJobId: inferenceJobId,
+            attemptCount: attemptCount,
+            nextAttemptAt: nextAttemptAt,
+            leaseOwner: leaseOwner,
+            leaseExpiresAt: leaseExpiresAt,
             createdAt: createdAt,
             updatedAt: updatedAt,
             rowid: rowid,
@@ -3756,6 +5542,13 @@ class $$OutboxEntriesTableTableManager extends RootTableManager<
             Value<String> state = const Value.absent(),
             required String manifestJson,
             Value<String?> error = const Value.absent(),
+            Value<String?> serverPackageId = const Value.absent(),
+            Value<String?> sessionId = const Value.absent(),
+            Value<String?> inferenceJobId = const Value.absent(),
+            Value<int> attemptCount = const Value.absent(),
+            Value<DateTime?> nextAttemptAt = const Value.absent(),
+            Value<String?> leaseOwner = const Value.absent(),
+            Value<DateTime?> leaseExpiresAt = const Value.absent(),
             required DateTime createdAt,
             required DateTime updatedAt,
             Value<int> rowid = const Value.absent(),
@@ -3767,6 +5560,13 @@ class $$OutboxEntriesTableTableManager extends RootTableManager<
             state: state,
             manifestJson: manifestJson,
             error: error,
+            serverPackageId: serverPackageId,
+            sessionId: sessionId,
+            inferenceJobId: inferenceJobId,
+            attemptCount: attemptCount,
+            nextAttemptAt: nextAttemptAt,
+            leaseOwner: leaseOwner,
+            leaseExpiresAt: leaseExpiresAt,
             createdAt: createdAt,
             updatedAt: updatedAt,
             rowid: rowid,
@@ -3793,6 +5593,212 @@ typedef $$OutboxEntriesTableProcessedTableManager = ProcessedTableManager<
     ),
     OutboxEntry,
     PrefetchHooks Function()>;
+typedef $$UploadAssetEntriesTableCreateCompanionBuilder
+    = UploadAssetEntriesCompanion Function({
+  required String packageId,
+  required String assetId,
+  Value<String> state,
+  Value<int> attemptCount,
+  Value<String?> errorCode,
+  Value<DateTime?> uploadedAt,
+  required DateTime updatedAt,
+  Value<int> rowid,
+});
+typedef $$UploadAssetEntriesTableUpdateCompanionBuilder
+    = UploadAssetEntriesCompanion Function({
+  Value<String> packageId,
+  Value<String> assetId,
+  Value<String> state,
+  Value<int> attemptCount,
+  Value<String?> errorCode,
+  Value<DateTime?> uploadedAt,
+  Value<DateTime> updatedAt,
+  Value<int> rowid,
+});
+
+class $$UploadAssetEntriesTableFilterComposer
+    extends Composer<_$AppDatabase, $UploadAssetEntriesTable> {
+  $$UploadAssetEntriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get packageId => $composableBuilder(
+      column: $table.packageId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get assetId => $composableBuilder(
+      column: $table.assetId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get state => $composableBuilder(
+      column: $table.state, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get attemptCount => $composableBuilder(
+      column: $table.attemptCount, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get errorCode => $composableBuilder(
+      column: $table.errorCode, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get uploadedAt => $composableBuilder(
+      column: $table.uploadedAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+      column: $table.updatedAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$UploadAssetEntriesTableOrderingComposer
+    extends Composer<_$AppDatabase, $UploadAssetEntriesTable> {
+  $$UploadAssetEntriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get packageId => $composableBuilder(
+      column: $table.packageId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get assetId => $composableBuilder(
+      column: $table.assetId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get state => $composableBuilder(
+      column: $table.state, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get attemptCount => $composableBuilder(
+      column: $table.attemptCount,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get errorCode => $composableBuilder(
+      column: $table.errorCode, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get uploadedAt => $composableBuilder(
+      column: $table.uploadedAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+      column: $table.updatedAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$UploadAssetEntriesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $UploadAssetEntriesTable> {
+  $$UploadAssetEntriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get packageId =>
+      $composableBuilder(column: $table.packageId, builder: (column) => column);
+
+  GeneratedColumn<String> get assetId =>
+      $composableBuilder(column: $table.assetId, builder: (column) => column);
+
+  GeneratedColumn<String> get state =>
+      $composableBuilder(column: $table.state, builder: (column) => column);
+
+  GeneratedColumn<int> get attemptCount => $composableBuilder(
+      column: $table.attemptCount, builder: (column) => column);
+
+  GeneratedColumn<String> get errorCode =>
+      $composableBuilder(column: $table.errorCode, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get uploadedAt => $composableBuilder(
+      column: $table.uploadedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$UploadAssetEntriesTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $UploadAssetEntriesTable,
+    UploadAssetEntry,
+    $$UploadAssetEntriesTableFilterComposer,
+    $$UploadAssetEntriesTableOrderingComposer,
+    $$UploadAssetEntriesTableAnnotationComposer,
+    $$UploadAssetEntriesTableCreateCompanionBuilder,
+    $$UploadAssetEntriesTableUpdateCompanionBuilder,
+    (
+      UploadAssetEntry,
+      BaseReferences<_$AppDatabase, $UploadAssetEntriesTable, UploadAssetEntry>
+    ),
+    UploadAssetEntry,
+    PrefetchHooks Function()> {
+  $$UploadAssetEntriesTableTableManager(
+      _$AppDatabase db, $UploadAssetEntriesTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$UploadAssetEntriesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$UploadAssetEntriesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$UploadAssetEntriesTableAnnotationComposer(
+                  $db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> packageId = const Value.absent(),
+            Value<String> assetId = const Value.absent(),
+            Value<String> state = const Value.absent(),
+            Value<int> attemptCount = const Value.absent(),
+            Value<String?> errorCode = const Value.absent(),
+            Value<DateTime?> uploadedAt = const Value.absent(),
+            Value<DateTime> updatedAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              UploadAssetEntriesCompanion(
+            packageId: packageId,
+            assetId: assetId,
+            state: state,
+            attemptCount: attemptCount,
+            errorCode: errorCode,
+            uploadedAt: uploadedAt,
+            updatedAt: updatedAt,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String packageId,
+            required String assetId,
+            Value<String> state = const Value.absent(),
+            Value<int> attemptCount = const Value.absent(),
+            Value<String?> errorCode = const Value.absent(),
+            Value<DateTime?> uploadedAt = const Value.absent(),
+            required DateTime updatedAt,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              UploadAssetEntriesCompanion.insert(
+            packageId: packageId,
+            assetId: assetId,
+            state: state,
+            attemptCount: attemptCount,
+            errorCode: errorCode,
+            uploadedAt: uploadedAt,
+            updatedAt: updatedAt,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$UploadAssetEntriesTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $UploadAssetEntriesTable,
+    UploadAssetEntry,
+    $$UploadAssetEntriesTableFilterComposer,
+    $$UploadAssetEntriesTableOrderingComposer,
+    $$UploadAssetEntriesTableAnnotationComposer,
+    $$UploadAssetEntriesTableCreateCompanionBuilder,
+    $$UploadAssetEntriesTableUpdateCompanionBuilder,
+    (
+      UploadAssetEntry,
+      BaseReferences<_$AppDatabase, $UploadAssetEntriesTable, UploadAssetEntry>
+    ),
+    UploadAssetEntry,
+    PrefetchHooks Function()>;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -3803,10 +5809,16 @@ class $AppDatabaseManager {
       $$CachedBuildingsTableTableManager(_db, _db.cachedBuildings);
   $$CachedPensTableTableManager get cachedPens =>
       $$CachedPensTableTableManager(_db, _db.cachedPens);
+  $$SyncCursorsTableTableManager get syncCursors =>
+      $$SyncCursorsTableTableManager(_db, _db.syncCursors);
   $$CaptureDraftsTableTableManager get captureDrafts =>
       $$CaptureDraftsTableTableManager(_db, _db.captureDrafts);
+  $$CaptureSetsTableTableManager get captureSets =>
+      $$CaptureSetsTableTableManager(_db, _db.captureSets);
   $$LocalMediaAssetsTableTableManager get localMediaAssets =>
       $$LocalMediaAssetsTableTableManager(_db, _db.localMediaAssets);
   $$OutboxEntriesTableTableManager get outboxEntries =>
       $$OutboxEntriesTableTableManager(_db, _db.outboxEntries);
+  $$UploadAssetEntriesTableTableManager get uploadAssetEntries =>
+      $$UploadAssetEntriesTableTableManager(_db, _db.uploadAssetEntries);
 }

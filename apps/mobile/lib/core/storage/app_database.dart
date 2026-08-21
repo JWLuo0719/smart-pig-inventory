@@ -43,6 +43,15 @@ class CachedPens extends Table {
   Set<Column> get primaryKey => <Column>{id};
 }
 
+class SyncCursors extends Table {
+  TextColumn get organizationId => text()();
+  TextColumn get cursor => text()();
+  DateTimeColumn get syncedAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => <Column>{organizationId};
+}
+
 class CaptureDrafts extends Table {
   TextColumn get id => text()();
   TextColumn get organizationId => text()();
@@ -52,6 +61,16 @@ class CaptureDrafts extends Table {
   DateTimeColumn get businessDate => dateTime()();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => <Column>{id};
+}
+
+class CaptureSets extends Table {
+  TextColumn get id => text()();
+  TextColumn get draftId => text().unique()();
+  TextColumn get kind => text()();
+  DateTimeColumn get createdAt => dateTime()();
 
   @override
   Set<Column> get primaryKey => <Column>{id};
@@ -68,19 +87,34 @@ class LocalMediaAssets extends Table {
   TextColumn get sha256 => text()();
   TextColumn get roiJson => text().withDefault(const Constant('{}'))();
   TextColumn get exifJson => text().withDefault(const Constant('{}'))();
+  DateTimeColumn get capturedAt => dateTime().nullable()();
+  IntColumn get width => integer().nullable()();
+  IntColumn get height => integer().nullable()();
   DateTimeColumn get createdAt => dateTime()();
 
   @override
   Set<Column> get primaryKey => <Column>{id};
+
+  @override
+  List<Set<Column>> get uniqueKeys => <Set<Column>>[
+        <Column>{draftId, viewPosition},
+      ];
 }
 
 class OutboxEntries extends Table {
   TextColumn get packageId => text()();
-  TextColumn get draftId => text()();
+  TextColumn get draftId => text().unique()();
   TextColumn get idempotencyKey => text()();
   TextColumn get state => text().withDefault(const Constant('queued'))();
   TextColumn get manifestJson => text()();
   TextColumn get error => text().nullable()();
+  TextColumn get serverPackageId => text().nullable()();
+  TextColumn get sessionId => text().nullable()();
+  TextColumn get inferenceJobId => text().nullable()();
+  IntColumn get attemptCount => integer().withDefault(const Constant(0))();
+  DateTimeColumn get nextAttemptAt => dateTime().nullable()();
+  TextColumn get leaseOwner => text().nullable()();
+  DateTimeColumn get leaseExpiresAt => dateTime().nullable()();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
 
@@ -88,13 +122,29 @@ class OutboxEntries extends Table {
   Set<Column> get primaryKey => <Column>{packageId};
 }
 
+class UploadAssetEntries extends Table {
+  TextColumn get packageId => text()();
+  TextColumn get assetId => text()();
+  TextColumn get state => text().withDefault(const Constant('pending'))();
+  IntColumn get attemptCount => integer().withDefault(const Constant(0))();
+  TextColumn get errorCode => text().nullable()();
+  DateTimeColumn get uploadedAt => dateTime().nullable()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => <Column>{packageId, assetId};
+}
+
 @DriftDatabase(tables: <Type>[
   CachedOrganizations,
   CachedBuildings,
   CachedPens,
+  SyncCursors,
   CaptureDrafts,
+  CaptureSets,
   LocalMediaAssets,
   OutboxEntries,
+  UploadAssetEntries,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.executor);
@@ -107,7 +157,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -119,6 +169,37 @@ class AppDatabase extends _$AppDatabase {
             await migrator.createTable(cachedPens);
             await migrator.createTable(captureDrafts);
             await migrator.createTable(localMediaAssets);
+          }
+          if (from < 3) {
+            await migrator.createTable(syncCursors);
+            await migrator.createTable(captureSets);
+            await migrator.addColumn(
+                localMediaAssets, localMediaAssets.capturedAt);
+            await migrator.addColumn(localMediaAssets, localMediaAssets.width);
+            await migrator.addColumn(localMediaAssets, localMediaAssets.height);
+            await migrator.addColumn(
+                outboxEntries, outboxEntries.serverPackageId);
+            await migrator.addColumn(outboxEntries, outboxEntries.sessionId);
+            await migrator.addColumn(
+                outboxEntries, outboxEntries.inferenceJobId);
+            await migrator.addColumn(outboxEntries, outboxEntries.attemptCount);
+            await migrator.addColumn(
+                outboxEntries, outboxEntries.nextAttemptAt);
+            await migrator.addColumn(outboxEntries, outboxEntries.leaseOwner);
+            await migrator.addColumn(
+                outboxEntries, outboxEntries.leaseExpiresAt);
+            await migrator.createTable(uploadAssetEntries);
+          }
+          if (from < 4) {
+            await customStatement(
+              'CREATE UNIQUE INDEX uk_local_media_draft_position '
+              'ON local_media_assets (draft_id, view_position)',
+            );
+          }
+          if (from < 5) {
+            await customStatement(
+              'CREATE UNIQUE INDEX uk_outbox_draft ON outbox_entries (draft_id)',
+            );
           }
         },
       );

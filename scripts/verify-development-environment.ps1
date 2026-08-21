@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [string]$FlutterBin = 'D:\ProgrammingLanguage\Flutter\flutter\bin\flutter.bat'
+    [string]$FlutterBin = 'D:\ProgrammingLanguage\Flutter\flutter\bin\flutter.bat',
+    [string]$MavenBin = 'D:\ProgrammingLanguage\apache-maven-3.9.11\bin\mvn.cmd'
 )
 
 Set-StrictMode -Version Latest
@@ -25,6 +26,15 @@ foreach ($tool in $required) {
         continue
     }
     Write-Host "[OK] $($tool.Name): $($command.Source)" -ForegroundColor Green
+}
+
+if (-not (Test-Path -LiteralPath $MavenBin)) {
+    Write-Host "[MISSING] Maven: $MavenBin" -ForegroundColor Yellow
+    $failed.Add('maven')
+} else {
+    Write-Host "[OK] Maven: $MavenBin" -ForegroundColor Green
+    & $MavenBin --version
+    if ($LASTEXITCODE -ne 0) { $failed.Add('maven') }
 }
 
 if (-not (Test-Path -LiteralPath $FlutterBin)) {

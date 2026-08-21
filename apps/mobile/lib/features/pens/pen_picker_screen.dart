@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../capture/domain/capture_target.dart';
 
 class PenPickerScreen extends StatelessWidget {
   const PenPickerScreen({super.key});
@@ -29,13 +30,21 @@ class PenPickerScreen extends StatelessWidget {
                 building: 'B01 育肥一栋',
                 pen: '03栏',
                 note: '有未完成三图草稿',
-                onTap: () => context.go('/capture')),
+                onTap: () => _openCapture(
+                    context,
+                    'B01 育肥一栋 · 03栏',
+                    '10000000-0000-4000-8000-000000000001',
+                    '20000000-0000-4000-8000-000000000003')),
             const SizedBox(height: 10),
             _PenChoice(
                 building: 'B02 育肥二栋',
                 pen: '08栏',
                 note: '今日已确认 126头',
-                onTap: () => context.go('/capture')),
+                onTap: () => _openCapture(
+                    context,
+                    'B02 育肥二栋 · 08栏',
+                    '10000000-0000-4000-8000-000000000001',
+                    '20000000-0000-4000-8000-000000000008')),
             const SizedBox(height: 20),
             Text('全部栏舍', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
@@ -43,8 +52,30 @@ class PenPickerScreen extends StatelessWidget {
                 building: 'B03 保育栋',
                 pen: '05栏',
                 note: '今天未开始',
-                onTap: () => context.go('/capture')),
+                onTap: () => _openCapture(
+                    context,
+                    'B03 保育栋 · 05栏',
+                    '10000000-0000-4000-8000-000000000001',
+                    '20000000-0000-4000-8000-000000000005')),
           ]),
+    );
+  }
+
+  void _openCapture(
+    BuildContext context,
+    String label,
+    String organizationId,
+    String penId,
+  ) {
+    final DateTime now = DateTime.now();
+    context.push(
+      '/capture',
+      extra: CaptureTarget(
+        organizationId: organizationId,
+        penId: penId,
+        label: label,
+        businessDate: DateTime(now.year, now.month, now.day),
+      ),
     );
   }
 }

@@ -1,12 +1,13 @@
 # 开发工作站基线
 
-更新时间：2026-08-20。适用于“智慧猪场场主”的 Windows 开发机。
+更新时间：2026-08-21。适用于“智慧猪场场主”的 Windows 开发机。
 
 ## 固定版本与目录
 
 | 项目 | 基线 |
 |---|---|
 | JDK | 21 |
+| Maven | 3.9.11，`D:\ProgrammingLanguage\apache-maven-3.9.11\bin\mvn.cmd` |
 | Flutter | 3.44.7 stable，`D:\ProgrammingLanguage\Flutter\flutter` |
 | Node.js | 已安装的 LTS；使用仓库锁定的 pnpm |
 | 容器运行时 | Docker Desktop 4.87.0 per-user + WSL 2 Linux containers；数据根 `D:\DockerDesktop\wsl-data` |
@@ -37,7 +38,7 @@ docker compose up --build
 .\scripts\verify-development-environment.ps1
 ```
 
-该命令会检查 Git、Java、Node、pnpm、Python、Docker、Flutter 与 `.env`，并执行 `flutter doctor`。如果 Docker Desktop 首次启动要求接受许可或启用 WSL，按其界面流程完成后再重试。
+该命令会检查 Git、Java、Maven、Node、pnpm、Python、Docker、Flutter 与 `.env`，并执行 `flutter doctor`。如果 Docker Desktop 首次启动要求接受许可或启用 WSL，按其界面流程完成后再重试。
 
 ## 本机验收
 
@@ -48,6 +49,15 @@ docker compose up --build
 3. `docker compose config --quiet` 与 `docker compose up --build` 成功，MySQL、Redis、MinIO、业务 API、推理 API 和网关健康。
 4. `.env` 不含模板密码，MinIO 桶未公开。
 
-## 当前机器的已知运行时问题
+## Docker Java/Testcontainers 兼容性
 
-Docker Desktop 已完成安装和 D 盘数据根配置，但在第一次 Compose 镜像拉取后重启时，WSL 引擎返回 `DockerDesktop/Wsl/ExecError` / `0xc00000fd`。这不影响 Android 开发环境；在该问题修复并通过 `docker version` 的服务器端检查前，不得把 Compose、Flyway 或 MinIO 的运行验证标为通过。
+Docker Desktop 29.7 的 Windows npipe 拒绝 Testcontainers 默认协商的旧 Docker API，曾导致集成测试被跳过。项目通过 `services/business-api/src/test/resources/docker-java.properties` 固定 Docker Java 客户端 API 至 `1.44`；这是测试 classpath 内的项目级配置，不修改 Docker Desktop 或系统全局环境。
+
+验证 Spring 时执行：
+
+```powershell
+cd services/business-api
+mvn verify
+```
+
+该命令必须显示 `9` 项测试、`0` skipped，并实际启动 MySQL 8.4 Testcontainer 完成 Flyway V1/V2。Docker Desktop 的 WSL 引擎、完整 Compose、Flyway、MinIO 私有桶和网关健康均已在本机复验。

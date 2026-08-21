@@ -90,7 +90,7 @@ class HomeScreen extends StatelessWidget {
                             TextStyle(color: Color(0xFFD9E5EB), fontSize: 12)),
                     const SizedBox(height: 15),
                     FilledButton.icon(
-                      onPressed: () => context.push('/capture'),
+                      onPressed: () => context.push('/pens'),
                       style: FilledButton.styleFrom(
                           backgroundColor: AppColors.straw,
                           foregroundColor: AppColors.ink),
@@ -129,7 +129,7 @@ class HomeScreen extends StatelessWidget {
                   pen: '03栏',
                   state: PenWorkState.queued,
                   detail: '2/3 张已保存',
-                  onTap: () => context.push('/capture')),
+                  onTap: () => context.push('/pens')),
             ],
           ),
         ),

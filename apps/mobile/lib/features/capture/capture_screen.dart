@@ -1,34 +1,254 @@
-import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
+
+import '../../core/storage/database_provider.dart';
+import '../../core/storage/image_metadata_reader.dart';
+import '../../core/storage/media_materializer.dart';
+import '../../core/storage/platform_image_metadata_reader.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/widgets/network_status_banner.dart';
+import 'application/add_capture_view.dart';
+import 'application/create_single_image_draft.dart';
+import 'application/create_three_view_draft.dart';
+import 'data/drift_capture_draft_repository.dart';
+import 'domain/capture_target.dart';
+import '../outbox/application/queue_capture_draft.dart';
 
-class CaptureScreen extends StatefulWidget {
-  const CaptureScreen({super.key});
+class CaptureScreen extends ConsumerStatefulWidget {
+  const CaptureScreen({required this.target, super.key});
+
+  final CaptureTarget target;
 
   @override
-  State<CaptureScreen> createState() => _CaptureScreenState();
+  ConsumerState<CaptureScreen> createState() => _CaptureScreenState();
 }
 
-class _CaptureScreenState extends State<CaptureScreen> {
+class _CaptureScreenState extends ConsumerState<CaptureScreen> {
   final ImagePicker _picker = ImagePicker();
-  final List<XFile> _selected = <XFile>[];
+  final PlatformImageMetadataReader _metadataReader =
+      PlatformImageMetadataReader();
+  final List<String> _savedPositions = <String>[];
+  CreatedCaptureDraft? _savedDraft;
   bool _threeView = false;
+  bool _saving = false;
+  bool _queueing = false;
+  QueuedCapturePackage? _queuedPackage;
+  String? _error;
 
-  Future<void> _pick(ImageSource source) async {
-    final XFile? result =
-        await _picker.pickImage(source: source, imageQuality: 92);
-    if (result != null && mounted) setState(() => _selected.add(result));
+  bool get _threeViewComplete => _threeView && _savedPositions.length == 3;
+
+  String get _nextThreeViewPosition => switch (_savedPositions.length) {
+        0 => 'left',
+        1 => 'center',
+        2 => 'right',
+        _ => throw StateError('Three-view draft already complete'),
+      };
+
+  String get _nextPositionLabel =>
+      switch (_threeView ? _nextThreeViewPosition : 'single') {
+        'left' => '左侧',
+        'center' => '中间',
+        'right' => '右侧',
+        _ => '单图',
+      };
+
+  bool get _canAddPhoto =>
+      !_saving &&
+      (!_threeView || !_threeViewComplete) &&
+      (_savedDraft == null || _threeView);
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.microtask(_recoverLostPickerData);
+  }
+
+  Future<void> _recoverLostPickerData() async {
+    final LostDataResponse response = await _picker.retrieveLostData();
+    if (!mounted || response.isEmpty) return;
+    if (response.file == null) {
+      setState(
+        () => _error = '上次拍摄未能恢复。已有本地草稿没有被删除，请重新拍摄。',
+      );
+      return;
+    }
+    await _savePicked(response.file!);
+  }
+
+  Future<void> _pickAndSave(ImageSource source) async {
+    if (!_canAddPhoto) return;
+    try {
+      final XFile? picked =
+          await _picker.pickImage(source: source, imageQuality: 92);
+      if (picked != null) await _savePicked(picked);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error = '无法打开相机或图库。已有本地草稿没有被删除，请检查权限后重试。',
+        );
+      }
+    }
+  }
+
+  Future<void> _savePicked(XFile picked) async {
+    if (!_canAddPhoto) return;
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      final File sourceFile = File(picked.path);
+      final ImageMetadata metadata = await _metadataReader.read(sourceFile);
+      final Directory documents = await getApplicationDocumentsDirectory();
+      final DriftCaptureDraftRepository repository =
+          DriftCaptureDraftRepository(ref.read(appDatabaseProvider));
+      final MediaMaterializer materializer = MediaMaterializer(documents);
+      final DateTime capturedAt = DateTime.now();
+
+      if (_threeView) {
+        await _saveThreeView(
+          source: sourceFile,
+          picked: picked,
+          metadata: metadata,
+          materializer: materializer,
+          repository: repository,
+          capturedAt: capturedAt,
+        );
+      } else {
+        final CreatedCaptureDraft saved = await CreateSingleImageDraft(
+          materializer: materializer,
+          repository: repository,
+        ).execute(
+          source: sourceFile,
+          originalName: picked.name,
+          contentType: metadata.contentType,
+          organizationId: widget.target.organizationId,
+          penId: widget.target.penId,
+          businessDate: widget.target.businessDate,
+          capturedAt: capturedAt,
+          width: metadata.width,
+          height: metadata.height,
+          exif: metadata.exif,
+        );
+        if (!mounted) return;
+        setState(() {
+          _savedDraft = saved;
+          _savedPositions.add('single');
+        });
+      }
+    } on UnsupportedImageFormatException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } on FileSystemException catch (_) {
+      if (mounted) {
+        setState(
+          () => _error = '照片未能安全保存到本机。请检查存储空间后重试，原草稿没有改变。',
+        );
+      }
+    } on StateError catch (_) {
+      if (mounted) {
+        setState(() => _error = '该采集方向已保存。请继续下一方向，已有草稿没有被删除。');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error = '保存照片时发生错误，原图和已有草稿没有被删除。请重试。',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _queueForUpload() async {
+    final CreatedCaptureDraft? draft = _savedDraft;
+    if (draft == null || _queueing || _queuedPackage != null) return;
+    setState(() {
+      _queueing = true;
+      _error = null;
+    });
+    try {
+      final QueuedCapturePackage queued =
+          await QueueCaptureDraft(ref.read(appDatabaseProvider))
+              .execute(draft.draftId);
+      if (!mounted) return;
+      setState(() => _queuedPackage = queued);
+    } on StateError catch (error) {
+      if (mounted) {
+        setState(() => _error = '当前采集组尚不完整，不能保存到待上传：${error.message}');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error = '未能写入上传队列。原图和草稿仍安全保存在本机，请重试。',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _queueing = false);
+    }
+  }
+
+  Future<void> _saveThreeView({
+    required File source,
+    required XFile picked,
+    required ImageMetadata metadata,
+    required MediaMaterializer materializer,
+    required DriftCaptureDraftRepository repository,
+    required DateTime capturedAt,
+  }) async {
+    if (_savedDraft == null) {
+      final CreatedCaptureDraft saved = await CreateThreeViewDraft(
+        materializer: materializer,
+        repository: repository,
+      ).execute(
+        source: source,
+        originalName: picked.name,
+        contentType: metadata.contentType,
+        organizationId: widget.target.organizationId,
+        penId: widget.target.penId,
+        businessDate: widget.target.businessDate,
+        capturedAt: capturedAt,
+        width: metadata.width,
+        height: metadata.height,
+        exif: metadata.exif,
+      );
+      if (!mounted) return;
+      setState(() {
+        _savedDraft = saved;
+        _savedPositions.add('left');
+      });
+      return;
+    }
+
+    final String position = _nextThreeViewPosition;
+    await AddCaptureView(materializer: materializer, repository: repository)
+        .execute(
+      source: source,
+      originalName: picked.name,
+      contentType: metadata.contentType,
+      organizationId: widget.target.organizationId,
+      draftId: _savedDraft!.draftId,
+      assetId: const Uuid().v4(),
+      position: position,
+      capturedAt: capturedAt,
+      width: metadata.width,
+      height: metadata.height,
+      exif: metadata.exif,
+    );
+    if (!mounted) return;
+    setState(() => _savedPositions.add(position));
   }
 
   @override
   Widget build(BuildContext context) {
-    final int expected = _threeView ? 3 : 1;
-    final List<String> directionLabels =
-        _threeView ? <String>['左侧', '中间', '右侧'] : <String>['单图'];
+    final CreatedCaptureDraft? savedDraft = _savedDraft;
     return Scaffold(
-      appBar: AppBar(title: const Text('B01 育肥一栋 · 03栏')),
+      appBar: AppBar(title: Text(widget.target.label)),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 6, 20, 28),
         children: <Widget>[
@@ -39,95 +259,195 @@ class _CaptureScreenState extends State<CaptureScreen> {
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
               value: _threeView,
-              onChanged: (bool value) => setState(() {
-                _threeView = value;
-                _selected.clear();
-              }),
+              onChanged: savedDraft == null && !_saving
+                  ? (bool value) => setState(() => _threeView = value)
+                  : null,
               title: const Text('左 / 中 / 右三图模式',
                   style: TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: const Text('三张图属于同一采集组，算法未验证前不自动相加。'),
+              subtitle: Text(
+                savedDraft == null
+                    ? '三张图会保存为同一采集组，未验证去重前不会自动相加。'
+                    : '已开始采集后不能切换模式，以保护已保存证据。',
+              ),
             ),
           ),
           const SizedBox(height: 18),
-          Text('采集方向', style: Theme.of(context).textTheme.titleLarge),
+          Text(_threeView ? '左 / 中 / 右采集' : '单图采集',
+              style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 4),
           Text(
-              '当前需要：${directionLabels[_selected.length.clamp(0, expected - 1).toInt()]}',
-              style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: 10),
-          Row(
-            children: List<Widget>.generate(expected, (int index) {
-              final bool done = index < _selected.length;
-              final bool current = index == _selected.length;
-              return Expanded(
-                child: Container(
-                  margin: EdgeInsets.only(right: index == expected - 1 ? 0 : 8),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: BoxDecoration(
-                    color: done
-                        ? AppColors.herdTeal.withValues(alpha: .12)
-                        : current
-                            ? AppColors.straw.withValues(alpha: .15)
-                            : Colors.white,
-                    border: Border.all(
-                        color: done
-                            ? AppColors.herdTeal
-                            : current
-                                ? AppColors.straw
-                                : AppColors.line),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(children: <Widget>[
-                    Icon(done ? Icons.check_circle : Icons.camera_alt_outlined,
-                        color: done
-                            ? AppColors.herdTeal
-                            : current
-                                ? AppColors.straw
-                                : AppColors.muted),
-                    const SizedBox(height: 5),
-                    Text(directionLabels[index],
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 12)),
-                  ]),
-                ),
-              );
-            }),
+            savedDraft == null
+                ? '当前需要：$_nextPositionLabel。拍摄或导入后会先安全保存到本机。'
+                : _threeViewComplete
+                    ? '三张照片已保存为同一采集组，等待加入上传队列。'
+                    : '已保存 ${_savedPositions.length}/3 张；当前需要：$_nextPositionLabel。',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 12),
+          if (savedDraft != null)
+            _SavedEvidenceCard(
+              file: savedDraft.materializedFile,
+              status: _queuedPackage != null
+                  ? '已保存到待上传 · 尚未生成盘点数量'
+                  : _threeView
+                      ? '已保存 ${_savedPositions.length}/3 张 · 不会显示数量'
+                      : '待上传 · 尚未生成盘点数量',
+            ),
+          if (savedDraft != null &&
+              (!_threeView || _threeViewComplete)) ...<Widget>[
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed:
+                  _queueing || _queuedPackage != null ? null : _queueForUpload,
+              icon: _queueing
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    )
+                  : Icon(_queuedPackage == null
+                      ? Icons.cloud_upload_outlined
+                      : Icons.cloud_done_outlined),
+              label: Text(_queueing
+                  ? '正在写入待上传队列…'
+                  : _queuedPackage == null
+                      ? '保存到待上传'
+                      : '已保存到待上传'),
+            ),
+          ],
+          if (_error != null) ...<Widget>[
+            const SizedBox(height: 12),
+            _CaptureError(message: _error!),
+          ],
+          const SizedBox(height: 18),
           FilledButton.icon(
-              onPressed: _selected.length < expected
-                  ? () => _pick(ImageSource.camera)
-                  : null,
-              icon: const Icon(Icons.camera_alt_outlined),
-              label: Text(_selected.length < expected
-                  ? '拍摄${directionLabels[_selected.length]}'
-                  : '图片已集齐')),
+            onPressed:
+                _canAddPhoto ? () => _pickAndSave(ImageSource.camera) : null,
+            icon: _saving
+                ? const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.camera_alt_outlined),
+            label: Text(
+              _saving
+                  ? '正在安全保存照片…'
+                  : _threeViewComplete
+                      ? '三张图片已安全保存'
+                      : '拍摄$_nextPositionLabel并保存',
+            ),
+          ),
           const SizedBox(height: 10),
           OutlinedButton.icon(
-              onPressed: _selected.length < expected
-                  ? () => _pick(ImageSource.gallery)
-                  : null,
-              icon: const Icon(Icons.photo_library_outlined),
-              label: const Text('从图库导入')),
+            onPressed:
+                _canAddPhoto ? () => _pickAndSave(ImageSource.gallery) : null,
+            icon: const Icon(Icons.photo_library_outlined),
+            label: const Text('从图库导入'),
+          ),
           const SizedBox(height: 18),
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.line)),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.line),
+            ),
             child: const Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Icon(Icons.shield_outlined,
-                      color: AppColors.barnBlue, size: 20),
-                  SizedBox(width: 9),
-                  Expanded(
-                      child: Text(
-                          '拍摄后先复制到本机持久目录，再计算 SHA-256 并写入草稿。服务器确认 Commit 前不会清理原图。')),
-                ]),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Icon(Icons.shield_outlined,
+                    color: AppColors.barnBlue, size: 20),
+                SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    '照片会复制到本机持久目录并计算 SHA-256。服务器 Commit 成功前不会清理原图，也不会显示推测数量。',
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SavedEvidenceCard extends StatelessWidget {
+  const _SavedEvidenceCard({required this.file, required this.status});
+
+  final File file;
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '采集证据已安全保存到本机，待上传',
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: <Widget>[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.file(
+                  file,
+                  width: 72,
+                  height: 72,
+                  cacheWidth: 240,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox(
+                    width: 72,
+                    height: 72,
+                    child: Icon(Icons.broken_image_outlined),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    const Text('已保存为本地草稿',
+                        style: TextStyle(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 3),
+                    Text(status),
+                  ],
+                ),
+              ),
+              const Icon(Icons.check_circle, color: AppColors.herdTeal),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CaptureError extends StatelessWidget {
+  const _CaptureError({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFE9E7),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFF1B3AD)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const Icon(Icons.error_outline, color: AppColors.alert),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
       ),
     );
   }

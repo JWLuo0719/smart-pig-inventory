@@ -7,8 +7,12 @@ import '../models/capture_package.dart';
 class UploadApi {
   UploadApi({required String baseUrl, required String accessToken})
       : _dio = Dio(BaseOptions(
-            baseUrl: baseUrl,
-            headers: <String, String>{'Authorization': 'Bearer $accessToken'}));
+          baseUrl: baseUrl,
+          connectTimeout: const Duration(seconds: 15),
+          receiveTimeout: const Duration(seconds: 30),
+          sendTimeout: const Duration(minutes: 2),
+          headers: <String, String>{'Authorization': 'Bearer $accessToken'},
+        ));
 
   final Dio _dio;
 
@@ -33,11 +37,13 @@ class UploadApi {
       final Map<String, Object?> item = media[index];
       if (uploaded.contains(item['assetId'])) continue;
       final File file = draft.media[index].file;
+      final int contentLength = await file.length();
       await _dio.put(
         '/api/v1/upload-packages/$serverPackageId/blobs/${item['assetId']}',
-        data: await file.readAsBytes(),
-        options: Options(headers: <String, String>{
-          'Content-Type': 'application/octet-stream',
+        data: file.openRead(),
+        options: Options(headers: <String, Object>{
+          Headers.contentTypeHeader: 'application/octet-stream',
+          Headers.contentLengthHeader: contentLength,
           'X-Idempotency-Key': draft.idempotencyKey,
           'X-Content-SHA256': item['sha256']! as String,
         }),

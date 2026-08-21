@@ -27,6 +27,8 @@
 - 架构：[`docs/architecture.md`](docs/architecture.md)
 - 视觉与页面：[`docs/design/visual-system.md`](docs/design/visual-system.md)、[`docs/design/information-architecture.md`](docs/design/information-architecture.md)
 - 开发规范：[`docs/development/standards.md`](docs/development/standards.md)
+- App 完整开发顺序：[`docs/development/mobile-development-sequence.md`](docs/development/mobile-development-sequence.md)
+- 开放决策：[`docs/product/open-decisions.md`](docs/product/open-decisions.md)
 - 工作站准备：[`docs/development/workstation-setup.md`](docs/development/workstation-setup.md)
 - 测试数据边界：[`docs/development/test-data-governance.md`](docs/development/test-data-governance.md)
 - 当前状态：[`PROJECT_STATUS.md`](PROJECT_STATUS.md)、[`NEXT_STEPS.md`](NEXT_STEPS.md)
