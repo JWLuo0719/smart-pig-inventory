@@ -6,7 +6,7 @@
 
 1. 已完成 Android 原生壳、Drift 生成、analyze/test 与 debug APK；后续在真实 Android 设备验证相机、权限和后台上传。工作站规则见 `docs/development/workstation-setup.md`。
 2. 已恢复 Docker Desktop WSL 引擎并完成完整 Compose、MySQL Flyway V1/V2、私有 MinIO 桶和网关健康验证；后续持续保留 Compose smoke test。首个试点部署基线见 `docs/deployment/pilot-baseline.md`。
-3. 按 ADR-0003 为 Spring 增加科研阶段本地账号、可撤销刷新令牌和 JWT；后续通过身份适配器接入金蝶账号。
+3. 已按 ADR-0003 实现环境变量一次性管理员初始化、BCrypt、JWT、可撤销刷新令牌及 login/refresh/logout/me；下一步将 Flutter Token 安全存储和登录状态接入真实 API，后续通过身份适配器接入金蝶账号。
 4. 已增加 Testcontainers MySQL Flyway 集成测试；持续保留该门禁。下一步扩展至 BINARY UUID、JSON、CHECK、唯一索引、对象写入和并发语义，并补充 MinIO 集成测试。
 
 ## Iteration 2：AC-01 至 AC-04

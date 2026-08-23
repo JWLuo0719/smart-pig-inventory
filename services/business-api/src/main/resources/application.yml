@@ -33,6 +33,15 @@ management:
 app:
   security:
     enabled: ${SECURITY_ENABLED:true}
+    jwt-signing-secret: ${JWT_SIGNING_SECRET:}
+    jwt-issuer: ${JWT_ISSUER:pig-inventory-business-api}
+    access-token-ttl: ${ACCESS_TOKEN_TTL:PT15M}
+    refresh-token-ttl: ${REFRESH_TOKEN_TTL:P7D}
+    bootstrap-admin-username: ${APP_BOOTSTRAP_ADMIN_USERNAME:}
+    bootstrap-admin-password: ${APP_BOOTSTRAP_ADMIN_PASSWORD:}
+    bootstrap-admin-display-name: ${APP_BOOTSTRAP_ADMIN_DISPLAY_NAME:}
+    bootstrap-organization-code: ${APP_BOOTSTRAP_ORGANIZATION_CODE:}
+    bootstrap-organization-name: ${APP_BOOTSTRAP_ORGANIZATION_NAME:}
   object-storage:
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
     access-key: ${MINIO_ACCESS_KEY:minioadmin}
