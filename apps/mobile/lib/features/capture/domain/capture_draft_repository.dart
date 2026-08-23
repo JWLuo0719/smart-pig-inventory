@@ -1,3 +1,19 @@
+class CaptureDraftSnapshot {
+  const CaptureDraftSnapshot({
+    required this.draftId,
+    required this.captureSetId,
+    required this.captureKind,
+    required this.state,
+    required this.media,
+  });
+
+  final String draftId;
+  final String captureSetId;
+  final String captureKind;
+  final String state;
+  final List<CapturedMediaRecord> media;
+}
+
 class CapturedMediaRecord {
   const CapturedMediaRecord({
     required this.assetId,
@@ -36,6 +52,12 @@ abstract interface class CaptureDraftRepository {
   });
 
   Future<List<String>> viewPositions(String draftId);
+
+  Future<CaptureDraftSnapshot?> findLatestForTarget({
+    required String organizationId,
+    required String penId,
+    required DateTime businessDate,
+  });
 
   Future<void> createDraft({
     required String draftId,

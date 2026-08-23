@@ -36,8 +36,9 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
   CreatedCaptureDraft? _savedDraft;
   bool _threeView = false;
   bool _saving = false;
+  bool _restoring = true;
   bool _queueing = false;
-  QueuedCapturePackage? _queuedPackage;
+  bool _isQueued = false;
   String? _error;
 
   bool get _threeViewComplete => _threeView && _savedPositions.length == 3;
@@ -58,14 +59,58 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
       };
 
   bool get _canAddPhoto =>
+      !_restoring &&
       !_saving &&
+      !_isQueued &&
       (!_threeView || !_threeViewComplete) &&
       (_savedDraft == null || _threeView);
 
   @override
   void initState() {
     super.initState();
-    Future<void>.microtask(_recoverLostPickerData);
+    Future<void>.microtask(_restoreCaptureScreen);
+  }
+
+  Future<void> _restoreCaptureScreen() async {
+    await _recoverLostPickerData();
+    final DriftCaptureDraftRepository repository =
+        DriftCaptureDraftRepository(ref.read(appDatabaseProvider));
+    try {
+      final snapshot = await repository.findLatestForTarget(
+        organizationId: widget.target.organizationId,
+        penId: widget.target.penId,
+        businessDate: widget.target.businessDate,
+      );
+      if (!mounted || snapshot == null) return;
+      if (snapshot.media.isEmpty ||
+          !await File(snapshot.media.first.materializedPath).exists()) {
+        setState(() {
+          _error = '已恢复草稿记录，但本地原图不可用。请勿覆盖该证据，联系管理员处理。';
+        });
+        return;
+      }
+      setState(() {
+        _threeView = snapshot.captureKind == 'left_center_right';
+        _savedDraft = CreatedCaptureDraft(
+          draftId: snapshot.draftId,
+          captureSetId: snapshot.captureSetId,
+          assetId: snapshot.media.first.assetId,
+          materializedFile: File(snapshot.media.first.materializedPath),
+        );
+        _savedPositions
+          ..clear()
+          ..addAll(snapshot.media.map((media) => media.position));
+        _isQueued = snapshot.state == 'queued';
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _error = '本地草稿恢复失败。已有证据没有被删除，请重试或联系管理员。';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _restoring = false);
+    }
   }
 
   Future<void> _recoverLostPickerData() async {
@@ -77,7 +122,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
       );
       return;
     }
-    await _savePicked(response.file!);
+    await _savePicked(response.file!, restoringLostData: true);
   }
 
   Future<void> _pickAndSave(ImageSource source) async {
@@ -95,8 +140,11 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
     }
   }
 
-  Future<void> _savePicked(XFile picked) async {
-    if (!_canAddPhoto) return;
+  Future<void> _savePicked(
+    XFile picked, {
+    bool restoringLostData = false,
+  }) async {
+    if (!_canAddPhoto && !restoringLostData) return;
     setState(() {
       _saving = true;
       _error = null;
@@ -167,17 +215,16 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
 
   Future<void> _queueForUpload() async {
     final CreatedCaptureDraft? draft = _savedDraft;
-    if (draft == null || _queueing || _queuedPackage != null) return;
+    if (draft == null || _queueing || _isQueued) return;
     setState(() {
       _queueing = true;
       _error = null;
     });
     try {
-      final QueuedCapturePackage queued =
-          await QueueCaptureDraft(ref.read(appDatabaseProvider))
-              .execute(draft.draftId);
+      await QueueCaptureDraft(ref.read(appDatabaseProvider))
+          .execute(draft.draftId);
       if (!mounted) return;
-      setState(() => _queuedPackage = queued);
+      setState(() => _isQueued = true);
     } on StateError catch (error) {
       if (mounted) {
         setState(() => _error = '当前采集组尚不完整，不能保存到待上传：${error.message}');
@@ -259,7 +306,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
               value: _threeView,
-              onChanged: savedDraft == null && !_saving
+              onChanged: savedDraft == null && !_saving && !_restoring
                   ? (bool value) => setState(() => _threeView = value)
                   : null,
               title: const Text('左 / 中 / 右三图模式',
@@ -276,18 +323,22 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
               style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 4),
           Text(
-            savedDraft == null
-                ? '当前需要：$_nextPositionLabel。拍摄或导入后会先安全保存到本机。'
-                : _threeViewComplete
-                    ? '三张照片已保存为同一采集组，等待加入上传队列。'
-                    : '已保存 ${_savedPositions.length}/3 张；当前需要：$_nextPositionLabel。',
+            _restoring
+                ? '正在恢复本地草稿和待上传证据…'
+                : savedDraft == null
+                    ? '当前需要：$_nextPositionLabel。拍摄或导入后会先安全保存到本机。'
+                    : _isQueued
+                        ? '采集组和待上传状态已恢复，尚未生成盘点数量。'
+                        : _threeViewComplete
+                            ? '三张照片已保存为同一采集组，等待加入上传队列。'
+                            : '已保存 ${_savedPositions.length}/3 张；当前需要：$_nextPositionLabel。',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 12),
           if (savedDraft != null)
             _SavedEvidenceCard(
               file: savedDraft.materializedFile,
-              status: _queuedPackage != null
+              status: _isQueued
                   ? '已保存到待上传 · 尚未生成盘点数量'
                   : _threeView
                       ? '已保存 ${_savedPositions.length}/3 张 · 不会显示数量'
@@ -297,20 +348,19 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
               (!_threeView || _threeViewComplete)) ...<Widget>[
             const SizedBox(height: 12),
             FilledButton.icon(
-              onPressed:
-                  _queueing || _queuedPackage != null ? null : _queueForUpload,
+              onPressed: _queueing || _isQueued ? null : _queueForUpload,
               icon: _queueing
                   ? const SizedBox.square(
                       dimension: 20,
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white),
                     )
-                  : Icon(_queuedPackage == null
+                  : Icon(!_isQueued
                       ? Icons.cloud_upload_outlined
                       : Icons.cloud_done_outlined),
               label: Text(_queueing
                   ? '正在写入待上传队列…'
-                  : _queuedPackage == null
+                  : !_isQueued
                       ? '保存到待上传'
                       : '已保存到待上传'),
             ),

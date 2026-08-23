@@ -47,7 +47,7 @@
 | Flutter Android | `flutter analyze` 通过；2 项测试通过；`assembleDebug` 成功，debug APK 已生成 |
 | Docker Desktop / Compose | 客户端/服务端版本校验通过；完整 Compose 已构建并启动；MySQL、Redis、MinIO、推理 API、Spring、管理端和网关健康 |
 | Flyway / MinIO | MySQL 已实际应用 V1/V2；`minio-init` 已完成私有桶初始化 |
-| Flutter 离线采集 | analyze 通过；15 项测试通过；debug APK 构建成功；10MB 流式物化、方向唯一、ROI 和本地入队均覆盖 |
+| Flutter 离线采集 | analyze 通过；15 项测试通过；debug APK 构建成功；10MB 流式物化、方向唯一、ROI 和本地入队均覆盖；realme GT 7 Pro 已验证单图/三图拍摄和入队、不显示数量，已修复进程终止后采集页未恢复草稿/待上传证据的问题，待实机复测 |
 | Python Provider | pytest 通过；3 项测试通过 |
 
 ## 未验证与阻塞

@@ -77,6 +77,13 @@ void main() {
       (await database.select(database.captureDrafts).getSingle()).state,
       'queued',
     );
+    final restored = await drafts.findLatestForTarget(
+      organizationId: 'organization-1',
+      penId: 'pen-1',
+      businessDate: DateTime.utc(2026, 8, 20),
+    );
+    expect(restored?.state, 'queued');
+    expect(restored?.media.single.assetId, draft.assetId);
   });
 
   test('rejects an incomplete three-view draft without creating an outbox',

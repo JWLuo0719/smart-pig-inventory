@@ -48,6 +48,12 @@ void main() {
         await database.select(database.captureSets).getSingle();
     final LocalMediaAsset media =
         await database.select(database.localMediaAssets).getSingle();
+    final restored =
+        await DriftCaptureDraftRepository(database).findLatestForTarget(
+      organizationId: '11111111-1111-4111-8111-111111111111',
+      penId: '22222222-2222-4222-8222-222222222222',
+      businessDate: DateTime.utc(2026, 8, 20),
+    );
 
     expect(draft.id, created.draftId);
     expect(draft.state, 'draft');
@@ -60,5 +66,9 @@ void main() {
     expect(media.height, 1080);
     expect(media.capturedAt?.toUtc(), DateTime.utc(2026, 8, 20, 1, 1));
     expect(await File(media.materializedPath).exists(), isTrue);
+    expect(restored?.draftId, created.draftId);
+    expect(restored?.captureSetId, created.captureSetId);
+    expect(restored?.state, 'draft');
+    expect(restored?.media.single.materializedPath, media.materializedPath);
   });
 }
