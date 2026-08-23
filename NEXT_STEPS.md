@@ -6,14 +6,14 @@
 
 1. 已完成 Android 原生壳、Drift 生成、analyze/test 与 debug APK；后续在真实 Android 设备验证相机、权限和后台上传。工作站规则见 `docs/development/workstation-setup.md`。
 2. 已恢复 Docker Desktop WSL 引擎并完成完整 Compose、MySQL Flyway V1/V2、私有 MinIO 桶和网关健康验证；后续持续保留 Compose smoke test。首个试点部署基线见 `docs/deployment/pilot-baseline.md`。
-3. 已按 ADR-0003 实现环境变量一次性管理员初始化、BCrypt、JWT、可撤销刷新令牌及 login/refresh/logout/me；下一步将 Flutter Token 安全存储和登录状态接入真实 API，后续通过身份适配器接入金蝶账号。
+3. 已按 ADR-0003 实现环境变量一次性管理员初始化、BCrypt、JWT、可撤销刷新令牌及 login/refresh/logout/me，并已接入 Flutter 安全存储、登录/刷新/登出和 7 天离线会话恢复；下一步以完整 Compose 在实机验证身份与主数据同步，后续通过身份适配器接入金蝶账号。
 4. 已增加 Testcontainers MySQL Flyway 集成测试；持续保留该门禁。下一步扩展至 BINARY UUID、JSON、CHECK、唯一索引、对象写入和并发语义，并补充 MinIO 集成测试。
 
 ## Iteration 2：AC-01 至 AC-04
 
-1. 已实现以 JWT 激活组织为可信来源的主数据全量/增量同步、游标失效全量恢复和删除墓碑；下一步将 Flutter 缓存、游标与栏舍选择接入真实 API。
+1. 已实现以 JWT 激活组织为可信来源的主数据全量/增量同步、游标失效全量恢复和删除墓碑，并接入 Flutter 的组织隔离缓存、搜索、禁用栏舍拦截和真实 API；下一步在实机验证登录、同步和离线缓存闭环。
 2. 已实现采集包 create/blob/manifest/commit 的 Controller、Application Service、JDBC Infrastructure、MinIO 暂存提升和事务 Outbox；下一步实现 Outbox 派发至推理服务并补充并发 Commit/MinIO HTTP 集成测试。
-3. Flutter 已完成媒体物化、流式 SHA-256、单图/三图草稿、ROI 口径和本地完整采集组入队；下一步实现草稿恢复 UI、主数据接线及前后台真实同步。
+3. Flutter 已完成媒体物化、流式 SHA-256、单图/三图草稿、ROI 口径、本地完整采集组入队、草稿恢复 UI，以及主数据接线；下一步实现前后台真实上传同步。
 4. 通过断网三图、杀进程、弱网恢复、并发 Commit 和精确重复 E2E。
 
 ## Iteration 3：AC-05 至 AC-12

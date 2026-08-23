@@ -32,7 +32,7 @@
 - 已安装 Docker Desktop 4.87.0（per-user、WSL 2、Linux containers），并将 WSL 数据根设置为 `D:\DockerDesktop\wsl-data`；已恢复 Desktop 引擎并完成 Compose 首次完整启动。
 - 已安装 Maven 3.9.11 至 `D:\ProgrammingLanguage\apache-maven-3.9.11`，并将其纳入本机核验脚本。
 - 已用 Testcontainers MySQL 8.4 实际验证 Flyway V1/V2；`src/test/resources/docker-java.properties` 将 Docker Java 客户端 API 固定为 1.44，解决 Docker Desktop 29.7 经 Windows npipe 的兼容问题，不依赖系统全局环境变量。
-- Flutter Drift 已升级至本地 schema v5：单图/三图媒体物化、流式 SHA-256、EXIF 方向/尺寸、方向唯一、ROI 边界持久化和完整采集组入队均具备自动化证据；尚未接入真实服务端上传。
+- Flutter Drift 已升级至本地 schema v6：单图/三图媒体物化、流式 SHA-256、EXIF 方向/尺寸、方向唯一、ROI 边界持久化、完整采集组入队，以及认证上下文、组织主数据游标缓存均具备自动化证据；尚未接入真实服务端上传。
 
 ## 已验证证据
 
@@ -44,7 +44,7 @@
 | OpenAPI | openapi-spec-validator 0.7.2 passed |
 | 推理 JSON Schema | JSON 语法与 Python 序列化键集合测试通过 |
 | 外部 YOLO 数据清单 | 500 图像、12,421 标注目标、0 图像—标签配对问题；本机生成且 Git 忽略 |
-| Flutter Android | `flutter analyze` 通过；2 项测试通过；`assembleDebug` 成功，debug APK 已生成 |
+| Flutter Android | `flutter analyze` 通过；17 项测试通过；`flutter build apk --debug` 成功，debug APK 已生成 |
 | Docker Desktop / Compose | 客户端/服务端版本校验通过；完整 Compose 已构建并启动；MySQL、Redis、MinIO、推理 API、Spring、管理端和网关健康 |
 | Flyway / MinIO | MySQL 已实际应用 V1/V2；`minio-init` 已完成私有桶初始化 |
 | Flutter 离线采集 | analyze 通过；15 项测试通过；debug APK 构建成功；10MB 流式物化、方向唯一、ROI 和本地入队均覆盖；realme GT 7 Pro 已验证单图/三图拍摄和入队、不显示数量，以及三图 left 后强杀并恢复到 center 的草稿恢复闭环 |
@@ -54,7 +54,7 @@
 
 - Docker Desktop 初次启动的 WSL 引擎问题已通过重新启动 Desktop 进程恢复；完整栈、Flyway、私有 MinIO 桶与网关健康已复验。`docker compose config --quiet` 已复验。管理端 Docker 构建曾因缺少 `.dockerignore` 覆盖 Linux `node_modules` 而失败，已修复并验证构建。
 - `mvn verify` 的 Flyway 运行时对 MySQL 8.4 输出“最新版已验证至 MySQL 8.1”的升级建议，但 V1/V2 已实际成功迁移；进入发布准备前应升级/复验 Flyway 与 MySQL 8.4 的兼容性，或固定到受支持的 MySQL 版本。
-- P0 上传包 create/blob/manifest/commit 的 Controller/Application/Infrastructure、事务 Outbox 记录、MinIO 暂存提升和 MySQL 集成测试，以及环境变量一次性 Bootstrap 管理员、login/refresh/logout/me、JWT、刷新令牌轮换和组织隔离的主数据全量/增量同步已实现；真实 Outbox 派发、完整 RBAC，以及 Flutter 主数据/身份/上传接线尚未实现。
+- P0 上传包 create/blob/manifest/commit 的 Controller/Application/Infrastructure、事务 Outbox 记录、MinIO 暂存提升和 MySQL 集成测试，以及环境变量一次性 Bootstrap 管理员、login/refresh/logout/me、JWT、刷新令牌轮换和组织隔离的主数据全量/增量同步已实现；Flutter 已接入安全令牌存储、登录/刷新/登出、7 天离线会话恢复和真实主数据缓存同步。真实 Outbox 派发、完整 RBAC，以及 Flutter 真实上传接线尚未实现。
 - 金蝶正式 API、线上 YOLOv13 权重、模型许可证、金标基准和部署服务器规格尚未提供。
 - 低端 Android 候选机是否可获得，以及首批试点猪场、边缘服务器规格仍待确认。
 

@@ -19,7 +19,7 @@ class CountWorkbenchScreen extends StatelessWidget {
         _StepTile(
             number: '1',
             title: '选择栏舍',
-            detail: '最近同步于 08:31，可离线使用',
+            detail: '同步栏舍后可离线选择',
             onTap: () => context.push('/pens')),
         const SizedBox(height: 12),
         _StepTile(

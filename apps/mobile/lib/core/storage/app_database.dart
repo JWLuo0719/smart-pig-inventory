@@ -7,6 +7,19 @@ import 'package:path_provider/path_provider.dart';
 
 part 'app_database.g.dart';
 
+class AuthContexts extends Table {
+  TextColumn get subjectId => text()();
+  TextColumn get displayName => text()();
+  TextColumn get activeOrganizationId => text()();
+  TextColumn get activeOrganizationCode => text()();
+  TextColumn get activeOrganizationName => text()();
+  TextColumn get rolesJson => text()();
+  DateTimeColumn get lastVerifiedAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => <Column>{subjectId};
+}
+
 class CachedOrganizations extends Table {
   TextColumn get id => text()();
   TextColumn get code => text()();
@@ -136,6 +149,7 @@ class UploadAssetEntries extends Table {
 }
 
 @DriftDatabase(tables: <Type>[
+  AuthContexts,
   CachedOrganizations,
   CachedBuildings,
   CachedPens,
@@ -157,7 +171,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -200,6 +214,9 @@ class AppDatabase extends _$AppDatabase {
             await customStatement(
               'CREATE UNIQUE INDEX uk_outbox_draft ON outbox_entries (draft_id)',
             );
+          }
+          if (from < 6) {
+            await migrator.createTable(authContexts);
           }
         },
       );

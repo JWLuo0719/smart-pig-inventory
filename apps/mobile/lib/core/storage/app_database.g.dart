@@ -3,6 +3,442 @@
 part of 'app_database.dart';
 
 // ignore_for_file: type=lint
+class $AuthContextsTable extends AuthContexts
+    with TableInfo<$AuthContextsTable, AuthContext> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AuthContextsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _subjectIdMeta =
+      const VerificationMeta('subjectId');
+  @override
+  late final GeneratedColumn<String> subjectId = GeneratedColumn<String>(
+      'subject_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _displayNameMeta =
+      const VerificationMeta('displayName');
+  @override
+  late final GeneratedColumn<String> displayName = GeneratedColumn<String>(
+      'display_name', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _activeOrganizationIdMeta =
+      const VerificationMeta('activeOrganizationId');
+  @override
+  late final GeneratedColumn<String> activeOrganizationId =
+      GeneratedColumn<String>('active_organization_id', aliasedName, false,
+          type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _activeOrganizationCodeMeta =
+      const VerificationMeta('activeOrganizationCode');
+  @override
+  late final GeneratedColumn<String> activeOrganizationCode =
+      GeneratedColumn<String>('active_organization_code', aliasedName, false,
+          type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _activeOrganizationNameMeta =
+      const VerificationMeta('activeOrganizationName');
+  @override
+  late final GeneratedColumn<String> activeOrganizationName =
+      GeneratedColumn<String>('active_organization_name', aliasedName, false,
+          type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _rolesJsonMeta =
+      const VerificationMeta('rolesJson');
+  @override
+  late final GeneratedColumn<String> rolesJson = GeneratedColumn<String>(
+      'roles_json', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _lastVerifiedAtMeta =
+      const VerificationMeta('lastVerifiedAt');
+  @override
+  late final GeneratedColumn<DateTime> lastVerifiedAt =
+      GeneratedColumn<DateTime>('last_verified_at', aliasedName, false,
+          type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [
+        subjectId,
+        displayName,
+        activeOrganizationId,
+        activeOrganizationCode,
+        activeOrganizationName,
+        rolesJson,
+        lastVerifiedAt
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'auth_contexts';
+  @override
+  VerificationContext validateIntegrity(Insertable<AuthContext> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('subject_id')) {
+      context.handle(_subjectIdMeta,
+          subjectId.isAcceptableOrUnknown(data['subject_id']!, _subjectIdMeta));
+    } else if (isInserting) {
+      context.missing(_subjectIdMeta);
+    }
+    if (data.containsKey('display_name')) {
+      context.handle(
+          _displayNameMeta,
+          displayName.isAcceptableOrUnknown(
+              data['display_name']!, _displayNameMeta));
+    } else if (isInserting) {
+      context.missing(_displayNameMeta);
+    }
+    if (data.containsKey('active_organization_id')) {
+      context.handle(
+          _activeOrganizationIdMeta,
+          activeOrganizationId.isAcceptableOrUnknown(
+              data['active_organization_id']!, _activeOrganizationIdMeta));
+    } else if (isInserting) {
+      context.missing(_activeOrganizationIdMeta);
+    }
+    if (data.containsKey('active_organization_code')) {
+      context.handle(
+          _activeOrganizationCodeMeta,
+          activeOrganizationCode.isAcceptableOrUnknown(
+              data['active_organization_code']!, _activeOrganizationCodeMeta));
+    } else if (isInserting) {
+      context.missing(_activeOrganizationCodeMeta);
+    }
+    if (data.containsKey('active_organization_name')) {
+      context.handle(
+          _activeOrganizationNameMeta,
+          activeOrganizationName.isAcceptableOrUnknown(
+              data['active_organization_name']!, _activeOrganizationNameMeta));
+    } else if (isInserting) {
+      context.missing(_activeOrganizationNameMeta);
+    }
+    if (data.containsKey('roles_json')) {
+      context.handle(_rolesJsonMeta,
+          rolesJson.isAcceptableOrUnknown(data['roles_json']!, _rolesJsonMeta));
+    } else if (isInserting) {
+      context.missing(_rolesJsonMeta);
+    }
+    if (data.containsKey('last_verified_at')) {
+      context.handle(
+          _lastVerifiedAtMeta,
+          lastVerifiedAt.isAcceptableOrUnknown(
+              data['last_verified_at']!, _lastVerifiedAtMeta));
+    } else if (isInserting) {
+      context.missing(_lastVerifiedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {subjectId};
+  @override
+  AuthContext map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AuthContext(
+      subjectId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}subject_id'])!,
+      displayName: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}display_name'])!,
+      activeOrganizationId: attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}active_organization_id'])!,
+      activeOrganizationCode: attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}active_organization_code'])!,
+      activeOrganizationName: attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}active_organization_name'])!,
+      rolesJson: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}roles_json'])!,
+      lastVerifiedAt: attachedDatabase.typeMapping.read(
+          DriftSqlType.dateTime, data['${effectivePrefix}last_verified_at'])!,
+    );
+  }
+
+  @override
+  $AuthContextsTable createAlias(String alias) {
+    return $AuthContextsTable(attachedDatabase, alias);
+  }
+}
+
+class AuthContext extends DataClass implements Insertable<AuthContext> {
+  final String subjectId;
+  final String displayName;
+  final String activeOrganizationId;
+  final String activeOrganizationCode;
+  final String activeOrganizationName;
+  final String rolesJson;
+  final DateTime lastVerifiedAt;
+  const AuthContext(
+      {required this.subjectId,
+      required this.displayName,
+      required this.activeOrganizationId,
+      required this.activeOrganizationCode,
+      required this.activeOrganizationName,
+      required this.rolesJson,
+      required this.lastVerifiedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['subject_id'] = Variable<String>(subjectId);
+    map['display_name'] = Variable<String>(displayName);
+    map['active_organization_id'] = Variable<String>(activeOrganizationId);
+    map['active_organization_code'] = Variable<String>(activeOrganizationCode);
+    map['active_organization_name'] = Variable<String>(activeOrganizationName);
+    map['roles_json'] = Variable<String>(rolesJson);
+    map['last_verified_at'] = Variable<DateTime>(lastVerifiedAt);
+    return map;
+  }
+
+  AuthContextsCompanion toCompanion(bool nullToAbsent) {
+    return AuthContextsCompanion(
+      subjectId: Value(subjectId),
+      displayName: Value(displayName),
+      activeOrganizationId: Value(activeOrganizationId),
+      activeOrganizationCode: Value(activeOrganizationCode),
+      activeOrganizationName: Value(activeOrganizationName),
+      rolesJson: Value(rolesJson),
+      lastVerifiedAt: Value(lastVerifiedAt),
+    );
+  }
+
+  factory AuthContext.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AuthContext(
+      subjectId: serializer.fromJson<String>(json['subjectId']),
+      displayName: serializer.fromJson<String>(json['displayName']),
+      activeOrganizationId:
+          serializer.fromJson<String>(json['activeOrganizationId']),
+      activeOrganizationCode:
+          serializer.fromJson<String>(json['activeOrganizationCode']),
+      activeOrganizationName:
+          serializer.fromJson<String>(json['activeOrganizationName']),
+      rolesJson: serializer.fromJson<String>(json['rolesJson']),
+      lastVerifiedAt: serializer.fromJson<DateTime>(json['lastVerifiedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'subjectId': serializer.toJson<String>(subjectId),
+      'displayName': serializer.toJson<String>(displayName),
+      'activeOrganizationId': serializer.toJson<String>(activeOrganizationId),
+      'activeOrganizationCode':
+          serializer.toJson<String>(activeOrganizationCode),
+      'activeOrganizationName':
+          serializer.toJson<String>(activeOrganizationName),
+      'rolesJson': serializer.toJson<String>(rolesJson),
+      'lastVerifiedAt': serializer.toJson<DateTime>(lastVerifiedAt),
+    };
+  }
+
+  AuthContext copyWith(
+          {String? subjectId,
+          String? displayName,
+          String? activeOrganizationId,
+          String? activeOrganizationCode,
+          String? activeOrganizationName,
+          String? rolesJson,
+          DateTime? lastVerifiedAt}) =>
+      AuthContext(
+        subjectId: subjectId ?? this.subjectId,
+        displayName: displayName ?? this.displayName,
+        activeOrganizationId: activeOrganizationId ?? this.activeOrganizationId,
+        activeOrganizationCode:
+            activeOrganizationCode ?? this.activeOrganizationCode,
+        activeOrganizationName:
+            activeOrganizationName ?? this.activeOrganizationName,
+        rolesJson: rolesJson ?? this.rolesJson,
+        lastVerifiedAt: lastVerifiedAt ?? this.lastVerifiedAt,
+      );
+  AuthContext copyWithCompanion(AuthContextsCompanion data) {
+    return AuthContext(
+      subjectId: data.subjectId.present ? data.subjectId.value : this.subjectId,
+      displayName:
+          data.displayName.present ? data.displayName.value : this.displayName,
+      activeOrganizationId: data.activeOrganizationId.present
+          ? data.activeOrganizationId.value
+          : this.activeOrganizationId,
+      activeOrganizationCode: data.activeOrganizationCode.present
+          ? data.activeOrganizationCode.value
+          : this.activeOrganizationCode,
+      activeOrganizationName: data.activeOrganizationName.present
+          ? data.activeOrganizationName.value
+          : this.activeOrganizationName,
+      rolesJson: data.rolesJson.present ? data.rolesJson.value : this.rolesJson,
+      lastVerifiedAt: data.lastVerifiedAt.present
+          ? data.lastVerifiedAt.value
+          : this.lastVerifiedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AuthContext(')
+          ..write('subjectId: $subjectId, ')
+          ..write('displayName: $displayName, ')
+          ..write('activeOrganizationId: $activeOrganizationId, ')
+          ..write('activeOrganizationCode: $activeOrganizationCode, ')
+          ..write('activeOrganizationName: $activeOrganizationName, ')
+          ..write('rolesJson: $rolesJson, ')
+          ..write('lastVerifiedAt: $lastVerifiedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+      subjectId,
+      displayName,
+      activeOrganizationId,
+      activeOrganizationCode,
+      activeOrganizationName,
+      rolesJson,
+      lastVerifiedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AuthContext &&
+          other.subjectId == this.subjectId &&
+          other.displayName == this.displayName &&
+          other.activeOrganizationId == this.activeOrganizationId &&
+          other.activeOrganizationCode == this.activeOrganizationCode &&
+          other.activeOrganizationName == this.activeOrganizationName &&
+          other.rolesJson == this.rolesJson &&
+          other.lastVerifiedAt == this.lastVerifiedAt);
+}
+
+class AuthContextsCompanion extends UpdateCompanion<AuthContext> {
+  final Value<String> subjectId;
+  final Value<String> displayName;
+  final Value<String> activeOrganizationId;
+  final Value<String> activeOrganizationCode;
+  final Value<String> activeOrganizationName;
+  final Value<String> rolesJson;
+  final Value<DateTime> lastVerifiedAt;
+  final Value<int> rowid;
+  const AuthContextsCompanion({
+    this.subjectId = const Value.absent(),
+    this.displayName = const Value.absent(),
+    this.activeOrganizationId = const Value.absent(),
+    this.activeOrganizationCode = const Value.absent(),
+    this.activeOrganizationName = const Value.absent(),
+    this.rolesJson = const Value.absent(),
+    this.lastVerifiedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  AuthContextsCompanion.insert({
+    required String subjectId,
+    required String displayName,
+    required String activeOrganizationId,
+    required String activeOrganizationCode,
+    required String activeOrganizationName,
+    required String rolesJson,
+    required DateTime lastVerifiedAt,
+    this.rowid = const Value.absent(),
+  })  : subjectId = Value(subjectId),
+        displayName = Value(displayName),
+        activeOrganizationId = Value(activeOrganizationId),
+        activeOrganizationCode = Value(activeOrganizationCode),
+        activeOrganizationName = Value(activeOrganizationName),
+        rolesJson = Value(rolesJson),
+        lastVerifiedAt = Value(lastVerifiedAt);
+  static Insertable<AuthContext> custom({
+    Expression<String>? subjectId,
+    Expression<String>? displayName,
+    Expression<String>? activeOrganizationId,
+    Expression<String>? activeOrganizationCode,
+    Expression<String>? activeOrganizationName,
+    Expression<String>? rolesJson,
+    Expression<DateTime>? lastVerifiedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (subjectId != null) 'subject_id': subjectId,
+      if (displayName != null) 'display_name': displayName,
+      if (activeOrganizationId != null)
+        'active_organization_id': activeOrganizationId,
+      if (activeOrganizationCode != null)
+        'active_organization_code': activeOrganizationCode,
+      if (activeOrganizationName != null)
+        'active_organization_name': activeOrganizationName,
+      if (rolesJson != null) 'roles_json': rolesJson,
+      if (lastVerifiedAt != null) 'last_verified_at': lastVerifiedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  AuthContextsCompanion copyWith(
+      {Value<String>? subjectId,
+      Value<String>? displayName,
+      Value<String>? activeOrganizationId,
+      Value<String>? activeOrganizationCode,
+      Value<String>? activeOrganizationName,
+      Value<String>? rolesJson,
+      Value<DateTime>? lastVerifiedAt,
+      Value<int>? rowid}) {
+    return AuthContextsCompanion(
+      subjectId: subjectId ?? this.subjectId,
+      displayName: displayName ?? this.displayName,
+      activeOrganizationId: activeOrganizationId ?? this.activeOrganizationId,
+      activeOrganizationCode:
+          activeOrganizationCode ?? this.activeOrganizationCode,
+      activeOrganizationName:
+          activeOrganizationName ?? this.activeOrganizationName,
+      rolesJson: rolesJson ?? this.rolesJson,
+      lastVerifiedAt: lastVerifiedAt ?? this.lastVerifiedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (subjectId.present) {
+      map['subject_id'] = Variable<String>(subjectId.value);
+    }
+    if (displayName.present) {
+      map['display_name'] = Variable<String>(displayName.value);
+    }
+    if (activeOrganizationId.present) {
+      map['active_organization_id'] =
+          Variable<String>(activeOrganizationId.value);
+    }
+    if (activeOrganizationCode.present) {
+      map['active_organization_code'] =
+          Variable<String>(activeOrganizationCode.value);
+    }
+    if (activeOrganizationName.present) {
+      map['active_organization_name'] =
+          Variable<String>(activeOrganizationName.value);
+    }
+    if (rolesJson.present) {
+      map['roles_json'] = Variable<String>(rolesJson.value);
+    }
+    if (lastVerifiedAt.present) {
+      map['last_verified_at'] = Variable<DateTime>(lastVerifiedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AuthContextsCompanion(')
+          ..write('subjectId: $subjectId, ')
+          ..write('displayName: $displayName, ')
+          ..write('activeOrganizationId: $activeOrganizationId, ')
+          ..write('activeOrganizationCode: $activeOrganizationCode, ')
+          ..write('activeOrganizationName: $activeOrganizationName, ')
+          ..write('rolesJson: $rolesJson, ')
+          ..write('lastVerifiedAt: $lastVerifiedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $CachedOrganizationsTable extends CachedOrganizations
     with TableInfo<$CachedOrganizationsTable, CachedOrganization> {
   @override
@@ -3840,6 +4276,7 @@ class UploadAssetEntriesCompanion extends UpdateCompanion<UploadAssetEntry> {
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
+  late final $AuthContextsTable authContexts = $AuthContextsTable(this);
   late final $CachedOrganizationsTable cachedOrganizations =
       $CachedOrganizationsTable(this);
   late final $CachedBuildingsTable cachedBuildings =
@@ -3858,6 +4295,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [
+        authContexts,
         cachedOrganizations,
         cachedBuildings,
         cachedPens,
@@ -3870,6 +4308,217 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       ];
 }
 
+typedef $$AuthContextsTableCreateCompanionBuilder = AuthContextsCompanion
+    Function({
+  required String subjectId,
+  required String displayName,
+  required String activeOrganizationId,
+  required String activeOrganizationCode,
+  required String activeOrganizationName,
+  required String rolesJson,
+  required DateTime lastVerifiedAt,
+  Value<int> rowid,
+});
+typedef $$AuthContextsTableUpdateCompanionBuilder = AuthContextsCompanion
+    Function({
+  Value<String> subjectId,
+  Value<String> displayName,
+  Value<String> activeOrganizationId,
+  Value<String> activeOrganizationCode,
+  Value<String> activeOrganizationName,
+  Value<String> rolesJson,
+  Value<DateTime> lastVerifiedAt,
+  Value<int> rowid,
+});
+
+class $$AuthContextsTableFilterComposer
+    extends Composer<_$AppDatabase, $AuthContextsTable> {
+  $$AuthContextsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get subjectId => $composableBuilder(
+      column: $table.subjectId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get displayName => $composableBuilder(
+      column: $table.displayName, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get activeOrganizationId => $composableBuilder(
+      column: $table.activeOrganizationId,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get activeOrganizationCode => $composableBuilder(
+      column: $table.activeOrganizationCode,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get activeOrganizationName => $composableBuilder(
+      column: $table.activeOrganizationName,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get rolesJson => $composableBuilder(
+      column: $table.rolesJson, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get lastVerifiedAt => $composableBuilder(
+      column: $table.lastVerifiedAt,
+      builder: (column) => ColumnFilters(column));
+}
+
+class $$AuthContextsTableOrderingComposer
+    extends Composer<_$AppDatabase, $AuthContextsTable> {
+  $$AuthContextsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get subjectId => $composableBuilder(
+      column: $table.subjectId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get displayName => $composableBuilder(
+      column: $table.displayName, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get activeOrganizationId => $composableBuilder(
+      column: $table.activeOrganizationId,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get activeOrganizationCode => $composableBuilder(
+      column: $table.activeOrganizationCode,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get activeOrganizationName => $composableBuilder(
+      column: $table.activeOrganizationName,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get rolesJson => $composableBuilder(
+      column: $table.rolesJson, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get lastVerifiedAt => $composableBuilder(
+      column: $table.lastVerifiedAt,
+      builder: (column) => ColumnOrderings(column));
+}
+
+class $$AuthContextsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $AuthContextsTable> {
+  $$AuthContextsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get subjectId =>
+      $composableBuilder(column: $table.subjectId, builder: (column) => column);
+
+  GeneratedColumn<String> get displayName => $composableBuilder(
+      column: $table.displayName, builder: (column) => column);
+
+  GeneratedColumn<String> get activeOrganizationId => $composableBuilder(
+      column: $table.activeOrganizationId, builder: (column) => column);
+
+  GeneratedColumn<String> get activeOrganizationCode => $composableBuilder(
+      column: $table.activeOrganizationCode, builder: (column) => column);
+
+  GeneratedColumn<String> get activeOrganizationName => $composableBuilder(
+      column: $table.activeOrganizationName, builder: (column) => column);
+
+  GeneratedColumn<String> get rolesJson =>
+      $composableBuilder(column: $table.rolesJson, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get lastVerifiedAt => $composableBuilder(
+      column: $table.lastVerifiedAt, builder: (column) => column);
+}
+
+class $$AuthContextsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $AuthContextsTable,
+    AuthContext,
+    $$AuthContextsTableFilterComposer,
+    $$AuthContextsTableOrderingComposer,
+    $$AuthContextsTableAnnotationComposer,
+    $$AuthContextsTableCreateCompanionBuilder,
+    $$AuthContextsTableUpdateCompanionBuilder,
+    (
+      AuthContext,
+      BaseReferences<_$AppDatabase, $AuthContextsTable, AuthContext>
+    ),
+    AuthContext,
+    PrefetchHooks Function()> {
+  $$AuthContextsTableTableManager(_$AppDatabase db, $AuthContextsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AuthContextsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$AuthContextsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$AuthContextsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> subjectId = const Value.absent(),
+            Value<String> displayName = const Value.absent(),
+            Value<String> activeOrganizationId = const Value.absent(),
+            Value<String> activeOrganizationCode = const Value.absent(),
+            Value<String> activeOrganizationName = const Value.absent(),
+            Value<String> rolesJson = const Value.absent(),
+            Value<DateTime> lastVerifiedAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              AuthContextsCompanion(
+            subjectId: subjectId,
+            displayName: displayName,
+            activeOrganizationId: activeOrganizationId,
+            activeOrganizationCode: activeOrganizationCode,
+            activeOrganizationName: activeOrganizationName,
+            rolesJson: rolesJson,
+            lastVerifiedAt: lastVerifiedAt,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String subjectId,
+            required String displayName,
+            required String activeOrganizationId,
+            required String activeOrganizationCode,
+            required String activeOrganizationName,
+            required String rolesJson,
+            required DateTime lastVerifiedAt,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              AuthContextsCompanion.insert(
+            subjectId: subjectId,
+            displayName: displayName,
+            activeOrganizationId: activeOrganizationId,
+            activeOrganizationCode: activeOrganizationCode,
+            activeOrganizationName: activeOrganizationName,
+            rolesJson: rolesJson,
+            lastVerifiedAt: lastVerifiedAt,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$AuthContextsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $AuthContextsTable,
+    AuthContext,
+    $$AuthContextsTableFilterComposer,
+    $$AuthContextsTableOrderingComposer,
+    $$AuthContextsTableAnnotationComposer,
+    $$AuthContextsTableCreateCompanionBuilder,
+    $$AuthContextsTableUpdateCompanionBuilder,
+    (
+      AuthContext,
+      BaseReferences<_$AppDatabase, $AuthContextsTable, AuthContext>
+    ),
+    AuthContext,
+    PrefetchHooks Function()>;
 typedef $$CachedOrganizationsTableCreateCompanionBuilder
     = CachedOrganizationsCompanion Function({
   required String id,
@@ -5803,6 +6452,8 @@ typedef $$UploadAssetEntriesTableProcessedTableManager = ProcessedTableManager<
 class $AppDatabaseManager {
   final _$AppDatabase _db;
   $AppDatabaseManager(this._db);
+  $$AuthContextsTableTableManager get authContexts =>
+      $$AuthContextsTableTableManager(_db, _db.authContexts);
   $$CachedOrganizationsTableTableManager get cachedOrganizations =>
       $$CachedOrganizationsTableTableManager(_db, _db.cachedOrganizations);
   $$CachedBuildingsTableTableManager get cachedBuildings =>
