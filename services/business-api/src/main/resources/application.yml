@@ -62,4 +62,4 @@ spring:
       on-profile: dev
 app:
   security:
-    enabled: false
+    enabled: ${SECURITY_ENABLED:false}
