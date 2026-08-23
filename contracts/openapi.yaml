@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Smart Pig Inventory Business API
-  version: 0.3.0
+  version: 0.4.0
   description: >-
     路线 B+ 的业务合同基线。所有写操作接受 X-Idempotency-Key，所有时间使用 ISO 8601；
     离线采集必须完成 package/blob/manifest/commit 后才创建正式推理任务。ROI 使用完成
@@ -109,7 +109,10 @@ paths:
       parameters:
         - name: cursor
           in: query
-          schema: {type: string}
+          description: >-
+            上次响应返回的全局单调 syncVersion；首次同步省略。非法或超过服务器当前水位的游标
+            会返回 fullResyncRequired=true，客户端必须原子替换该组织缓存。
+          schema: {type: string, pattern: '^[0-9]+$'}
       responses:
         '200':
           description: 增量主数据及新游标

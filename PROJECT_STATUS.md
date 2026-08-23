@@ -38,7 +38,7 @@
 
 | 范围 | 结果 |
 |---|---|
-| Spring 上传链路、身份、领域与 Flyway 集成测试 | `mvn verify` success；15 tests passed，0 skipped；Testcontainers 实际启动 MySQL 8.4 并应用 V1/V2/V3，覆盖 create/blob/manifest/commit 重放、并发 Commit、事务 Outbox、精确重复阻断、Bootstrap 管理员、登录、刷新轮换和登出撤销 |
+| Spring 上传链路、身份、主数据、领域与 Flyway 集成测试 | `mvn verify` success；17 tests passed，0 skipped；Testcontainers 实际启动 MySQL 8.4 并应用 V1/V2/V3/V4，覆盖 create/blob/manifest/commit 重放、并发 Commit、事务 Outbox、精确重复阻断、Bootstrap 管理员、登录、刷新轮换、登出撤销及主数据全量/增量隔离 |
 | Python Provider/合同漂移/Worker 注册测试 | 3 tests passed |
 | Next.js | ESLint passed；TypeScript passed；production build passed |
 | OpenAPI | openapi-spec-validator 0.7.2 passed |
@@ -54,7 +54,7 @@
 
 - Docker Desktop 初次启动的 WSL 引擎问题已通过重新启动 Desktop 进程恢复；完整栈、Flyway、私有 MinIO 桶与网关健康已复验。`docker compose config --quiet` 已复验。管理端 Docker 构建曾因缺少 `.dockerignore` 覆盖 Linux `node_modules` 而失败，已修复并验证构建。
 - `mvn verify` 的 Flyway 运行时对 MySQL 8.4 输出“最新版已验证至 MySQL 8.1”的升级建议，但 V1/V2 已实际成功迁移；进入发布准备前应升级/复验 Flyway 与 MySQL 8.4 的兼容性，或固定到受支持的 MySQL 版本。
-- P0 上传包 create/blob/manifest/commit 的 Controller/Application/Infrastructure、事务 Outbox 记录、MinIO 暂存提升和 MySQL 集成测试，以及环境变量一次性 Bootstrap 管理员、login/refresh/logout/me、JWT 和刷新令牌轮换已实现；真实 Outbox 派发、完整 RBAC、主数据同步和真实页面数据接线尚未实现。
+- P0 上传包 create/blob/manifest/commit 的 Controller/Application/Infrastructure、事务 Outbox 记录、MinIO 暂存提升和 MySQL 集成测试，以及环境变量一次性 Bootstrap 管理员、login/refresh/logout/me、JWT、刷新令牌轮换和组织隔离的主数据全量/增量同步已实现；真实 Outbox 派发、完整 RBAC，以及 Flutter 主数据/身份/上传接线尚未实现。
 - 金蝶正式 API、线上 YOLOv13 权重、模型许可证、金标基准和部署服务器规格尚未提供。
 - 低端 Android 候选机是否可获得，以及首批试点猪场、边缘服务器规格仍待确认。
 

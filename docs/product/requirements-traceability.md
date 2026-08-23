@@ -5,7 +5,7 @@
 | 需求 | 权威设计 | 主要实现位置 | 验收 | 当前状态 |
 |---|---|---|---|---|
 | 科研阶段登录/令牌刷新 | PRD P0；ADR-0003 | Flutter auth；Spring identity | AC-11、AC-12 | 开发中（Spring Bootstrap、JWT、登录、刷新轮换、登出和当前用户已通过 MySQL 集成测试；Flutter 安全存储和页面待接线） |
-| 组织/栋舍/栏舍离线同步 | PRD 3.1 | Flutter master-data；Spring organization | AC-01、AC-11 | 开发中（增量合同已补充） |
+| 组织/栋舍/栏舍离线同步 | PRD 3.1 | Flutter master-data；Spring masterdata | AC-01、AC-11 | 开发中（Spring 全量/增量游标、删除墓碑和组织隔离已通过 MySQL 集成测试；Flutter 缓存接线待实现） |
 | 单图与三视图采集 | PRD 3.2 | Flutter capture；Spring capture | AC-01、AC-08 | 开发中（单图/三图本地采集、方向唯一和页面接线已测试；服务端上传清单校验已测试） |
 | ROI | PRD 3.2/3.4 | Flutter ROI domain；推理合同 | AC-01、AC-07 | 开发中（边界校验和草稿持久化已测试；服务端 Manifest 边界校验已测试，推理中心点口径待实现） |
 | 草稿恢复与本地媒体 | PRD 3.2 | Drift v5 CaptureDrafts/CaptureSets/LocalMediaAssets；MediaMaterializer | AC-01 | 开发中（流式物化、EXIF 方向/尺寸、原子持久化、数据库重开恢复已测试） |
