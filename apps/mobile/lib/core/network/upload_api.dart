@@ -2,56 +2,178 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 
-import '../models/capture_package.dart';
+abstract interface class UploadRemoteGateway {
+  Future<RemoteUploadPackage> createPackage({
+    required String accessToken,
+    required String idempotencyKey,
+    required String clientPackageId,
+    required String organizationId,
+    required String penId,
+    required DateTime businessDate,
+    required String captureKind,
+  });
+  Future<RemoteUploadPackage> package(
+      {required String accessToken, required String serverPackageId});
+  Future<void> putBlob({
+    required String accessToken,
+    required String idempotencyKey,
+    required String serverPackageId,
+    required String assetId,
+    required String sha256,
+    required File file,
+  });
+  Future<void> putManifest({
+    required String accessToken,
+    required String idempotencyKey,
+    required String serverPackageId,
+    required Map<String, dynamic> manifest,
+  });
+  Future<RemoteCommitResult> commit({
+    required String accessToken,
+    required String idempotencyKey,
+    required String serverPackageId,
+  });
+}
 
-class UploadApi {
-  UploadApi({required String baseUrl, required String accessToken})
-      : _dio = Dio(BaseOptions(
-          baseUrl: baseUrl,
-          connectTimeout: const Duration(seconds: 15),
-          receiveTimeout: const Duration(seconds: 30),
-          sendTimeout: const Duration(minutes: 2),
-          headers: <String, String>{'Authorization': 'Bearer $accessToken'},
-        ));
+class UploadRemoteApi implements UploadRemoteGateway {
+  UploadRemoteApi({required String baseUrl, Dio? dio})
+      : _dio = dio ??
+            Dio(BaseOptions(
+              baseUrl: baseUrl,
+              connectTimeout: const Duration(seconds: 15),
+              receiveTimeout: const Duration(seconds: 30),
+              sendTimeout: const Duration(minutes: 2),
+            ));
 
   final Dio _dio;
 
-  Future<void> upload(CapturePackageDraft draft) async {
-    final Map<String, Object?> manifest = await draft.toManifest();
-    final List<Map<String, Object?>> media =
-        List<Map<String, Object?>>.from(manifest['assets']! as List<Object?>);
-    final Options idempotent = Options(
-        headers: <String, String>{'X-Idempotency-Key': draft.idempotencyKey});
-    final Response<dynamic> package = await _dio.post(
+  @override
+  Future<RemoteUploadPackage> createPackage({
+    required String accessToken,
+    required String idempotencyKey,
+    required String clientPackageId,
+    required String organizationId,
+    required String penId,
+    required DateTime businessDate,
+    required String captureKind,
+  }) async {
+    final Response<dynamic> response = await _dio.post(
       '/api/v1/upload-packages',
-      data: draft.createPackageRequest(),
-      options: idempotent,
+      data: <String, Object>{
+        'clientPackageId': clientPackageId,
+        'organizationId': organizationId,
+        'penId': penId,
+        'businessDate': businessDate.toIso8601String().substring(0, 10),
+        'captureKind': captureKind,
+      },
+      options: _options(accessToken, idempotencyKey),
     );
-    final String serverPackageId = package.data['id'] as String;
-    final Set<String> uploaded = <String>{
-      for (final Object? item
-          in package.data['existingAssets'] as List<Object?>)
-        item as String,
-    };
-    for (int index = 0; index < media.length; index++) {
-      final Map<String, Object?> item = media[index];
-      if (uploaded.contains(item['assetId'])) continue;
-      final File file = draft.media[index].file;
-      final int contentLength = await file.length();
-      await _dio.put(
-        '/api/v1/upload-packages/$serverPackageId/blobs/${item['assetId']}',
-        data: file.openRead(),
-        options: Options(headers: <String, Object>{
-          Headers.contentTypeHeader: 'application/octet-stream',
-          Headers.contentLengthHeader: contentLength,
-          'X-Idempotency-Key': draft.idempotencyKey,
-          'X-Content-SHA256': item['sha256']! as String,
-        }),
-      );
-    }
-    await _dio.put('/api/v1/upload-packages/$serverPackageId/manifest',
-        data: manifest, options: idempotent);
-    await _dio.post('/api/v1/upload-packages/$serverPackageId/commit',
-        options: idempotent);
+    return RemoteUploadPackage.fromJson(response.data as Map<String, dynamic>);
   }
+
+  @override
+  Future<RemoteUploadPackage> package({
+    required String accessToken,
+    required String serverPackageId,
+  }) async {
+    final Response<dynamic> response = await _dio.get(
+      '/api/v1/upload-packages/$serverPackageId',
+      options: _options(accessToken),
+    );
+    return RemoteUploadPackage.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  @override
+  Future<void> putBlob({
+    required String accessToken,
+    required String idempotencyKey,
+    required String serverPackageId,
+    required String assetId,
+    required String sha256,
+    required File file,
+  }) async {
+    final int length = await file.length();
+    await _dio.put<void>(
+      '/api/v1/upload-packages/$serverPackageId/blobs/$assetId',
+      data: file.openRead(),
+      options: _options(accessToken, idempotencyKey).copyWith(
+        headers: <String, Object>{
+          'Authorization': 'Bearer $accessToken',
+          'X-Idempotency-Key': idempotencyKey,
+          Headers.contentTypeHeader: 'application/octet-stream',
+          Headers.contentLengthHeader: length,
+          'X-Content-SHA256': sha256,
+        },
+      ),
+    );
+  }
+
+  @override
+  Future<void> putManifest({
+    required String accessToken,
+    required String idempotencyKey,
+    required String serverPackageId,
+    required Map<String, dynamic> manifest,
+  }) =>
+      _dio.put<void>(
+        '/api/v1/upload-packages/$serverPackageId/manifest',
+        data: manifest,
+        options: _options(accessToken, idempotencyKey),
+      );
+
+  @override
+  Future<RemoteCommitResult> commit({
+    required String accessToken,
+    required String idempotencyKey,
+    required String serverPackageId,
+  }) async {
+    final Response<dynamic> response = await _dio.post(
+      '/api/v1/upload-packages/$serverPackageId/commit',
+      options: _options(accessToken, idempotencyKey),
+    );
+    return RemoteCommitResult.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  Options _options(String accessToken, [String? idempotencyKey]) => Options(
+        headers: <String, String>{
+          'Authorization': 'Bearer $accessToken',
+          if (idempotencyKey != null) 'X-Idempotency-Key': idempotencyKey,
+        },
+      );
+}
+
+class RemoteUploadPackage {
+  const RemoteUploadPackage({
+    required this.id,
+    required this.state,
+    required this.existingAssets,
+  });
+
+  final String id;
+  final String state;
+  final Set<String> existingAssets;
+
+  factory RemoteUploadPackage.fromJson(Map<String, dynamic> body) =>
+      RemoteUploadPackage(
+        id: body['id'] as String,
+        state: body['state'] as String,
+        existingAssets:
+            (body['existingAssets'] as List<dynamic>).cast<String>().toSet(),
+      );
+}
+
+class RemoteCommitResult {
+  const RemoteCommitResult({
+    required this.sessionId,
+    required this.inferenceJobId,
+  });
+
+  final String sessionId;
+  final String inferenceJobId;
+
+  factory RemoteCommitResult.fromJson(Map<String, dynamic> body) =>
+      RemoteCommitResult(
+        sessionId: body['sessionId'] as String,
+        inferenceJobId: body['inferenceJobId'] as String,
+      );
 }
