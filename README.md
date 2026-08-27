@@ -67,7 +67,7 @@ flutter analyze
 flutter test
 ```
 
-Flutter 当前调用地址通过 `--dart-define=API_BASE_URL=http://10.0.2.2:8088` 配置。版本锁定、提交规则和分支约束以开发规范为准。
+Android 模拟器调用地址可通过 `--dart-define=API_BASE_URL=http://10.0.2.2:8088` 配置；局域网真机使用 `./scripts/build-lan-test-apk.ps1` 一键构建。完整步骤见 [`docs/development/android-lan-e2e-testing.md`](docs/development/android-lan-e2e-testing.md)。版本锁定、提交规则和分支约束以开发规范为准。
 
 ## 尚需产品确认
 

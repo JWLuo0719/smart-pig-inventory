@@ -4,4 +4,7 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Development-only support for a private-LAN HTTP gateway. Release builds
+         do not merge this attribute and must use HTTPS. -->
+    <application android:usesCleartextTraffic="true" />
 </manifest>

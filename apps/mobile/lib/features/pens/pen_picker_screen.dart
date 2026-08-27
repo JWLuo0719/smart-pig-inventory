@@ -47,9 +47,16 @@ class _PenPickerScreenState extends ConsumerState<PenPickerScreen> {
       body: Column(
         children: <Widget>[
           if (auth.isOffline)
-            const MaterialBanner(
-              content: Text('当前离线：仅显示上次同步的栏舍，不能同步。'),
-              actions: <Widget>[],
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF4D8),
+                border: Border.all(color: const Color(0xFFEAD39A)),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Text('当前离线：仅显示上次同步的栏舍，不能同步。'),
             ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 10),

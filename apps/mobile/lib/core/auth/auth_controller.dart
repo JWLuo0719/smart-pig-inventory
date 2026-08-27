@@ -54,6 +54,49 @@ class AuthController extends AsyncNotifier<AuthState?> {
     });
   }
 
+  /// Re-checks a locally restored offline session after connectivity returns.
+  /// It deliberately keeps the local session if the network is still absent,
+  /// so queued evidence is never discarded merely because retry was tapped.
+  Future<AuthState?> reconnect() async {
+    final AuthState? current = state.valueOrNull;
+    if (current == null) return null;
+    try {
+      final AuthState verified = await _verify(current.session);
+      state = AsyncData<AuthState?>(verified);
+      return verified;
+    } on DioException catch (error) {
+      if (_isUnauthorized(error)) {
+        try {
+          final AuthSession refreshed =
+              await _api.refresh(current.session.refreshToken);
+          final AuthenticatedUser user =
+              await _api.currentUser(refreshed.accessToken);
+          await _sessions.save(refreshed);
+          await _contexts.save(user);
+          final AuthState refreshedState =
+              AuthState(session: refreshed, user: user, isOffline: false);
+          state = AsyncData<AuthState?>(refreshedState);
+          return refreshedState;
+        } on DioException catch (refreshError) {
+          if (_isNetworkFailure(refreshError)) {
+            final AuthState? offline = await _offlineFallback(current.session);
+            state = AsyncData<AuthState?>(offline);
+            return offline;
+          }
+          await _clearLocalSession();
+          state = const AsyncData<AuthState?>(null);
+          return null;
+        }
+      }
+      if (_isNetworkFailure(error)) {
+        final AuthState? offline = await _offlineFallback(current.session);
+        state = AsyncData<AuthState?>(offline);
+        return offline;
+      }
+      rethrow;
+    }
+  }
+
   Future<void> logout() async {
     final AuthState? current = state.valueOrNull;
     try {
@@ -95,7 +138,7 @@ class AuthController extends AsyncNotifier<AuthState?> {
     }
   }
 
-  Future<AuthState?> _verify(AuthSession session) async {
+  Future<AuthState> _verify(AuthSession session) async {
     final AuthenticatedUser user = await _api.currentUser(session.accessToken);
     await _contexts.save(user);
     return AuthState(session: session, user: user, isOffline: false);

@@ -70,13 +70,22 @@ class _OutboxScreenState extends ConsumerState<OutboxScreen> {
   }
 
   Future<void> _syncNext() async {
-    final auth = ref.read(authControllerProvider).valueOrNull;
+    var auth = ref.read(authControllerProvider).valueOrNull;
     if (auth == null) {
       _show('请先登录后再上传');
       return;
     }
     setState(() => _syncing = true);
     try {
+      // A session restored while the device was offline must be checked again
+      // when the operator taps retry after connectivity returns.
+      if (auth.isOffline) {
+        auth = await ref.read(authControllerProvider.notifier).reconnect();
+      }
+      if (auth == null) {
+        if (mounted) _show('登录状态已失效，请重新登录后再上传');
+        return;
+      }
       final UploadSyncOutcome outcome = await ref
           .read(uploadPackageSynchronizerProvider)
           .syncNext(auth, leaseOwner: const Uuid().v4());

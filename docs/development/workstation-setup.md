@@ -30,7 +30,7 @@ docker compose config --quiet
 docker compose up --build
 ```
 
-`.env` 仅在本机创建且已被 Git 忽略。脚本产生随机 MySQL/MinIO 密码，不显示密码；不要手动把 `.env` 发到聊天、Issue 或仓库。
+`.env` 仅在本机创建且已被 Git 忽略。脚本产生随机 MySQL/MinIO 密码、初始管理员密码和 JWT 签名密钥，且不显示密码或密钥；不要手动把 `.env` 发到聊天、Issue 或仓库。Android 局域网真机 E2E 步骤见 `docs/development/android-lan-e2e-testing.md`。
 
 ## 一键核验
 
