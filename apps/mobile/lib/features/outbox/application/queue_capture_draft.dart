@@ -21,13 +21,17 @@ class QueuedCapturePackage {
 /// network work occurs here; foreground and background upload use this same
 /// persisted operation later.
 class QueueCaptureDraft {
-  QueueCaptureDraft(this.database, {Uuid uuid = const Uuid()}) : _uuid = uuid;
+  QueueCaptureDraft(this.database,
+      {Uuid uuid = const Uuid(), Future<void> Function()? scheduleSync})
+      : _uuid = uuid,
+        _scheduleSync = scheduleSync;
 
   final AppDatabase database;
   final Uuid _uuid;
+  final Future<void> Function()? _scheduleSync;
 
-  Future<QueuedCapturePackage> execute(String draftId) {
-    return database.transaction(() async {
+  Future<QueuedCapturePackage> execute(String draftId) async {
+    final QueuedCapturePackage result = await database.transaction(() async {
       final OutboxEntry? existing =
           await (database.select(database.outboxEntries)
                 ..where((entry) => entry.draftId.equals(draftId)))
@@ -106,6 +110,16 @@ class QueueCaptureDraft {
         wasAlreadyQueued: false,
       );
     });
+    if (!result.wasAlreadyQueued) {
+      // Local queue durability is the source of truth. A scheduling failure
+      // must not turn a successful local save into a user-visible failure.
+      try {
+        await _scheduleSync?.call();
+      } on Exception {
+        // The next app launch or manual retry will schedule the same unique job.
+      }
+    }
+    return result;
   }
 
   Map<String, Object?> _manifestAsset(LocalMediaAsset asset) {

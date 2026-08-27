@@ -49,6 +49,29 @@ void main() {
   });
 
   test(
+      'resumes an interrupted intermediate state without creating a package again',
+      () async {
+    await (database.update(database.outboxEntries)
+          ..where(
+              (OutboxEntries row) => row.packageId.equals('client-package-id')))
+        .write(const OutboxEntriesCompanion(
+            state: Value<String>('uploading_blobs'),
+            serverPackageId: Value<String>('server-package-id')));
+    final gateway = _FakeUploadGateway();
+    final synchronizer = UploadPackageSynchronizer(
+      api: gateway,
+      repository: DriftOutboxRepository(database),
+      clock: () => now,
+    );
+
+    expect(await synchronizer.syncNext(_auth(now), leaseOwner: 'foreground'),
+        UploadSyncOutcome.synced);
+    expect(gateway.createCalls, 0);
+    expect(gateway.packageCalls, 1);
+    expect(gateway.uploadedAssetIds, <String>['asset-id']);
+  });
+
+  test(
       'three-view retry skips a server-confirmed blob and commits one capture set',
       () async {
     await _replaceWithThreeViewAssets(database, sandbox, now);
@@ -182,6 +205,8 @@ class _FakeUploadGateway implements UploadRemoteGateway {
   final int? error;
   final Set<String> existingAssets;
   final List<String> uploadedAssetIds = <String>[];
+  int createCalls = 0;
+  int packageCalls = 0;
   int commitCalls = 0;
   void _throwIfRequested() {
     if (error != null) {
@@ -203,6 +228,7 @@ class _FakeUploadGateway implements UploadRemoteGateway {
       required DateTime businessDate,
       required String captureKind}) async {
     _throwIfRequested();
+    createCalls++;
     return RemoteUploadPackage(
         id: 'server-package-id',
         state: 'awaiting_blobs',
@@ -211,12 +237,14 @@ class _FakeUploadGateway implements UploadRemoteGateway {
 
   @override
   Future<RemoteUploadPackage> package(
-          {required String accessToken,
-          required String serverPackageId}) async =>
-      RemoteUploadPackage(
-          id: 'server-package-id',
-          state: 'awaiting_blobs',
-          existingAssets: existingAssets);
+      {required String accessToken, required String serverPackageId}) async {
+    packageCalls++;
+    return RemoteUploadPackage(
+        id: 'server-package-id',
+        state: 'awaiting_blobs',
+        existingAssets: existingAssets);
+  }
+
   @override
   Future<void> putBlob(
       {required String accessToken,

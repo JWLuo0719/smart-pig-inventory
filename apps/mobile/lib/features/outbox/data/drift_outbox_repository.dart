@@ -41,7 +41,14 @@ class DriftOutboxRepository {
           _database.outboxEntries,
         )
               ..where((OutboxEntries entry) =>
-                  entry.state.isIn(<String>['queued', 'retry_wait']) &
+                  entry.state.isIn(<String>[
+                    'queued',
+                    'retry_wait',
+                    'creating_package',
+                    'uploading_blobs',
+                    'putting_manifest',
+                    'committing',
+                  ]) &
                   (entry.nextAttemptAt.isNull() |
                       entry.nextAttemptAt.isSmallerOrEqualValue(now)) &
                   (entry.leaseExpiresAt.isNull() |
@@ -148,6 +155,21 @@ class DriftOutboxRepository {
         leaseExpiresAt: const Value<DateTime?>(null),
         updatedAt: Value<DateTime>(now),
       ));
+
+  Future<void> retryAuthenticationWaiting({required DateTime now}) =>
+      _database.transaction(() async {
+        await (_database.update(_database.outboxEntries)
+              ..where((OutboxEntries row) =>
+                  row.state.equals('waiting_authentication')))
+            .write(OutboxEntriesCompanion(
+          state: const Value<String>('queued'),
+          error: const Value<String?>(null),
+          nextAttemptAt: const Value<DateTime?>(null),
+          leaseOwner: const Value<String?>(null),
+          leaseExpiresAt: const Value<DateTime?>(null),
+          updatedAt: Value<DateTime>(now),
+        ));
+      });
 
   Future<void> markSynced(String packageId,
           {required String sessionId,

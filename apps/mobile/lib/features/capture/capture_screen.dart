@@ -18,6 +18,7 @@ import 'application/create_three_view_draft.dart';
 import 'data/drift_capture_draft_repository.dart';
 import 'domain/capture_target.dart';
 import '../outbox/application/queue_capture_draft.dart';
+import '../sync/outbox_background_sync.dart';
 
 class CaptureScreen extends ConsumerStatefulWidget {
   const CaptureScreen({required this.target, super.key});
@@ -221,8 +222,10 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
       _error = null;
     });
     try {
-      await QueueCaptureDraft(ref.read(appDatabaseProvider))
-          .execute(draft.draftId);
+      await QueueCaptureDraft(
+        ref.read(appDatabaseProvider),
+        scheduleSync: scheduleOutboxSync,
+      ).execute(draft.draftId);
       if (!mounted) return;
       setState(() => _isQueued = true);
     } on StateError catch (error) {
