@@ -48,6 +48,27 @@ void main() {
     expect(asset.state, 'uploaded');
   });
 
+  test(
+      'three-view retry skips a server-confirmed blob and commits one capture set',
+      () async {
+    await _replaceWithThreeViewAssets(database, sandbox, now);
+    final gateway =
+        _FakeUploadGateway(existingAssets: const <String>{'left-id'});
+    final synchronizer = UploadPackageSynchronizer(
+      api: gateway,
+      repository: DriftOutboxRepository(database),
+      clock: () => now,
+    );
+
+    expect(await synchronizer.syncNext(_auth(now), leaseOwner: 'foreground'),
+        UploadSyncOutcome.synced);
+    expect(gateway.uploadedAssetIds, <String>['center-id', 'right-id']);
+    expect(gateway.commitCalls, 1);
+    final OutboxEntry outbox =
+        await database.select(database.outboxEntries).getSingle();
+    expect(outbox.state, 'synced');
+  });
+
   test('does not delete evidence when the server rejects an upload', () async {
     final synchronizer = UploadPackageSynchronizer(
       api: _FakeUploadGateway(error: 422),
@@ -104,6 +125,41 @@ Future<void> _insertQueuedPackage(
           packageId: 'client-package-id', assetId: 'asset-id', updatedAt: now));
 }
 
+Future<void> _replaceWithThreeViewAssets(
+    AppDatabase database, Directory sandbox, DateTime now) async {
+  await (database.update(database.captureDrafts)
+        ..where((CaptureDrafts row) => row.id.equals('draft-id')))
+      .write(const CaptureDraftsCompanion(
+          captureKind: Value<String>('left_center_right')));
+  await database.delete(database.uploadAssetEntries).go();
+  await database.delete(database.localMediaAssets).go();
+  await (database.update(database.outboxEntries)
+        ..where(
+            (OutboxEntries row) => row.packageId.equals('client-package-id')))
+      .write(const OutboxEntriesCompanion(
+          manifestJson: Value<String>(
+              '{"captureSetId":"set-id","captureKind":"left_center_right","penId":"pen-id","assets":[]}')));
+  for (final String position in <String>['left', 'center', 'right']) {
+    final String assetId = '$position-id';
+    final File evidence = File('${sandbox.path}/$assetId.jpg')
+      ..writeAsBytesSync(<int>[1, 2, 3]);
+    await database.into(database.localMediaAssets).insert(
+        LocalMediaAssetsCompanion.insert(
+            id: assetId,
+            draftId: 'draft-id',
+            viewPosition: position,
+            materializedPath: evidence.path,
+            originalName: '$assetId.jpg',
+            contentType: 'image/jpeg',
+            byteSize: 3,
+            sha256: 'a' * 64,
+            createdAt: now));
+    await database.into(database.uploadAssetEntries).insert(
+        UploadAssetEntriesCompanion.insert(
+            packageId: 'client-package-id', assetId: assetId, updatedAt: now));
+  }
+}
+
 AuthState _auth(DateTime now) => AuthState(
       session: AuthSession(
           accessToken: 'access',
@@ -122,8 +178,11 @@ AuthState _auth(DateTime now) => AuthState(
     );
 
 class _FakeUploadGateway implements UploadRemoteGateway {
-  _FakeUploadGateway({this.error});
+  _FakeUploadGateway({this.error, this.existingAssets = const <String>{}});
   final int? error;
+  final Set<String> existingAssets;
+  final List<String> uploadedAssetIds = <String>[];
+  int commitCalls = 0;
   void _throwIfRequested() {
     if (error != null) {
       throw DioException(
@@ -144,29 +203,32 @@ class _FakeUploadGateway implements UploadRemoteGateway {
       required DateTime businessDate,
       required String captureKind}) async {
     _throwIfRequested();
-    return const RemoteUploadPackage(
+    return RemoteUploadPackage(
         id: 'server-package-id',
         state: 'awaiting_blobs',
-        existingAssets: <String>{});
+        existingAssets: existingAssets);
   }
 
   @override
   Future<RemoteUploadPackage> package(
           {required String accessToken,
           required String serverPackageId}) async =>
-      const RemoteUploadPackage(
+      RemoteUploadPackage(
           id: 'server-package-id',
           state: 'awaiting_blobs',
-          existingAssets: <String>{});
+          existingAssets: existingAssets);
   @override
   Future<void> putBlob(
-          {required String accessToken,
-          required String idempotencyKey,
-          required String serverPackageId,
-          required String assetId,
-          required String sha256,
-          required File file}) async =>
-      _throwIfRequested();
+      {required String accessToken,
+      required String idempotencyKey,
+      required String serverPackageId,
+      required String assetId,
+      required String sha256,
+      required File file}) async {
+    _throwIfRequested();
+    uploadedAssetIds.add(assetId);
+  }
+
   @override
   Future<void> putManifest(
           {required String accessToken,
@@ -180,6 +242,7 @@ class _FakeUploadGateway implements UploadRemoteGateway {
       required String idempotencyKey,
       required String serverPackageId}) async {
     _throwIfRequested();
+    commitCalls++;
     return const RemoteCommitResult(
         sessionId: 'session-id', inferenceJobId: 'job-id');
   }

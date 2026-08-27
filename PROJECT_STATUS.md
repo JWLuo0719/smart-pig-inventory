@@ -44,10 +44,10 @@
 | OpenAPI | openapi-spec-validator 0.7.2 passed |
 | 推理 JSON Schema | JSON 语法与 Python 序列化键集合测试通过 |
 | 外部 YOLO 数据清单 | 500 图像、12,421 标注目标、0 图像—标签配对问题；本机生成且 Git 忽略 |
-| Flutter Android | `flutter analyze` 通过；19 项测试通过；`flutter build apk --debug` 成功，debug APK 已生成 |
+| Flutter Android | `flutter analyze` 通过；20 项测试通过；`flutter build apk --debug` 成功，debug APK 已生成 |
 | Docker Desktop / Compose | 客户端/服务端版本校验通过；完整 Compose 已构建并启动；MySQL、Redis、MinIO、推理 API、Spring、管理端和网关健康；认证启用的独立 Compose 已验证 bootstrap 登录、`/me`、令牌刷新及组织/栋舍/栏舍主数据游标同步 |
 | Flyway / MinIO | MySQL 已实际应用 V1/V2；`minio-init` 已完成私有桶初始化 |
-| Flutter 离线采集 | analyze 通过；15 项测试通过；debug APK 构建成功；10MB 流式物化、方向唯一、ROI 和本地入队均覆盖；realme GT 7 Pro 已验证单图/三图拍摄和入队、不显示数量，以及三图 left 后强杀并恢复到 center 的草稿恢复闭环 |
+| Flutter 离线采集与上传恢复 | analyze 通过；20 项测试通过；debug APK 构建成功；10MB 流式物化、方向唯一、ROI、本地入队和三视图剩余 Blob 续传均覆盖；realme GT 7 Pro 已验证单图/三图拍摄和入队、不显示数量、三图 left 后强杀恢复到 center，以及登录、同步、单图上传、断网保留、强杀恢复和恢复网络后提交闭环 |
 | Python Provider | pytest 通过；3 项测试通过 |
 
 ## 未验证与阻塞

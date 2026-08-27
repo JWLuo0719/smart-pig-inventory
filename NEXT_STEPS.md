@@ -13,7 +13,7 @@
 
 1. 已实现以 JWT 激活组织为可信来源的主数据全量/增量同步、游标失效全量恢复和删除墓碑，并接入 Flutter 的组织隔离缓存、搜索、禁用栏舍拦截和真实 API；认证 Compose 已验证 API 闭环，下一步在实机验证登录、同步和离线缓存闭环。
 2. 已实现采集包 create/blob/manifest/commit 的 Controller、Application Service、JDBC Infrastructure、MinIO 暂存提升和事务 Outbox；下一步实现 Outbox 派发至推理服务并补充并发 Commit/MinIO HTTP 集成测试。
-3. Flutter 已完成媒体物化、流式 SHA-256、单图/三图草稿、ROI 口径、本地完整采集组入队、草稿恢复 UI、主数据接线，以及带租约、退避和 Commit 后同步标记的前台真实上传状态机；下一步接入 WorkManager 并执行 Compose/真机上传 E2E。
+3. Flutter 已完成媒体物化、流式 SHA-256、单图/三图草稿、ROI 口径、本地完整采集组入队、草稿恢复 UI、主数据接线，以及带租约、退避和 Commit 后同步标记的前台真实上传状态机；单图真机断网恢复上传已通过，三视图剩余 Blob 自动化续传已通过；下一步执行三视图真机 E2E，再接入 WorkManager。
 4. 通过断网三图、杀进程、弱网恢复、并发 Commit 和精确重复 E2E。
 
 ## Iteration 3：AC-05 至 AC-12
