@@ -32,7 +32,7 @@
 - 已安装 Docker Desktop 4.87.0（per-user、WSL 2、Linux containers），并将 WSL 数据根设置为 `D:\DockerDesktop\wsl-data`；已恢复 Desktop 引擎并完成 Compose 首次完整启动。
 - 已安装 Maven 3.9.11 至 `D:\ProgrammingLanguage\apache-maven-3.9.11`，并将其纳入本机核验脚本。
 - 已用 Testcontainers MySQL 8.4 实际验证 Flyway V1/V2；`src/test/resources/docker-java.properties` 将 Docker Java 客户端 API 固定为 1.44，解决 Docker Desktop 29.7 经 Windows npipe 的兼容问题，不依赖系统全局环境变量。
-- Flutter Drift 已升级至本地 schema v6：单图/三图媒体物化、流式 SHA-256、EXIF 方向/尺寸、方向唯一、ROI 边界持久化、完整采集组入队，以及认证上下文、组织主数据游标缓存均具备自动化证据；上传队列现已实现 create/blob/manifest/commit 的持久状态机、租约、失败分流和 Commit 后才标记 synced，WorkManager 已接入安全存储会话、网络约束、指数退避和后台批处理，待 Android 后台触发实机验证。
+- Flutter Drift 已升级至本地 schema v6：单图/三图媒体物化、流式 SHA-256、EXIF 方向/尺寸、方向唯一、ROI 边界持久化、完整采集组入队，以及认证上下文、组织主数据游标缓存均具备自动化证据；上传队列现已实现 create/blob/manifest/commit 的持久状态机、租约、失败分流和 Commit 后才标记 synced，WorkManager 已接入安全存储会话、网络约束、指数退避和后台批处理，并已在 realme GT 7 Pro 验证网络恢复、应用重启后的自动上传。
 
 ## 已验证证据
 
@@ -47,7 +47,7 @@
 | Flutter Android | `flutter analyze` 通过；21 项测试通过；`flutter build apk --debug` 成功，debug APK 已生成 |
 | Docker Desktop / Compose | 客户端/服务端版本校验通过；完整 Compose 已构建并启动；MySQL、Redis、MinIO、推理 API、Spring、管理端和网关健康；认证启用的独立 Compose 已验证 bootstrap 登录、`/me`、令牌刷新及组织/栋舍/栏舍主数据游标同步；LAN E2E 栈已用于真机三图断网/强杀恢复上传验证 |
 | Flyway / MinIO | MySQL 已实际应用 V1/V2；`minio-init` 已完成私有桶初始化 |
-| Flutter 离线采集与上传恢复 | analyze 通过；20 项测试通过；debug APK 构建成功；10MB 流式物化、方向唯一、ROI、本地入队和三视图剩余 Blob 续传均覆盖；realme GT 7 Pro 已验证单图/三图拍摄和入队、不显示数量、三图 left 后强杀恢复到 center，以及三图断网强杀恢复、恢复网络后重试提交闭环 |
+| Flutter 离线采集与上传恢复 | analyze 通过；21 项测试通过；debug APK 构建成功；10MB 流式物化、方向唯一、ROI、本地入队和三视图剩余 Blob 续传均覆盖；realme GT 7 Pro 已验证单图/三图拍摄和入队、不显示数量、三图 left 后强杀恢复到 center、三图断网强杀恢复与恢复网络后重试提交，以及网络恢复、应用重启后的 WorkManager 自动提交闭环 |
 | Python Provider | pytest 通过；3 项测试通过 |
 
 ## 未验证与阻塞

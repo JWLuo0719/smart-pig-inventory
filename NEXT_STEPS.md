@@ -13,7 +13,7 @@
 
 1. 已实现以 JWT 激活组织为可信来源的主数据全量/增量同步、游标失效全量恢复和删除墓碑，并接入 Flutter 的组织隔离缓存、搜索、禁用栏舍拦截和真实 API；认证 Compose 与 realme GT 7 Pro 已验证登录、同步和离线缓存闭环。
 2. 已实现采集包 create/blob/manifest/commit 的 Controller、Application Service、JDBC Infrastructure、MinIO 暂存提升和事务 Outbox；下一步实现 Outbox 派发至推理服务并补充并发 Commit/MinIO HTTP 集成测试。
-3. Flutter 已完成媒体物化、流式 SHA-256、单图/三图草稿、ROI 口径、本地完整采集组入队、草稿恢复 UI、主数据接线，以及带租约、退避和 Commit 后同步标记的前后台真实上传状态机；三视图断网强杀恢复、恢复网络后重试提交真机 E2E 已通过，三视图剩余 Blob 自动化续传已通过；WorkManager 已接入安全存储会话、网络约束、指数退避和最多 20 包批处理，待 Android 后台触发实机验证。
+3. Flutter 已完成媒体物化、流式 SHA-256、单图/三图草稿、ROI 口径、本地完整采集组入队、草稿恢复 UI、主数据接线，以及带租约、退避和 Commit 后同步标记的前后台真实上传状态机；三视图断网强杀恢复、恢复网络后重试提交真机 E2E 已通过，三视图剩余 Blob 自动化续传已通过；WorkManager 已在 realme GT 7 Pro 验证网络恢复、应用重启后的自动提交。下一步实现服务端 Outbox 推理派发和结果回调。
 4. 断网三图、杀进程恢复和恢复网络重试已通过；仍需通过上传中途断流只续传剩余 Blob、WorkManager 后台执行、推理/复核和并发 Commit E2E。
 
 ## Iteration 3：AC-05 至 AC-12

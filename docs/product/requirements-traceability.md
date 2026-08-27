@@ -9,7 +9,7 @@
 | 单图与三视图采集 | PRD 3.2 | Flutter capture；Spring capture | AC-01、AC-08 | 开发中（单图/三图本地采集、方向唯一和页面接线已测试；realme GT 7 Pro 已通过三图断网、强杀恢复和恢复网络重试提交；服务端上传清单校验已测试） |
 | ROI | PRD 3.2/3.4 | Flutter ROI domain；推理合同 | AC-01、AC-07 | 开发中（边界校验和草稿持久化已测试；服务端 Manifest 边界校验已测试，推理中心点口径待实现） |
 | 草稿恢复与本地媒体 | PRD 3.2 | Drift v5 CaptureDrafts/CaptureSets/LocalMediaAssets；MediaMaterializer | AC-01 | 开发中（流式物化、EXIF 方向/尺寸、原子持久化、数据库重开恢复已测试） |
-| Outbox 与续传 | PRD 3.3 | Drift v6 OutboxEntries/UploadAssetEntries；UploadPackageSynchronizer；Upload API；Spring capture | AC-02 | 开发中（完整采集组入队、逐 Blob 状态、稳定幂等键、租约、退避、三视图已确认 Blob 跳过、后台 WorkManager 批处理及 Commit 后同步标记均已自动化测试；realme GT 7 Pro 已通过三图断网/强杀恢复后重试提交，待上传中途断流和后台 Worker 实机 E2E） |
+| Outbox 与续传 | PRD 3.3 | Drift v6 OutboxEntries/UploadAssetEntries；UploadPackageSynchronizer；Upload API；Spring capture | AC-02 | 开发中（完整采集组入队、逐 Blob 状态、稳定幂等键、租约、退避、三视图已确认 Blob 跳过、后台 WorkManager 批处理及 Commit 后同步标记均已自动化测试；realme GT 7 Pro 已通过三图断网/强杀恢复后重试提交，以及网络恢复、应用重启后的自动提交；待上传中途断流 E2E） |
 | 幂等上传包 | OpenAPI Upload | Spring capture application/infrastructure/UI | AC-02、AC-03 | 已验证（Testcontainers MySQL 覆盖 create、Blob、Manifest、Commit 重放及唯一任务） |
 | SHA-256 精确去重 | PRD 3.3 | Flutter hash；Spring capture；MySQL 唯一索引 | AC-04 | 已验证（同组织精确重复在 Manifest 阶段阻断的 MySQL 集成测试） |
 | 感知哈希审核 | PRD 3.4 | Spring review；管理端 | AC-05 | 草案 |
