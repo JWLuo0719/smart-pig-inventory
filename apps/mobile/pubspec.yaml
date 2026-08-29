@@ -37,3 +37,9 @@ flutter:
   uses-material-design: true
   assets:
     - assets/branding/smart-pig-farm-owner-logo-v1.png
+
+hooks:
+  user_defines:
+    sqlite3:
+      source: system
+      name: sqlite3

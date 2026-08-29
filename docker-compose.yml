@@ -124,6 +124,7 @@ services:
       MODEL_VERSION: ${MODEL_VERSION:-unverified}
       MODEL_CHECKSUM: ${MODEL_CHECKSUM:-unverified}
       MODEL_ADAPTER_VERSION: ${MODEL_ADAPTER_VERSION:-http-v1}
+      MULTIVIEW_AUTO_COUNT_ENABLED: ${MULTIVIEW_AUTO_COUNT_ENABLED:-false}
     depends_on:
       mysql:
         condition: service_healthy

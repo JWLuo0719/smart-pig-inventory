@@ -46,8 +46,18 @@ public class InferenceResultService {
         repository.insertResult(jobId, result);
         repository.insertReceipt(jobId, fingerprint);
         repository.finishJob(jobId, result);
-        repository.markSessionForReview(job.sessionId(), result.isSucceeded() ? result.count() : null);
+        repository.markSessionForReview(job.sessionId(), candidateCount(result));
         return CallbackOutcome.CREATED;
+    }
+
+    private Integer candidateCount(InferenceCallbackResult result) {
+        if (result.isSucceeded()) {
+            return result.count();
+        }
+        if (result.isReviewRequired() && result.detections() != null && !result.detections().isEmpty()) {
+            return result.detections().size();
+        }
+        return null;
     }
 
     private void validate(InferenceCallbackResult result) {
