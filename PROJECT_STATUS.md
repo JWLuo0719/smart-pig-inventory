@@ -27,7 +27,7 @@
 - 建立 CI、开发规范、测试规范、许可证边界和冻结原型说明。
 - 建立工作站初始化/核验脚本、随机本机 `.env` 生成流程和测试数据治理规则。
 - 已对外部 YOLO 研究集生成本机忽略的完整性清单：500 张图像、12,421 个标注目标，图像—标签配对问题为 0；这不是业务金标或产品分发授权证明。
-- 已建立本地 Git 首次基线；尚未配置远端仓库或向外部服务推送任何内容。
+- 已建立公开 GitHub 仓库 [`JWLuo0719/smart-pig-inventory`](https://github.com/JWLuo0719/smart-pig-inventory)，默认分支为 `main`，原创产品源码按 Apache-2.0 发布；公开前已排除 `.env`、模型/权重、外部研究数据、测试产物、真实媒体和 `eg/` 参照物。
 - 已安装 Flutter 3.44.7、Android SDK 36、Build Tools 36.0.0 和 platform-tools；Android SDK 许可证已接受，Android 原生壳与 Drift 生成代码已入工程。
 - 已安装 Docker Desktop 4.87.0（per-user、WSL 2、Linux containers），并将 WSL 数据根设置为 `D:\DockerDesktop\wsl-data`；已恢复 Desktop 引擎并完成 Compose 首次完整启动。
 - 已安装 Maven 3.9.11 至 `D:\ProgrammingLanguage\apache-maven-3.9.11`，并将其纳入本机核验脚本。
