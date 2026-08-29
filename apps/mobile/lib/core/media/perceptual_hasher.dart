@@ -27,10 +27,13 @@ class PerceptualHasher {
     try {
       final image.Decoder? decoder = image.findDecoderForData(bytes);
       final image.DecodeInfo? info = decoder?.startDecode(bytes);
-      if (info == null || info.width * info.height > _maximumPixels)
+      if (info == null || info.width * info.height > _maximumPixels) {
         return null;
+      }
       final image.Image? decoded = decoder!.decodeFrame(0);
-      if (decoded == null) return null;
+      if (decoded == null) {
+        return null;
+      }
       // A 9x8 image yields 8 adjacent horizontal comparisons per row.
       final image.Image thumbnail =
           image.copyResize(decoded, width: 9, height: 8);
