@@ -8,8 +8,8 @@ __pycache__/
 .coverage
 htmlcov/
 db.sqlite3
-media/
-staticfiles/
+/media/
+/staticfiles/
 node_modules/
 .next/
 pnpm-debug.log*
