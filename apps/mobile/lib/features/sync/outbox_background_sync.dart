@@ -64,7 +64,8 @@ Future<bool> _runOutboxWorker() async {
       repository: repository,
       reconnect: () async {
         try {
-          final AuthSession refreshed = await authApi.refresh(auth.session.refreshToken);
+          final AuthSession refreshed =
+              await authApi.refresh(auth.session.refreshToken);
           await sessions.save(refreshed);
           auth = AuthState(session: refreshed, user: user, isOffline: false);
           return auth;

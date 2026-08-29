@@ -18,9 +18,11 @@ void main() {
         usedTokens.add(accessToken);
         if (accessToken == 'expired-access') {
           throw DioException(
-            requestOptions: RequestOptions(path: '/api/v1/inventory-sessions/session'),
+            requestOptions:
+                RequestOptions(path: '/api/v1/inventory-sessions/session'),
             response: Response<void>(
-              requestOptions: RequestOptions(path: '/api/v1/inventory-sessions/session'),
+              requestOptions:
+                  RequestOptions(path: '/api/v1/inventory-sessions/session'),
               statusCode: 401,
             ),
           );

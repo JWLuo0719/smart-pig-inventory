@@ -8,10 +8,12 @@ import 'package:smart_pig_inventory/core/media/perceptual_hasher.dart';
 void main() {
   late Directory sandbox;
 
-  setUp(() async => sandbox = await Directory.systemTemp.createTemp('perceptual-hasher-test'));
+  setUp(() async => sandbox =
+      await Directory.systemTemp.createTemp('perceptual-hasher-test'));
   tearDown(() async => sandbox.delete(recursive: true));
 
-  test('produces a normalized 64-bit perceptual hash for a decodable image', () async {
+  test('produces a normalized 64-bit perceptual hash for a decodable image',
+      () async {
     final image.Image pixels = image.Image(width: 64, height: 64);
     for (int y = 0; y < pixels.height; y++) {
       for (int x = 0; x < pixels.width; x++) {
@@ -28,7 +30,8 @@ void main() {
   });
 
   test('does not treat undecodable bytes as a perceptual hash', () async {
-    final File file = File(path.join(sandbox.path, 'invalid.jpg'))..writeAsBytesSync(<int>[1, 2, 3]);
+    final File file = File(path.join(sandbox.path, 'invalid.jpg'))
+      ..writeAsBytesSync(<int>[1, 2, 3]);
     expect(await PerceptualHasher().hash(file), isNull);
   });
 }

@@ -24,7 +24,9 @@ class QueuedCapturePackage {
 /// persisted operation later.
 class QueueCaptureDraft {
   QueueCaptureDraft(this.database,
-      {Uuid uuid = const Uuid(), Future<void> Function()? scheduleSync, PerceptualHasher? perceptualHasher})
+      {Uuid uuid = const Uuid(),
+      Future<void> Function()? scheduleSync,
+      PerceptualHasher? perceptualHasher})
       : _uuid = uuid,
         _scheduleSync = scheduleSync,
         _perceptualHasher = perceptualHasher ?? PerceptualHasher();
@@ -135,7 +137,8 @@ class QueueCaptureDraft {
         asset.height == null) {
       throw StateError('Media metadata is incomplete and cannot be uploaded');
     }
-    final String? perceptualHash = await _perceptualHasher.hash(File(asset.materializedPath));
+    final String? perceptualHash =
+        await _perceptualHasher.hash(File(asset.materializedPath));
     return <String, Object?>{
       'assetId': asset.id,
       'viewPosition': asset.viewPosition,

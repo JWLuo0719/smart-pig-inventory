@@ -95,7 +95,8 @@ void main() {
     expect(outbox.state, 'synced');
   });
 
-  test('retries an idempotent upload package after access token refresh', () async {
+  test('retries an idempotent upload package after access token refresh',
+      () async {
     final gateway = _FakeUploadGateway(unauthorizedOnce: true);
     int reconnects = 0;
     final synchronizer = UploadPackageSynchronizer(
@@ -111,7 +112,8 @@ void main() {
     expect(await synchronizer.syncNext(_auth(now), leaseOwner: 'foreground'),
         UploadSyncOutcome.synced);
     expect(reconnects, 1);
-    expect(gateway.accessTokens.take(2), <String>['access', 'refreshed-access']);
+    expect(
+        gateway.accessTokens.take(2), <String>['access', 'refreshed-access']);
     expect((await database.select(database.outboxEntries).getSingle()).state,
         'synced');
   });
@@ -247,7 +249,8 @@ class _FakeUploadGateway implements UploadRemoteGateway {
       throw DioException(
           requestOptions: RequestOptions(path: '/upload'),
           response: Response<void>(
-              requestOptions: RequestOptions(path: '/upload'), statusCode: 401));
+              requestOptions: RequestOptions(path: '/upload'),
+              statusCode: 401));
     }
     if (error != null) {
       throw DioException(

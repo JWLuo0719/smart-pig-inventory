@@ -1,0 +1,15 @@
+rules:
+  openapi-version-required:
+    description: OpenAPI contracts must declare their version.
+    severity: error
+    given: $
+    then:
+      field: openapi
+      function: truthy
+  paths-required:
+    description: OpenAPI contracts must declare at least one path.
+    severity: error
+    given: $
+    then:
+      field: paths
+      function: truthy
