@@ -194,11 +194,15 @@ public class UploadService {
             UUID jobId = UUID.randomUUID();
             repository.insertInventorySession(sessionId, uploadPackage.penId(), uploadPackage.businessDate(), actor.subjectId());
             repository.insertCaptureSet(manifest.captureSetId(), sessionId, uploadPackage.id(), manifest.captureKind());
+            List<InsertedMedia> insertedMedia = new java.util.ArrayList<>();
             for (var asset : manifest.assets()) {
                 StoredBlob blob = repository.findBlob(uploadPackage.id(), asset.assetId())
                         .orElseThrow(() -> UploadException.invalid("MANIFEST_BLOB_MISSING", "A manifest blob disappeared before commit"));
-                repository.insertMediaAsset(UUID.randomUUID(), uploadPackage.organizationId(), manifest.captureSetId(), asset, blob.storageKey());
+                UUID mediaId = UUID.randomUUID();
+                repository.insertMediaAsset(mediaId, uploadPackage.organizationId(), manifest.captureSetId(), asset, blob.storageKey());
+                insertedMedia.add(new InsertedMedia(mediaId, asset.perceptualHash()));
             }
+            createNearDuplicateReviews(uploadPackage.organizationId(), sessionId, manifest.captureSetId(), insertedMedia);
             repository.insertInferenceJob(jobId, sessionId, manifest.captureSetId(), correlationId);
             repository.insertOutbox(UUID.randomUUID(), uploadPackage.id(), correlationId, json(Map.of(
                     "eventVersion", 1,
@@ -209,6 +213,21 @@ public class UploadService {
             repository.markCommitted(uploadPackage.id(), sessionId, idempotencyKey);
             return new UploadOutcome<>(new CommitUploadResult(uploadPackage.id(), sessionId, jobId, "submitted"), false);
         });
+    }
+
+    private void createNearDuplicateReviews(UUID organizationId, UUID sessionId, UUID captureSetId,
+            List<InsertedMedia> insertedMedia) {
+        List<JdbcUploadRepository.PerceptualCandidate> candidates = repository.findPerceptualCandidates(organizationId, captureSetId);
+        for (InsertedMedia source : insertedMedia) {
+            if (source.perceptualHash() == null) continue;
+            for (JdbcUploadRepository.PerceptualCandidate candidate : candidates) {
+                int distance = Long.bitCount(Long.parseUnsignedLong(source.perceptualHash(), 16)
+                        ^ Long.parseUnsignedLong(candidate.perceptualHash(), 16));
+                if (distance <= 8) {
+                    repository.insertNearDuplicateReview(organizationId, sessionId, source.mediaId(), candidate.mediaId(), distance);
+                }
+            }
+        }
     }
 
     private StoredPackage getVisiblePackage(UUID packageId) {
@@ -318,5 +337,8 @@ public class UploadService {
     }
 
     private record OptionalBlob(boolean present) {
+    }
+
+    private record InsertedMedia(UUID mediaId, String perceptualHash) {
     }
 }

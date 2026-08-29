@@ -20,7 +20,7 @@ class FlywayMigrationIntegrationTest {
             .withPassword("integration-test-password");
 
     @Test
-    void appliesBaselineIdentityUploadAndMasterDataMigrations() throws Exception {
+    void appliesBaselineIdentityUploadInferenceReviewAndNearDuplicateResolutionMigrations() throws Exception {
         Flyway.configure()
                 .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                 .locations("classpath:db/migration")
@@ -32,7 +32,7 @@ class FlywayMigrationIntegrationTest {
             try (ResultSet migrations = statement.executeQuery(
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1")) {
                 migrations.next();
-                assertEquals(4, migrations.getInt(1));
+                assertEquals(8, migrations.getInt(1));
             }
             try (ResultSet userTable = statement.executeQuery(
                     "SELECT COUNT(*) FROM information_schema.tables "
@@ -59,6 +59,26 @@ class FlywayMigrationIntegrationTest {
                             + "WHERE table_schema = 'pig_inventory' AND table_name = 'master_data_tombstone'")) {
                 tombstone.next();
                 assertEquals(1, tombstone.getInt(1));
+            }
+            try (ResultSet receipt = statement.executeQuery(
+                    "SELECT COUNT(*) FROM information_schema.tables "
+                            + "WHERE table_schema = 'pig_inventory' AND table_name = 'inference_result_receipt'")) {
+                receipt.next();
+                assertEquals(1, receipt.getInt(1));
+            }
+            try (ResultSet reviewColumns = statement.executeQuery(
+                    "SELECT COUNT(*) FROM information_schema.columns "
+                            + "WHERE table_schema = 'pig_inventory' AND table_name IN ('inventory_session', 'media_asset') "
+                            + "AND column_name IN ('confirmation_idempotency_key', 'delete_idempotency_key')")) {
+                reviewColumns.next();
+                assertEquals(2, reviewColumns.getInt(1));
+            }
+            try (ResultSet nearDuplicate = statement.executeQuery(
+                    "SELECT COUNT(*) FROM information_schema.columns "
+                            + "WHERE table_schema = 'pig_inventory' AND table_name = 'near_duplicate_review' "
+                            + "AND column_name IN ('state', 'resolved_at', 'resolution_idempotency_key')")) {
+                nearDuplicate.next();
+                assertEquals(3, nearDuplicate.getInt(1));
             }
         }
     }

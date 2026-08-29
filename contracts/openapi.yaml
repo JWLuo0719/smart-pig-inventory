@@ -219,6 +219,101 @@ paths:
               schema: {$ref: '#/components/schemas/CommitResult'}
         '409': {$ref: '#/components/responses/Conflict'}
         '422': {$ref: '#/components/responses/ValidationError'}
+  /inventory-tasks:
+    get:
+      tags: [Inventory]
+      summary: 查询指定业务日期的栏舍盘点任务与最新状态
+      operationId: listInventoryTasks
+      parameters:
+        - name: businessDate
+          in: query
+          required: true
+          schema: {type: string, format: date}
+      responses:
+        '200':
+          description: 当前组织中启用栏舍的任务投影
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/InventoryTask'}
+  /inventory-reports/daily:
+    get:
+      tags: [Inventory]
+      summary: 查询指定业务日期已确认的日盘点
+      operationId: getDailyInventoryReport
+      parameters:
+        - name: businessDate
+          in: query
+          required: true
+          schema: {type: string, format: date}
+      responses:
+        '200':
+          description: 只含已确认结果的日盘点报表
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/DailyInventoryRecord'}
+  /inventory-reports/aggregate:
+    get:
+      tags: [Inventory]
+      summary: 按栏舍和日期范围计算已确认日盘点的综合平均
+      operationId: getAggregateInventoryReport
+      parameters:
+        - {$ref: '#/components/parameters/PenId'}
+        - name: from
+          in: query
+          required: true
+          schema: {type: string, format: date}
+        - name: to
+          in: query
+          required: true
+          schema: {type: string, format: date}
+      responses:
+        '200':
+          description: 原始均值、展示整数和参与日期；无确认记录时展示数量为空
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AggregateInventoryReport'}
+  /review/near-duplicates:
+    get:
+      tags: [Review]
+      summary: 查询当前组织待处理的感知近重复告警
+      operationId: listNearDuplicateReviews
+      responses:
+        '200':
+          description: 仅告警，系统不会自动删除或覆盖媒体
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/NearDuplicateReview'}
+  /review/near-duplicates/{reviewId}/resolve:
+    post:
+      tags: [Review]
+      summary: 由复核员解决近重复告警并保留审计记录
+      operationId: resolveNearDuplicateReview
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ResolveNearDuplicateReview'}
+      responses:
+        '200':
+          description: 告警已解决；媒体保持原样，未删除或覆盖
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NearDuplicateReview'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
   /inventory-sessions/{sessionId}:
     get:
       tags: [Inventory]
@@ -232,6 +327,22 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/InventorySession'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /inventory-sessions/{sessionId}/media:
+    get:
+      tags: [Inventory]
+      summary: 查询盘点会话中原始证据的受限预览元数据
+      operationId: listInventorySessionMedia
+      parameters:
+        - {$ref: '#/components/parameters/SessionId'}
+      responses:
+        '200':
+          description: 只返回当前组织可见的证据；已删除项仅保留状态元数据
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/MediaEvidence'}
         '404': {$ref: '#/components/responses/NotFound'}
   /inventory-sessions/{sessionId}/confirm:
     post:
@@ -254,6 +365,27 @@ paths:
               schema: {$ref: '#/components/schemas/InventorySession'}
         '409': {$ref: '#/components/responses/Conflict'}
         '422': {$ref: '#/components/responses/ValidationError'}
+  /audit-events:
+    get:
+      tags: [Review]
+      summary: 查询当前组织的确认、删除、覆盖和告警解决审计记录
+      operationId: listAuditEvents
+      parameters:
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+        - name: before
+          in: query
+          description: 上一页末项的 createdAt；省略时从最新事件开始
+          schema: {type: string, format: date-time}
+      responses:
+        '200':
+          description: 组织范围内按时间倒序的不可变审计记录
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/AuditEvent'}
   /inference-jobs/{jobId}/result:
     put:
       tags: [InternalInference]
@@ -262,6 +394,8 @@ paths:
         仅允许受信任的推理服务身份调用。相同任务和相同结果重复回传视为成功；
         相同任务回传不同最终结果返回 409。Spring 数据库是任务状态的唯一业务事实来源。
       operationId: putInferenceJobResult
+      security:
+        - inferenceServiceKey: []
       parameters:
         - {$ref: '#/components/parameters/JobId'}
         - {$ref: '#/components/parameters/IdempotencyKey'}
@@ -278,6 +412,35 @@ paths:
         '404': {$ref: '#/components/responses/NotFound'}
         '409': {$ref: '#/components/responses/Conflict'}
         '422': {$ref: '#/components/responses/ValidationError'}
+  /media-assets/{assetId}/content:
+    get:
+      tags: [Review]
+      summary: 读取当前组织可见且未删除的原始媒体证据
+      operationId: getMediaEvidenceContent
+      parameters:
+        - {$ref: '#/components/parameters/AssetId'}
+      responses:
+        '200':
+          description: 原始媒体字节；通过受认证 API 流式传输，绝不公开对象存储 URL
+          content:
+            image/jpeg: {schema: {type: string, format: binary}}
+            image/png: {schema: {type: string, format: binary}}
+            image/heic: {schema: {type: string, format: binary}}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /media-assets/{assetId}:
+    delete:
+      tags: [Review]
+      summary: 删除未锁定的媒体证据
+      description: 已被确认结果引用的媒体已锁定，普通删除必须返回 409；不得绕过锁定。
+      operationId: deleteMedia
+      parameters:
+        - {$ref: '#/components/parameters/AssetId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '204': {description: 未锁定媒体已软删除并记录审计}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
   /media-assets/{assetId}/override-delete:
     post:
       tags: [Review]
@@ -305,6 +468,10 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    inferenceServiceKey:
+      type: apiKey
+      in: header
+      name: X-Inference-Service-Key
   parameters:
     IdempotencyKey:
       name: X-Idempotency-Key
@@ -319,6 +486,11 @@ components:
     AssetId:
       name: assetId
       in: path
+      required: true
+      schema: {type: string, format: uuid}
+    PenId:
+      name: penId
+      in: query
       required: true
       schema: {type: string, format: uuid}
     SessionId:
@@ -538,6 +710,86 @@ components:
         sessionId: {type: string, format: uuid}
         inferenceJobId: {type: string, format: uuid}
         status: {type: string, enum: [submitted, processing, review_required]}
+    NearDuplicateReview:
+      type: object
+      required: [id, sessionId, sourceMediaId, candidateMediaId, hammingDistance, state, createdAt]
+      properties:
+        id: {type: string, format: uuid}
+        sessionId: {type: string, format: uuid}
+        sourceMediaId: {type: string, format: uuid}
+        candidateMediaId: {type: string, format: uuid}
+        hammingDistance: {type: integer, minimum: 0, maximum: 64}
+        state: {type: string, enum: [open, resolved]}
+        createdAt: {type: string, format: date-time}
+        resolvedAt: {type: [string, 'null'], format: date-time}
+    ResolveNearDuplicateReview:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: {type: string, minLength: 8, maxLength: 500}
+    MediaEvidence:
+      type: object
+      required: [assetId, viewPosition, contentType, byteSize, state, locked, deleted]
+      properties:
+        assetId: {type: string, format: uuid}
+        viewPosition: {type: string, enum: [single, left, center, right]}
+        contentType: {type: string, enum: [image/jpeg, image/png, image/heic]}
+        byteSize: {type: integer, minimum: 1}
+        state: {type: string, enum: [submitted, locked, deleted]}
+        locked: {type: boolean}
+        deleted: {type: boolean}
+    AuditEvent:
+      type: object
+      required: [id, actorId, action, targetType, targetId, createdAt]
+      properties:
+        id: {type: string, format: uuid}
+        actorId: {type: string, minLength: 1}
+        action: {type: string}
+        targetType: {type: string}
+        targetId: {type: string}
+        reason: {type: [string, 'null']}
+        before: {type: [object, 'null'], additionalProperties: true}
+        after: {type: [object, 'null'], additionalProperties: true}
+        correlationId: {type: string}
+        createdAt: {type: string, format: date-time}
+    InventoryTask:
+      type: object
+      required: [penId, buildingCode, penCode, businessDate, status]
+      properties:
+        penId: {type: string, format: uuid}
+        buildingCode: {type: string}
+        buildingName: {type: string}
+        penCode: {type: string}
+        penName: {type: string}
+        businessDate: {type: string, format: date}
+        sessionId: {type: [string, 'null'], format: uuid}
+        status: {type: string, enum: [pending, submitted, processing, review_required, confirmed]}
+        confirmedCount: {type: [integer, 'null'], minimum: 0}
+    DailyInventoryRecord:
+      type: object
+      required: [sessionId, penId, buildingCode, penCode, businessDate, confirmedCount]
+      properties:
+        sessionId: {type: string, format: uuid}
+        penId: {type: string, format: uuid}
+        buildingCode: {type: string}
+        buildingName: {type: string}
+        penCode: {type: string}
+        penName: {type: string}
+        businessDate: {type: string, format: date}
+        confirmedCount: {type: integer, minimum: 0}
+    AggregateInventoryReport:
+      type: object
+      required: [penId, from, to, rawMean, roundedCount, includedDates]
+      properties:
+        penId: {type: string, format: uuid}
+        from: {type: string, format: date}
+        to: {type: string, format: date}
+        rawMean: {type: [number, 'null'], multipleOf: 0.0001}
+        roundedCount: {type: [integer, 'null'], minimum: 0}
+        includedDates:
+          type: array
+          items: {type: string, format: date}
     InventorySession:
       type: object
       required: [id, penId, businessDate, status]

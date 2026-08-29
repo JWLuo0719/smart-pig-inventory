@@ -32,6 +32,16 @@ android/local.properties
 target/
 .mvn/
 *.log
+/artifacts/
+/apps/admin-web/playwright-report/
+/apps/admin-web/test-results/
+
+# 未获准公开的上游研究输入、模型和权重绝不进入 Git 历史。
+/yolov13-official-main.zip
+*.pt
+*.pth
+*.onnx
+*.engine
 
 # 本地开发初始化和从外部研究数据集生成的清单。原始猪场图片绝不提交。
 /test-assets/generated/

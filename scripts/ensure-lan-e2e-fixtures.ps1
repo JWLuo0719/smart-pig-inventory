@@ -9,6 +9,33 @@ $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $envFile = Join-Path $repositoryRoot '.env'
 
+function Ensure-LocalFixtureConfiguration {
+    if (-not (Test-Path -LiteralPath $envFile)) {
+        throw "Missing local configuration: $envFile. Run .\scripts\initialize-local-dev.ps1 first."
+    }
+    $content = [System.IO.File]::ReadAllText($envFile)
+    $changed = $false
+    if ($content -match '(?m)^APP_E2E_FIXTURES_ENABLED=.*$') {
+        $content = [regex]::Replace($content, '(?m)^APP_E2E_FIXTURES_ENABLED=.*$', 'APP_E2E_FIXTURES_ENABLED=true')
+        $changed = $true
+    }
+    else {
+        $content += "`r`nAPP_E2E_FIXTURES_ENABLED=true`r`n"
+        $changed = $true
+    }
+    if ($content -notmatch '(?m)^APP_E2E_FIXTURE_PASSWORD=.+$') {
+        $buffer = [byte[]]::new(24)
+        $generator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+        try { $generator.GetBytes($buffer) } finally { $generator.Dispose() }
+        $password = ([BitConverter]::ToString($buffer)).Replace('-', '').ToLowerInvariant()
+        $content += "APP_E2E_FIXTURE_PASSWORD=$password`r`n"
+        $changed = $true
+    }
+    if ($changed) {
+        [System.IO.File]::WriteAllText($envFile, $content, [System.Text.UTF8Encoding]::new($false))
+    }
+}
+
 function Get-RequiredEnvValue {
     param([string]$Name)
 
@@ -28,10 +55,20 @@ function Get-RequiredEnvValue {
 }
 
 try {
-    $composePrefix = @('compose')
-    if (-not [string]::IsNullOrWhiteSpace($ComposeProjectName)) {
-        $composePrefix += @('-p', $ComposeProjectName)
+    if ($ComposeProjectName -ne 'pig-inventory-p0') {
+        throw 'Synthetic P0 fixtures may only run with -ComposeProjectName pig-inventory-p0; no default development volume is touched.'
     }
+    Ensure-LocalFixtureConfiguration
+    $composePrefix = @('compose', '-p', $ComposeProjectName)
+    & docker @composePrefix up -d --force-recreate business-api
+    if ($LASTEXITCODE -ne 0) { throw 'Could not recreate business-api with local synthetic fixture configuration.' }
+    $healthy = $false
+    for ($attempt = 0; $attempt -lt 30; $attempt++) {
+        & docker @composePrefix exec -T business-api sh -lc 'curl -fsS http://localhost:8080/actuator/health >/dev/null'
+        if ($LASTEXITCODE -eq 0) { $healthy = $true; break }
+        Start-Sleep -Seconds 2
+    }
+    if (-not $healthy) { throw 'business-api did not become healthy after enabling synthetic fixtures.' }
 
     $organizationCode = Get-RequiredEnvValue -Name 'APP_BOOTSTRAP_ORGANIZATION_CODE'
     if ($organizationCode -notmatch '^[A-Za-z0-9_-]{1,64}$') {
@@ -87,7 +124,7 @@ WHERE o.code = @organization_code AND b.code = 'E2E-B01' AND p.code = 'E2E-P01';
     if ($LASTEXITCODE -ne 0) {
         throw 'Could not create E2E fixtures. Start the Docker Compose stack with security enabled, wait for MySQL and business-api health checks, then retry.'
     }
-    Write-Output '[OK] Local synthetic E2E building and pen are ready. No credentials were displayed.'
+    Write-Output '[OK] Isolated synthetic P0 identities, two organizations, buildings and pens are ready. No credentials were displayed.'
 }
 catch {
     Write-Error $_

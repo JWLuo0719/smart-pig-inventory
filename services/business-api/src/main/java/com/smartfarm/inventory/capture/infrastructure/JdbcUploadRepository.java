@@ -122,6 +122,25 @@ public class JdbcUploadRepository {
                 asset.perceptualHash(), storageKey, json(asset.roi()), json(asset.exif()));
     }
 
+    public List<PerceptualCandidate> findPerceptualCandidates(UUID organizationId, UUID captureSetId) {
+        return jdbc.query("""
+                SELECT id, perceptual_hash FROM media_asset
+                WHERE organization_id = ? AND capture_set_id <> ? AND deleted_at IS NULL
+                  AND perceptual_hash IS NOT NULL
+                """, (resultSet, rowNumber) -> new PerceptualCandidate(
+                readUuid(resultSet, "id"), resultSet.getString("perceptual_hash")), bytes(organizationId), bytes(captureSetId));
+    }
+
+    public void insertNearDuplicateReview(UUID organizationId, UUID sessionId, UUID sourceMediaId, UUID candidateMediaId,
+            int hammingDistance) {
+        jdbc.update("""
+                INSERT IGNORE INTO near_duplicate_review
+                  (id, organization_id, session_id, source_media_id, candidate_media_id, hamming_distance)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """, bytes(UUID.randomUUID()), bytes(organizationId), bytes(sessionId), bytes(sourceMediaId),
+                bytes(candidateMediaId), hammingDistance);
+    }
+
     public void insertInferenceJob(UUID jobId, UUID sessionId, UUID captureSetId, String correlationId) {
         jdbc.update("""
                 INSERT INTO inference_job (id, session_id, capture_set_id, status, provider_key, correlation_id)
@@ -192,6 +211,9 @@ public class JdbcUploadRepository {
     }
 
     public record CommittedReferences(UUID sessionId, UUID inferenceJobId) {
+    }
+
+    public record PerceptualCandidate(UUID mediaId, String perceptualHash) {
     }
 
     private static byte[] bytes(UUID uuid) {

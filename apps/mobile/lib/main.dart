@@ -12,6 +12,7 @@ import 'features/auth/login_screen.dart';
 import 'features/capture/capture_screen.dart';
 import 'features/capture/domain/capture_target.dart';
 import 'features/outbox/outbox_screen.dart';
+import 'features/inventory/session_review_screen.dart';
 import 'features/pens/pen_picker_screen.dart';
 import 'features/sync/outbox_background_sync.dart';
 
@@ -56,6 +57,12 @@ class PigInventoryApp extends StatelessWidget {
       },
     ),
     GoRoute(path: '/outbox', builder: (context, state) => const OutboxScreen()),
+    GoRoute(
+      path: '/inventory-sessions/:sessionId',
+      builder: (context, state) => SessionReviewScreen(
+        sessionId: state.pathParameters['sessionId']!,
+      ),
+    ),
   ]);
 
   @override

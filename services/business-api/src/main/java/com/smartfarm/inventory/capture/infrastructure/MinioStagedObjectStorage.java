@@ -1,6 +1,7 @@
 package com.smartfarm.inventory.capture.infrastructure;
 
 import io.minio.CopyObjectArgs;
+import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
@@ -53,6 +54,15 @@ public class MinioStagedObjectStorage implements StagedObjectStorage {
             return key;
         } catch (Exception exception) {
             throw UploadStorageException.writeFailed(exception);
+        }
+    }
+
+    @Override
+    public InputStream open(String key) {
+        try {
+            return client.getObject(GetObjectArgs.builder().bucket(bucket).object(key).build());
+        } catch (Exception exception) {
+            throw UploadStorageException.readFailed(exception);
         }
     }
 

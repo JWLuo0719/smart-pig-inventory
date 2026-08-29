@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/media/perceptual_hasher.dart';
 import '../../../core/storage/app_database.dart';
 
 class QueuedCapturePackage {
@@ -22,13 +24,15 @@ class QueuedCapturePackage {
 /// persisted operation later.
 class QueueCaptureDraft {
   QueueCaptureDraft(this.database,
-      {Uuid uuid = const Uuid(), Future<void> Function()? scheduleSync})
+      {Uuid uuid = const Uuid(), Future<void> Function()? scheduleSync, PerceptualHasher? perceptualHasher})
       : _uuid = uuid,
-        _scheduleSync = scheduleSync;
+        _scheduleSync = scheduleSync,
+        _perceptualHasher = perceptualHasher ?? PerceptualHasher();
 
   final AppDatabase database;
   final Uuid _uuid;
   final Future<void> Function()? _scheduleSync;
+  final PerceptualHasher _perceptualHasher;
 
   Future<QueuedCapturePackage> execute(String draftId) async {
     final QueuedCapturePackage result = await database.transaction(() async {
@@ -65,11 +69,14 @@ class QueueCaptureDraft {
 
       final String packageId = _uuid.v4();
       final String idempotencyKey = _uuid.v4();
+      final List<Map<String, Object?>> manifestAssets = await Future.wait(
+        assets.map(_manifestAsset),
+      );
       final String manifestJson = jsonEncode(<String, Object?>{
         'captureSetId': captureSet.id,
         'captureKind': draft.captureKind,
         'penId': draft.penId,
-        'assets': assets.map(_manifestAsset).toList(),
+        'assets': manifestAssets,
       });
       final DateTime now = DateTime.now().toUtc();
       await database.into(database.outboxEntries).insert(
@@ -122,12 +129,13 @@ class QueueCaptureDraft {
     return result;
   }
 
-  Map<String, Object?> _manifestAsset(LocalMediaAsset asset) {
+  Future<Map<String, Object?>> _manifestAsset(LocalMediaAsset asset) async {
     if (asset.capturedAt == null ||
         asset.width == null ||
         asset.height == null) {
       throw StateError('Media metadata is incomplete and cannot be uploaded');
     }
+    final String? perceptualHash = await _perceptualHasher.hash(File(asset.materializedPath));
     return <String, Object?>{
       'assetId': asset.id,
       'viewPosition': asset.viewPosition,
@@ -136,6 +144,7 @@ class QueueCaptureDraft {
       'width': asset.width,
       'height': asset.height,
       'sha256': asset.sha256,
+      if (perceptualHash != null) 'perceptualHash': perceptualHash,
       'byteSize': asset.byteSize,
       'mediaType': asset.contentType,
       'exif': _decodeObject(asset.exifJson, 'exif'),

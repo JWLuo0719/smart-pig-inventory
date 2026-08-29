@@ -12,20 +12,20 @@
 ## Iteration 2：AC-01 至 AC-04
 
 1. 已实现以 JWT 激活组织为可信来源的主数据全量/增量同步、游标失效全量恢复和删除墓碑，并接入 Flutter 的组织隔离缓存、搜索、禁用栏舍拦截和真实 API；认证 Compose 与 realme GT 7 Pro 已验证登录、同步和离线缓存闭环。
-2. 已实现采集包 create/blob/manifest/commit 的 Controller、Application Service、JDBC Infrastructure、MinIO 暂存提升和事务 Outbox；下一步实现 Outbox 派发至推理服务并补充并发 Commit/MinIO HTTP 集成测试。
-3. Flutter 已完成媒体物化、流式 SHA-256、单图/三图草稿、ROI 口径、本地完整采集组入队、草稿恢复 UI、主数据接线，以及带租约、退避和 Commit 后同步标记的前后台真实上传状态机；三视图断网强杀恢复、恢复网络后重试提交真机 E2E 已通过，三视图剩余 Blob 自动化续传已通过；WorkManager 已在 realme GT 7 Pro 验证网络恢复、应用重启后的自动提交。下一步实现服务端 Outbox 推理派发和结果回调。
+2. 已实现采集包 create/blob/manifest/commit 的 Controller、Application Service、JDBC Infrastructure、MinIO 暂存提升和事务 Outbox；Spring 现在可领取 Outbox、租约恢复后派发 Python 任务，Python Worker 通过服务密钥幂等回传最终结果。下一步完成 Compose 端到端派发/回调、失败重试可观测性以及 MinIO HTTP 集成测试。
+3. Flutter 已完成媒体物化、流式 SHA-256、单图/三图草稿、ROI 口径、本地完整采集组入队、草稿恢复 UI、主数据接线，以及带租约、退避和 Commit 后同步标记的前后台真实上传状态机；三视图断网强杀恢复、恢复网络后重试提交真机 E2E 已通过，三视图剩余 Blob 自动化续传已通过；WorkManager 已在 realme GT 7 Pro 验证网络恢复、应用重启后的自动提交。下一步接入任务状态/复核结果展示，完成服务端推理 Compose E2E。
 4. 断网三图、杀进程恢复和恢复网络重试已通过；仍需通过上传中途断流只续传剩余 Blob、WorkManager 后台执行、推理/复核和并发 Commit E2E。
 
 ## Iteration 3：AC-05 至 AC-12
 
-1. 实现近重复审核、人工确认、媒体锁定、带原因软删除和审计。
-2. 管理端接入任务、媒体审核、组织栏舍、报表、模型同步和审计 API。
-3. 完成综合平均、RBAC、安全配置、备份恢复和实机测试：主流机固定为 realme GT 7 Pro；低端机优先 REDMI Note 14 5G（6GB+128GB），不可获得时选择 Android 14+、6GB RAM/128GB 存储、UFS 2.2 级别或更低的等效机型。
+1. 已完成不依赖人工测试的 P0 开发：管理端会话媒体预览/人工确认、日报/综合报表、审计页面；合成 OPERATOR/REVIEWER/FARM_ADMIN 与第二组织 fixture；RBAC/跨组织自动化 MySQL/JWT 集成测试；近重复告警带理由解决审计。下一步是在 `pig-inventory-p0` 隔离 Compose 中执行浏览器与真机验收，不得重置默认 MySQL 卷。P0 人工验收状态见 `docs/development/p0-manual-acceptance-runbook.md`。
+2. 管理端局域网 HTTP 登录的 `crypto.randomUUID` 兼容性已修复，但需要以 `docker compose -p pig-inventory-p0 up --build -d admin-web gateway` 部署回归。继续接入会话媒体预览/确认、组织栏舍、日报/综合报表、模型同步和审计 API。
+3. Flutter v`0.1.0+3` 已修复三图恢复证据预览、取消伪造离线队列数量，并在复核页 401 时自动 Refresh Token 后重试读取/确认。该路径及 Outbox 运行中 Access Token 过期后以同一幂等键重试均已有 Flutter 自动化测试；主流机固定为 realme GT 7 Pro，待实机回归，低端机优先 REDMI Note 14 5G（6GB+128GB）。
 
 ## P1 准入项
 
 - 取得金蝶正式接口文档后实现 Kingdee Provider；此前只用 Manual/Mock。
-- 取得 YOLO 权重、许可证和金标集后实现 HttpYolo Provider；通过回归门禁前保持 unavailable。
+- iMoonLab YOLOv13 Nano 已以产品仓库外的 `research-http-yolo` Runner 部署并完成隔离产品测试；它强制人工复核，不代表自动计数准入。取得部署许可或经批准的替代模型、权重 checksum 与金标集后，配置独立 HTTP 模型服务并启用 `http-yolo` Provider；通过回归门禁前不得自动计数。详见 `docs/research/yolov13-research-runner.md`。
 - 端侧、多视角、视频和 Agent 均以隔离 PoC 验证，不进入 P0 关键路径。
 
 ## 已准备的测试数据边界

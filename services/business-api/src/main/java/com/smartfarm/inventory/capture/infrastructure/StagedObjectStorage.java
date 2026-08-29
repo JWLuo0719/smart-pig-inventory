@@ -8,5 +8,8 @@ public interface StagedObjectStorage {
 
     String promote(String stagedKey, UUID organizationId, UUID assetId);
 
+    /** Opens private evidence only after the business service has authorized the caller. */
+    InputStream open(String key);
+
     void deleteQuietly(String key);
 }

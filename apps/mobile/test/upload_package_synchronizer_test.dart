@@ -31,6 +31,7 @@ void main() {
     final synchronizer = UploadPackageSynchronizer(
       api: _FakeUploadGateway(),
       repository: DriftOutboxRepository(database),
+      reconnect: () async => _auth(now),
       clock: () => now,
     );
 
@@ -61,6 +62,7 @@ void main() {
     final synchronizer = UploadPackageSynchronizer(
       api: gateway,
       repository: DriftOutboxRepository(database),
+      reconnect: () async => _auth(now),
       clock: () => now,
     );
 
@@ -80,6 +82,7 @@ void main() {
     final synchronizer = UploadPackageSynchronizer(
       api: gateway,
       repository: DriftOutboxRepository(database),
+      reconnect: () async => _auth(now),
       clock: () => now,
     );
 
@@ -92,10 +95,32 @@ void main() {
     expect(outbox.state, 'synced');
   });
 
+  test('retries an idempotent upload package after access token refresh', () async {
+    final gateway = _FakeUploadGateway(unauthorizedOnce: true);
+    int reconnects = 0;
+    final synchronizer = UploadPackageSynchronizer(
+      api: gateway,
+      repository: DriftOutboxRepository(database),
+      reconnect: () async {
+        reconnects++;
+        return _auth(now, accessToken: 'refreshed-access');
+      },
+      clock: () => now,
+    );
+
+    expect(await synchronizer.syncNext(_auth(now), leaseOwner: 'foreground'),
+        UploadSyncOutcome.synced);
+    expect(reconnects, 1);
+    expect(gateway.accessTokens.take(2), <String>['access', 'refreshed-access']);
+    expect((await database.select(database.outboxEntries).getSingle()).state,
+        'synced');
+  });
+
   test('does not delete evidence when the server rejects an upload', () async {
     final synchronizer = UploadPackageSynchronizer(
       api: _FakeUploadGateway(error: 422),
       repository: DriftOutboxRepository(database),
+      reconnect: () async => _auth(now),
       clock: () => now,
     );
 
@@ -183,9 +208,9 @@ Future<void> _replaceWithThreeViewAssets(
   }
 }
 
-AuthState _auth(DateTime now) => AuthState(
+AuthState _auth(DateTime now, {String accessToken = 'access'}) => AuthState(
       session: AuthSession(
-          accessToken: 'access',
+          accessToken: accessToken,
           refreshToken: 'refresh',
           accessTokenExpiresAt: now,
           refreshTokenExpiresAt: now),
@@ -201,14 +226,29 @@ AuthState _auth(DateTime now) => AuthState(
     );
 
 class _FakeUploadGateway implements UploadRemoteGateway {
-  _FakeUploadGateway({this.error, this.existingAssets = const <String>{}});
+  _FakeUploadGateway({
+    this.error,
+    this.existingAssets = const <String>{},
+    this.unauthorizedOnce = false,
+  });
   final int? error;
   final Set<String> existingAssets;
+  final bool unauthorizedOnce;
   final List<String> uploadedAssetIds = <String>[];
+  final List<String> accessTokens = <String>[];
+  bool _returnedUnauthorized = false;
   int createCalls = 0;
   int packageCalls = 0;
   int commitCalls = 0;
-  void _throwIfRequested() {
+  void _recordAndThrowIfRequested(String accessToken) {
+    accessTokens.add(accessToken);
+    if (unauthorizedOnce && !_returnedUnauthorized) {
+      _returnedUnauthorized = true;
+      throw DioException(
+          requestOptions: RequestOptions(path: '/upload'),
+          response: Response<void>(
+              requestOptions: RequestOptions(path: '/upload'), statusCode: 401));
+    }
     if (error != null) {
       throw DioException(
           requestOptions: RequestOptions(path: '/upload'),
@@ -227,7 +267,7 @@ class _FakeUploadGateway implements UploadRemoteGateway {
       required String penId,
       required DateTime businessDate,
       required String captureKind}) async {
-    _throwIfRequested();
+    _recordAndThrowIfRequested(accessToken);
     createCalls++;
     return RemoteUploadPackage(
         id: 'server-package-id',
@@ -238,6 +278,7 @@ class _FakeUploadGateway implements UploadRemoteGateway {
   @override
   Future<RemoteUploadPackage> package(
       {required String accessToken, required String serverPackageId}) async {
+    _recordAndThrowIfRequested(accessToken);
     packageCalls++;
     return RemoteUploadPackage(
         id: 'server-package-id',
@@ -253,7 +294,7 @@ class _FakeUploadGateway implements UploadRemoteGateway {
       required String assetId,
       required String sha256,
       required File file}) async {
-    _throwIfRequested();
+    _recordAndThrowIfRequested(accessToken);
     uploadedAssetIds.add(assetId);
   }
 
@@ -263,13 +304,13 @@ class _FakeUploadGateway implements UploadRemoteGateway {
           required String idempotencyKey,
           required String serverPackageId,
           required Map<String, dynamic> manifest}) async =>
-      _throwIfRequested();
+      _recordAndThrowIfRequested(accessToken);
   @override
   Future<RemoteCommitResult> commit(
       {required String accessToken,
       required String idempotencyKey,
       required String serverPackageId}) async {
-    _throwIfRequested();
+    _recordAndThrowIfRequested(accessToken);
     commitCalls++;
     return const RemoteCommitResult(
         sessionId: 'session-id', inferenceJobId: 'job-id');

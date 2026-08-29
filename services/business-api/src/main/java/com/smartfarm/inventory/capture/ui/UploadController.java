@@ -120,7 +120,7 @@ public class UploadController {
             @Positive int width,
             @Positive int height,
             @NotBlank @Pattern(regexp = "^[a-f0-9]{64}$") String sha256,
-            @jakarta.validation.constraints.Size(max = 128) String perceptualHash,
+            @jakarta.validation.constraints.Pattern(regexp = "^[a-f0-9]{16}$") String perceptualHash,
             @Positive long byteSize,
             @NotBlank String mediaType,
             @NotNull Map<String, Object> exif,

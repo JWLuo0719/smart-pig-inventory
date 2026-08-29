@@ -53,13 +53,22 @@ $content = @(
     'APP_BOOTSTRAP_ADMIN_DISPLAY_NAME=Local E2E Administrator',
     'APP_BOOTSTRAP_ORGANIZATION_CODE=DEV-E2E',
     'APP_BOOTSTRAP_ORGANIZATION_NAME=Local E2E Synthetic Farm',
+    '# Disabled by default. p0 fixture script enables these only for the isolated Compose project.',
+    'APP_E2E_FIXTURES_ENABLED=false',
+    "APP_E2E_FIXTURE_PASSWORD=$(New-Secret -Bytes 24)",
     '',
     '# Only for local development. Shared and production environments must use a real issuer.',
     'OIDC_ISSUER_URI=https://identity.example.invalid/realms/pig-inventory',
     'COUNTING_PROVIDER=unavailable',
-    'MODEL_KEY=',
-    'MODEL_VERSION=',
-    'MODEL_CHECKSUM='
+    'MODEL_KEY=pending-license-review',
+    'MODEL_VERSION=unverified',
+    'MODEL_CHECKSUM=unverified',
+    'MODEL_ADAPTER_VERSION=http-v1',
+    "INFERENCE_CALLBACK_TOKEN=$(New-Secret)",
+    'INFERENCE_DISPATCHER_ENABLED=true',
+    'YOLO_HTTP_ENDPOINT=',
+    'MODEL_RESEARCH_ENABLED=false',
+    'MODEL_APPROVED=false'
 )
 
 [System.IO.File]::WriteAllLines($envFile, $content, [System.Text.UTF8Encoding]::new($false))

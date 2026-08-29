@@ -54,14 +54,25 @@ Future<bool> _runOutboxWorker() async {
     }
 
     final DriftOutboxRepository repository = DriftOutboxRepository(database);
-    final UploadPackageSynchronizer synchronizer = UploadPackageSynchronizer(
-      api: UploadRemoteApi(baseUrl: _workerApiBaseUrl),
-      repository: repository,
-    );
     AuthState auth = AuthState(
       session: session,
       user: user,
       isOffline: false,
+    );
+    final UploadPackageSynchronizer synchronizer = UploadPackageSynchronizer(
+      api: UploadRemoteApi(baseUrl: _workerApiBaseUrl),
+      repository: repository,
+      reconnect: () async {
+        try {
+          final AuthSession refreshed = await authApi.refresh(auth.session.refreshToken);
+          await sessions.save(refreshed);
+          auth = AuthState(session: refreshed, user: user, isOffline: false);
+          return auth;
+        } on Exception {
+          // Never discard queued media if the refresh token was revoked.
+          return null;
+        }
+      },
     );
 
     // Process a bounded batch so a large queue does not exceed Android's

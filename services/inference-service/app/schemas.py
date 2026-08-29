@@ -49,3 +49,5 @@ class CountingJobResult(BaseModel):
     adapter_version: str
     inference_source: str
     latency_ms: int = Field(ge=0)
+    failure_code: str | None = Field(default=None, max_length=128)
+    failure_message: str | None = Field(default=None, max_length=1000)

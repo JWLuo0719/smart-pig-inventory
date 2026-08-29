@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../core/auth/auth_controller.dart';
 import '../../core/storage/database_provider.dart';
 import '../../core/storage/image_metadata_reader.dart';
 import '../../core/storage/media_materializer.dart';
@@ -16,6 +17,7 @@ import 'application/add_capture_view.dart';
 import 'application/create_single_image_draft.dart';
 import 'application/create_three_view_draft.dart';
 import 'data/drift_capture_draft_repository.dart';
+import 'domain/capture_draft_repository.dart';
 import 'domain/capture_target.dart';
 import '../outbox/application/queue_capture_draft.dart';
 import '../sync/outbox_background_sync.dart';
@@ -34,6 +36,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
   final PlatformImageMetadataReader _metadataReader =
       PlatformImageMetadataReader();
   final List<String> _savedPositions = <String>[];
+  final List<_LocalEvidence> _savedEvidence = <_LocalEvidence>[];
   CreatedCaptureDraft? _savedDraft;
   bool _threeView = false;
   bool _saving = false;
@@ -101,6 +104,10 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
         _savedPositions
           ..clear()
           ..addAll(snapshot.media.map((media) => media.position));
+        _savedEvidence
+          ..clear()
+          ..addAll(snapshot.media.map((media) => _LocalEvidence(
+              position: media.position, file: File(media.materializedPath))));
         _isQueued = snapshot.state == 'queued';
       });
     } catch (_) {
@@ -189,6 +196,8 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
         setState(() {
           _savedDraft = saved;
           _savedPositions.add('single');
+          _savedEvidence.add(
+              _LocalEvidence(position: 'single', file: saved.materializedFile));
         });
       }
     } on UnsupportedImageFormatException catch (error) {
@@ -271,6 +280,8 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
       setState(() {
         _savedDraft = saved;
         _savedPositions.add('left');
+        _savedEvidence.add(
+            _LocalEvidence(position: 'left', file: saved.materializedFile));
       });
       return;
     }
@@ -290,19 +301,35 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
       height: metadata.height,
       exif: metadata.exif,
     );
+    final CaptureDraftSnapshot? snapshot = await repository.findLatestForTarget(
+      organizationId: widget.target.organizationId,
+      penId: widget.target.penId,
+      businessDate: widget.target.businessDate,
+    );
     if (!mounted) return;
-    setState(() => _savedPositions.add(position));
+    setState(() {
+      _savedPositions.add(position);
+      final CapturedMediaRecord? saved = snapshot?.media
+          .where((CapturedMediaRecord media) => media.position == position)
+          .firstOrNull;
+      if (saved != null) {
+        _savedEvidence.add(_LocalEvidence(
+            position: position, file: File(saved.materializedPath)));
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final CreatedCaptureDraft? savedDraft = _savedDraft;
+    final bool? offline =
+        ref.watch(authControllerProvider).valueOrNull?.isOffline;
     return Scaffold(
       appBar: AppBar(title: Text(widget.target.label)),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 6, 20, 28),
         children: <Widget>[
-          const NetworkStatusBanner(),
+          NetworkStatusBanner(offline: offline),
           const SizedBox(height: 14),
           Card(
             child: SwitchListTile(
@@ -339,8 +366,8 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
           ),
           const SizedBox(height: 12),
           if (savedDraft != null)
-            _SavedEvidenceCard(
-              file: savedDraft.materializedFile,
+            _SavedEvidenceList(
+              evidence: _savedEvidence,
               status: _isQueued
                   ? '已保存到待上传 · 尚未生成盘点数量'
                   : _threeView
@@ -426,10 +453,17 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
   }
 }
 
-class _SavedEvidenceCard extends StatelessWidget {
-  const _SavedEvidenceCard({required this.file, required this.status});
+class _LocalEvidence {
+  const _LocalEvidence({required this.position, required this.file});
 
+  final String position;
   final File file;
+}
+
+class _SavedEvidenceList extends StatelessWidget {
+  const _SavedEvidenceList({required this.evidence, required this.status});
+
+  final List<_LocalEvidence> evidence;
   final String status;
 
   @override
@@ -439,42 +473,106 @@ class _SavedEvidenceCard extends StatelessWidget {
       child: Card(
         child: Padding(
           padding: const EdgeInsets.all(12),
-          child: Row(
-            children: <Widget>[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.file(
-                  file,
-                  width: 72,
-                  height: 72,
-                  cacheWidth: 240,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const SizedBox(
-                    width: 72,
-                    height: 72,
-                    child: Icon(Icons.broken_image_outlined),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    const Text('已保存为本地草稿',
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(children: <Widget>[
+                  const Expanded(
+                    child: Text('已保存为本地草稿',
                         style: TextStyle(fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 3),
-                    Text(status),
-                  ],
+                  ),
+                  const Icon(Icons.check_circle, color: AppColors.herdTeal),
+                ]),
+                const SizedBox(height: 3),
+                Text(status),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: evidence
+                      .map((item) => _EvidenceThumbnail(item: item))
+                      .toList(growable: false),
                 ),
-              ),
-              const Icon(Icons.check_circle, color: AppColors.herdTeal),
-            ],
-          ),
+              ]),
         ),
       ),
     );
   }
+}
+
+class _EvidenceThumbnail extends StatelessWidget {
+  const _EvidenceThumbnail({required this.item});
+
+  final _LocalEvidence item;
+
+  String get _label {
+    return switch (item.position) {
+      'left' => '左图',
+      'center' => '中图',
+      'right' => '右图',
+      _ => '单图',
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        button: true,
+        label: '已保存的$_label，点击查看大图',
+        child: InkWell(
+          onTap: () => showDialog<void>(
+            context: context,
+            builder: (BuildContext dialogContext) => Dialog(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child:
+                    Column(mainAxisSize: MainAxisSize.min, children: <Widget>[
+                  Row(children: <Widget>[
+                    Text(_label,
+                        style: Theme.of(dialogContext).textTheme.titleMedium),
+                    const Spacer(),
+                    IconButton(
+                      tooltip: '关闭',
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ]),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 520),
+                    child: InteractiveViewer(
+                        child: Image.file(item.file, fit: BoxFit.contain)),
+                  ),
+                ]),
+              ),
+            ),
+          ),
+          borderRadius: BorderRadius.circular(8),
+          child: SizedBox(
+            width: 92,
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(
+                      item.file,
+                      width: 92,
+                      height: 92,
+                      cacheWidth: 240,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const SizedBox(
+                        width: 92,
+                        height: 92,
+                        child: Icon(Icons.broken_image_outlined),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(_label,
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                ]),
+          ),
+        ),
+      );
 }
 
 class _CaptureError extends StatelessWidget {

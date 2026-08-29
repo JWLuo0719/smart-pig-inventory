@@ -25,8 +25,9 @@ flowchart LR
     P --> R
     R --> C["Celery 推理 Worker"]
     C --> Y["CountingProvider"]
-    Y -.-> Y1["当前 YOLOv13"]
-    Y -.未来.-> Y2["多视角 / 视频 / Agent"]
+    Y -.-> Y1["隔离的研究模型 Runner"]
+    Y -.未来.-> Y2["团队模型 / 多视角 / 视频"]
+    Y -.建议与编排.-> A["受限 Agent Sidecar"]
     B -.适配器.-> K["金蝶 ERP"]
 ```
 
@@ -83,11 +84,18 @@ draft -> submitted -> processing -> confirmed
 
 ## 7. 扩展点
 
-- `CountingProvider`：Unavailable、Mock（仅自动化测试）、HttpYolo、未来 MultiView/Video/Agent。
+- `CountingProvider`：Unavailable、Mock（仅自动化测试）、ResearchHttpYolo（强制复核）、HttpYolo（已验收）、未来 MultiView/Video。
 - `ErpOrganizationProvider`：Manual、Mock、未来 Kingdee。
 - `ObjectStorage`：使用 S3 合同，MinIO 可替换为云对象存储。
 - Flutter `InferenceAdapter`：默认 Server；未来端侧实验必须隔离开关并记录来源。
 - Provider 能力通过 `/api/v1/system/capabilities` 暴露，客户端按真实能力显示入口。
+
+### 模型 Runner 与 Agent 边界
+
+- 任何第三方或研究模型都部署在产品仓库和业务网络边界之外，只实现 `CountingJobRequest -> CountingJobResult` 的 HTTP 合同；源码、权重、训练依赖和对象存储凭据不进入产品 Git。
+- `research-http-yolo` 是显式实验开关，成功响应也会被标准化为 `review_required` 与空计数。只有许可证、金标回归、校准和运营负责人批准齐全时，才允许以 `http-yolo` 启用自动计数。
+- Agent 只能作为只读检索、任务编排和复核建议 Sidecar：不得伪造推理回调、写 MySQL、确认盘点、解锁媒体或覆盖模型结果。需要改变业务事实时，必须调用已有的受鉴权 API，并保留人类确认与 AuditEvent。
+- 团队自研模型替换时只新增/切换 Runner 配置及模型身份；若合同语义需要演进，先发布兼容的新 adapter 版本，再迁移消费者。
 
 ## 8. 迁移路径
 

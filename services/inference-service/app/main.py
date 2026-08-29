@@ -32,6 +32,8 @@ def ready() -> dict[str, object]:
 
 @app.post("/v1/jobs", response_model=JobAccepted, status_code=status.HTTP_202_ACCEPTED)
 def enqueue_job(request: CountingJobRequest) -> JobAccepted:
-    task = run_counting_job.delay(request.model_dump(mode="json"))
+    # Re-delivery is safe: the Spring callback uses job ID + payload fingerprint
+    # as its idempotency boundary.
+    task = run_counting_job.apply_async(args=[request.model_dump(mode="json")], task_id=str(request.job_id))
     return JobAccepted(job_id=str(request.job_id), task_id=task.id)
 

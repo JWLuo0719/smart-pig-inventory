@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/auth/auth_controller.dart';
@@ -45,6 +46,10 @@ class _OutboxScreenState extends ConsumerState<OutboxScreen> {
             itemBuilder: (BuildContext context, int index) {
               final OutboxEntry row = rows[index];
               return ListTile(
+                onTap: row.sessionId == null
+                    ? null
+                    : () =>
+                        context.push('/inventory-sessions/${row.sessionId}'),
                 title: Text(_stateLabel(row.state)),
                 subtitle: Text(row.error ?? '采集包 ${row.packageId}'),
                 trailing: row.state == 'synced'

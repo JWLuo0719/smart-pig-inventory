@@ -8,4 +8,8 @@ public class UploadStorageException extends RuntimeException {
     static UploadStorageException writeFailed(Throwable cause) {
         return new UploadStorageException("Evidence object storage operation failed", cause);
     }
+
+    static UploadStorageException readFailed(Throwable cause) {
+        return new UploadStorageException("Evidence object storage could not be read", cause);
+    }
 }

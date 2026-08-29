@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-当前是 `Architecture Baseline / Not Release Ready`。已完成产品、边界、验收和视觉基线，并搭建四个可独立演进的工程壳：
+当前是 `Development Readiness / Not Release Ready`。已完成 P0 上传、推理安全降级、人工复核、管理端审核与合成 RBAC Fixture；仍须完成全部人工验收、安全运行与模型准入门禁。工程按以下边界独立演进：
 
 | 目录 | 责任 | 状态 |
 |---|---|---|
@@ -31,6 +31,7 @@
 - 开放决策：[`docs/product/open-decisions.md`](docs/product/open-decisions.md)
 - 工作站准备：[`docs/development/workstation-setup.md`](docs/development/workstation-setup.md)
 - 测试数据边界：[`docs/development/test-data-governance.md`](docs/development/test-data-governance.md)
+- 外部人工验收：[`docs/development/p0-external-manual-test-guide.md`](docs/development/p0-external-manual-test-guide.md)
 - 当前状态：[`PROJECT_STATUS.md`](PROJECT_STATUS.md)、[`NEXT_STEPS.md`](NEXT_STEPS.md)
 
 ## 本地启动
@@ -68,6 +69,10 @@ flutter test
 ```
 
 Android 模拟器调用地址可通过 `--dart-define=API_BASE_URL=http://10.0.2.2:8088` 配置；局域网真机使用 `./scripts/build-lan-test-apk.ps1` 一键构建。完整步骤见 [`docs/development/android-lan-e2e-testing.md`](docs/development/android-lan-e2e-testing.md)。版本锁定、提交规则和分支约束以开发规范为准。
+
+## 开源许可与公开边界
+
+原创产品源码以 [Apache-2.0](LICENSE) 发布。模型权重、外部研究数据、现场媒体、`.env`、测试报告产物和 `eg/` 参照物不属于公开内容；完整边界见 [LICENSES.md](LICENSES.md) 与测试数据治理规则。
 
 ## 尚需产品确认
 

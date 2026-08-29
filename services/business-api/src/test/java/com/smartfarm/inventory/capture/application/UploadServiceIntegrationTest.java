@@ -234,6 +234,13 @@ class UploadServiceIntegrationTest {
         }
 
         @Override
+        public InputStream open(String key) {
+            byte[] bytes = objects.get(key);
+            if (bytes == null) throw new IllegalArgumentException("Evidence is unavailable");
+            return new ByteArrayInputStream(bytes);
+        }
+
+        @Override
         public void deleteQuietly(String key) {
             objects.remove(key);
         }

@@ -16,6 +16,7 @@ final uploadPackageSynchronizerProvider = Provider<UploadPackageSynchronizer>(
   (ref) => UploadPackageSynchronizer(
     api: ref.watch(uploadRemoteApiProvider),
     repository: ref.watch(outboxRepositoryProvider),
+    reconnect: () => ref.read(authControllerProvider.notifier).reconnect(),
   ),
 );
 
@@ -23,15 +24,18 @@ class UploadPackageSynchronizer {
   UploadPackageSynchronizer({
     required UploadRemoteGateway api,
     required DriftOutboxRepository repository,
+    required Future<AuthState?> Function() reconnect,
     DateTime Function()? clock,
     Random? random,
   })  : _api = api,
         _repository = repository,
+        _reconnect = reconnect,
         _clock = clock ?? (() => DateTime.now().toUtc()),
         _random = random ?? Random.secure();
 
   final UploadRemoteGateway _api;
   final DriftOutboxRepository _repository;
+  final Future<AuthState?> Function() _reconnect;
   final DateTime Function() _clock;
   final Random _random;
 
@@ -47,6 +51,20 @@ class UploadPackageSynchronizer {
       await _sync(work, auth);
       return UploadSyncOutcome.synced;
     } on DioException catch (error) {
+      if (error.response?.statusCode == 401) {
+        final AuthState? refreshed = await _reconnect();
+        if (refreshed != null && !refreshed.isOffline) {
+          try {
+            // Every server write has the same stable idempotency key, so replaying
+            // the package after a token refresh cannot create duplicate evidence.
+            await _sync(work, refreshed);
+            return UploadSyncOutcome.synced;
+          } on DioException catch (retryError) {
+            await _handleDioFailure(work, retryError);
+            return _outcomeFor(retryError);
+          }
+        }
+      }
       await _handleDioFailure(work, error);
       return _outcomeFor(error);
     } on FileSystemException {

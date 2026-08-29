@@ -22,6 +22,13 @@ class CaptureManifestTest {
     }
 
     @Test
+    void rejectsInvalidPerceptualHash() {
+        assertThrows(IllegalArgumentException.class, () -> new ManifestAsset(
+                UUID.randomUUID(), ViewPosition.SINGLE, Instant.parse("2026-08-20T01:00:00Z"), "single.jpg", 100, 100,
+                "a".repeat(64), "not-a-perceptual-hash", 10, "image/jpeg", Map.of(), null));
+    }
+
+    @Test
     void rejectsDuplicateDirectionAndOutOfBoundsRoi() {
         assertThrows(IllegalArgumentException.class, () -> new CaptureManifest(
                 UUID.randomUUID(),

@@ -65,7 +65,12 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     environment:
       REDIS_URL: redis://redis:6379/0
-      COUNTING_PROVIDER: unavailable
+      COUNTING_PROVIDER: ${COUNTING_PROVIDER:-unavailable}
+      BUSINESS_API_BASE_URL: http://business-api:8080
+      INFERENCE_CALLBACK_TOKEN: ${INFERENCE_CALLBACK_TOKEN:-}
+      YOLO_HTTP_ENDPOINT: ${YOLO_HTTP_ENDPOINT:-}
+      MODEL_RESEARCH_ENABLED: ${MODEL_RESEARCH_ENABLED:-false}
+      MODEL_APPROVED: ${MODEL_APPROVED:-false}
     depends_on:
       redis:
         condition: service_healthy
@@ -80,7 +85,12 @@ services:
     command: celery -A app.celery_app worker --loglevel=INFO --concurrency=1
     environment:
       REDIS_URL: redis://redis:6379/0
-      COUNTING_PROVIDER: unavailable
+      COUNTING_PROVIDER: ${COUNTING_PROVIDER:-unavailable}
+      BUSINESS_API_BASE_URL: http://business-api:8080
+      INFERENCE_CALLBACK_TOKEN: ${INFERENCE_CALLBACK_TOKEN:-}
+      YOLO_HTTP_ENDPOINT: ${YOLO_HTTP_ENDPOINT:-}
+      MODEL_RESEARCH_ENABLED: ${MODEL_RESEARCH_ENABLED:-false}
+      MODEL_APPROVED: ${MODEL_APPROVED:-false}
     depends_on:
       redis:
         condition: service_healthy
@@ -96,6 +106,8 @@ services:
       APP_BOOTSTRAP_ADMIN_DISPLAY_NAME: ${APP_BOOTSTRAP_ADMIN_DISPLAY_NAME:-}
       APP_BOOTSTRAP_ORGANIZATION_CODE: ${APP_BOOTSTRAP_ORGANIZATION_CODE:-}
       APP_BOOTSTRAP_ORGANIZATION_NAME: ${APP_BOOTSTRAP_ORGANIZATION_NAME:-}
+      APP_E2E_FIXTURES_ENABLED: ${APP_E2E_FIXTURES_ENABLED:-false}
+      APP_E2E_FIXTURE_PASSWORD: ${APP_E2E_FIXTURE_PASSWORD:-}
       MYSQL_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-pig_inventory}?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
       MYSQL_USER: ${MYSQL_USER:-pig_inventory}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
@@ -106,6 +118,12 @@ services:
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}
       MINIO_BUCKET: ${MINIO_BUCKET:-pig-inventory}
       INFERENCE_BASE_URL: http://inference-api:8000
+      INFERENCE_CALLBACK_TOKEN: ${INFERENCE_CALLBACK_TOKEN:-}
+      INFERENCE_DISPATCHER_ENABLED: ${INFERENCE_DISPATCHER_ENABLED:-false}
+      MODEL_KEY: ${MODEL_KEY:-pending-license-review}
+      MODEL_VERSION: ${MODEL_VERSION:-unverified}
+      MODEL_CHECKSUM: ${MODEL_CHECKSUM:-unverified}
+      MODEL_ADAPTER_VERSION: ${MODEL_ADAPTER_VERSION:-http-v1}
     depends_on:
       mysql:
         condition: service_healthy
@@ -124,7 +142,9 @@ services:
   admin-web:
     build: ./apps/admin-web
     environment:
-      NEXT_PUBLIC_API_BASE_URL: /api
+      # Keep the browser same-origin: the Next route handler forwards only
+      # allow-listed API headers to this internal Docker endpoint.
+      BUSINESS_API_BASE_URL: http://business-api:8080
     depends_on:
       business-api:
         condition: service_healthy
@@ -132,7 +152,7 @@ services:
   gateway:
     image: nginx:1.27-alpine
     ports:
-      - "8088:80"
+      - "${GATEWAY_PORT:-8088}:80"
     volumes:
       - ./infra/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:

@@ -33,6 +33,9 @@ public record ManifestAsset(
         if (originalName.length() > 255) {
             throw new IllegalArgumentException("Original name is too long");
         }
+        if (perceptualHash != null && !perceptualHash.matches("^[a-f0-9]{16}$")) {
+            throw new IllegalArgumentException("Perceptual hash must be a 64-bit lowercase hexadecimal value");
+        }
         Set<String> permittedExifFields = Set.of(
                 "orientation", "make", "model", "focalLengthMm", "exposureTimeSeconds", "iso");
         if (!permittedExifFields.containsAll(exif.keySet())) {

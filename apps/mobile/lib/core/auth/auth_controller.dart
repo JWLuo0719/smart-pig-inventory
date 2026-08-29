@@ -25,6 +25,7 @@ final authControllerProvider =
 
 class AuthController extends AsyncNotifier<AuthState?> {
   static const Duration _offlineSessionLimit = Duration(days: 7);
+  Future<AuthState?>? _reconnectInFlight;
 
   AuthSessionRepository get _sessions =>
       ref.read(authSessionRepositoryProvider);
@@ -58,6 +59,18 @@ class AuthController extends AsyncNotifier<AuthState?> {
   /// It deliberately keeps the local session if the network is still absent,
   /// so queued evidence is never discarded merely because retry was tapped.
   Future<AuthState?> reconnect() async {
+    final Future<AuthState?>? inFlight = _reconnectInFlight;
+    if (inFlight != null) return inFlight;
+    final Future<AuthState?> pending = _reconnectInternal();
+    _reconnectInFlight = pending;
+    try {
+      return await pending;
+    } finally {
+      if (identical(_reconnectInFlight, pending)) _reconnectInFlight = null;
+    }
+  }
+
+  Future<AuthState?> _reconnectInternal() async {
     final AuthState? current = state.valueOrNull;
     if (current == null) return null;
     try {

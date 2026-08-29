@@ -49,6 +49,8 @@
     "model_checksum": {"type": "string"},
     "adapter_version": {"type": "string"},
     "inference_source": {"type": "string"},
-    "latency_ms": {"type": "integer", "minimum": 0}
+    "latency_ms": {"type": "integer", "minimum": 0},
+    "failure_code": {"type": ["string", "null"], "maxLength": 128},
+    "failure_message": {"type": ["string", "null"], "maxLength": 1000}
   }
 }

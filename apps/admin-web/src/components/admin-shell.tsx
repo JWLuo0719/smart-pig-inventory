@@ -2,13 +2,11 @@ import type { ReactNode } from "react";
 import Image from "next/image";
 
 const navigation = [
-  ["现场态势", "今日需处理"],
-  ["盘点任务", "下发与进度"],
-  ["媒体审核", "重复与质量"],
-  ["组织栏舍", "主数据"],
-  ["盘点报表", "日盘与综合"],
-  ["模型与同步", "版本与 ERP"],
-  ["审计日志", "更正与覆盖"],
+  ["现场态势", "今日需处理", "#top"],
+  ["盘点任务", "下发与进度", "#tasks"],
+  ["媒体审核", "会话与近重复", "#media-review"],
+  ["盘点报表", "日盘与综合", "#reports"],
+  ["审计日志", "确认与覆盖", "#audit"],
 ] as const;
 
 export function AdminShell({ children }: Readonly<{ children: ReactNode }>) {
@@ -30,8 +28,8 @@ export function AdminShell({ children }: Readonly<{ children: ReactNode }>) {
           </div>
         </div>
         <nav className="nav-list">
-          {navigation.map(([label, hint], index) => (
-            <a className={index === 0 ? "nav-item active" : "nav-item"} href="#" key={label}>
+          {navigation.map(([label, hint, href], index) => (
+            <a className={index === 0 ? "nav-item active" : "nav-item"} href={href} key={label}>
               <span>{label}</span>
               <small>{hint}</small>
             </a>
@@ -45,12 +43,12 @@ export function AdminShell({ children }: Readonly<{ children: ReactNode }>) {
       <main className="main-column">
         <header className="topbar">
           <div>
-            <span className="eyebrow">F001 · 示范猪场</span>
+            <span className="eyebrow">组织范围由登录令牌确定</span>
             <h1>现场态势</h1>
           </div>
           <div className="top-actions">
-            <span className="network-pill warning">3 个包待上传</span>
-            <button type="button" className="quiet-button">管理员</button>
+            <span className="network-pill warning">当前组织实时数据</span>
+            <button type="button" className="quiet-button">受认证访问</button>
           </div>
         </header>
         {children}
