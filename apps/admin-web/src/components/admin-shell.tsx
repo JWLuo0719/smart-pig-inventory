@@ -7,6 +7,8 @@ const navigation = [
   ["媒体审核", "会话与近重复", "#media-review"],
   ["盘点报表", "日盘与综合", "#reports"],
   ["审计日志", "确认与覆盖", "#audit"],
+  ["猪场与栏舍", "基础资料维护", "#master-data"],
+  ["历史盘点", "按日查询与跨日均值", "#inventory-history"],
 ] as const;
 
 export function AdminShell({ children }: Readonly<{ children: ReactNode }>) {
@@ -37,7 +39,7 @@ export function AdminShell({ children }: Readonly<{ children: ReactNode }>) {
         </nav>
         <div className="sidebar-foot">
           <span className="status-dot" aria-hidden="true" />
-          <div><strong>开发环境</strong><small>推理未启用</small></div>
+          <div><strong>人工复核后入账</strong><small>确认记录保留审计</small></div>
         </div>
       </aside>
       <main className="main-column">

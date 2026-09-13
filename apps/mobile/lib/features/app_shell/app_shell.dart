@@ -1,20 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../gallery/gallery_screen.dart';
 import '../home/home_screen.dart';
 import '../profile/profile_screen.dart';
 import '../tasks/task_list_screen.dart';
 import '../workbench/count_workbench_screen.dart';
+import '../outbox/data/drift_outbox_repository.dart';
+import '../sync/outbox_background_sync.dart';
 
-class AppShell extends StatefulWidget {
+class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});
 
   @override
-  State<AppShell> createState() => _AppShellState();
+  ConsumerState<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends ConsumerState<AppShell> {
   int _index = 0;
+  final Set<int> _visited = {0};
 
   static const List<Widget> _pages = <Widget>[
     HomeScreen(),
@@ -25,12 +29,36 @@ class _AppShellState extends State<AppShell> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    // Re-arm a durable queue after process restart or an app upgrade, but only
+    // when a synchronizable row is actually present. The worker performs its
+    // own session check, so an empty queue never causes a token refresh.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final bool hasWork = await ref
+          .read(outboxRepositoryProvider)
+          .hasSynchronizableWork(now: DateTime.now().toUtc());
+      if (hasWork) await scheduleOutboxSync();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(child: IndexedStack(index: _index, children: _pages)),
+      body: SafeArea(
+          child: IndexedStack(
+              index: _index,
+              children: List.generate(
+                  _pages.length,
+                  (index) => _visited.contains(index)
+                      ? _pages[index]
+                      : const SizedBox.shrink()))),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
-        onDestinationSelected: (int value) => setState(() => _index = value),
+        onDestinationSelected: (int value) => setState(() {
+          _visited.add(value);
+          _index = value;
+        }),
         destinations: const <NavigationDestination>[
           NavigationDestination(
               icon: Icon(Icons.home_outlined),

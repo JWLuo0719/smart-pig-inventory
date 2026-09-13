@@ -13,7 +13,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
-@RestControllerAdvice(basePackageClasses = InventoryReviewController.class)
+@RestControllerAdvice(basePackageClasses = {InventoryReviewController.class,
+        com.smartfarm.inventory.masterdata.ui.MasterDataAdministrationController.class})
 public class InventoryProblemHandler {
     @ExceptionHandler(InventoryException.class)
     ResponseEntity<Map<String, Object>> inventoryException(InventoryException exception, HttpServletRequest request) {

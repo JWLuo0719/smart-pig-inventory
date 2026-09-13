@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:convert';
+import 'dart:math';
 
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
@@ -118,6 +120,49 @@ void main() {
         'synced');
   });
 
+  test(
+      'retries legacy negative dHash without reuploading or replacing evidence',
+      () async {
+    final original = jsonEncode({
+      'captureSetId': 'set-id',
+      'captureKind': 'single',
+      'penId': 'pen-id',
+      'assets': [
+        {
+          'assetId': 'asset-id',
+          'sha256': 'a' * 64,
+          'perceptualHash': '00000000000000-1'
+        }
+      ]
+    });
+    await database.update(database.outboxEntries).write(OutboxEntriesCompanion(
+        state: const Value('blocked'),
+        serverPackageId: const Value('server-package-id'),
+        manifestJson: Value(original)));
+    final repository = DriftOutboxRepository(database);
+    await repository.retryNow('client-package-id', now: now);
+    final gateway = _FakeUploadGateway(existingAssets: {'asset-id'});
+    final synchronizer = UploadPackageSynchronizer(
+        api: gateway,
+        repository: repository,
+        reconnect: () async => _auth(now),
+        clock: () => now);
+    expect(await synchronizer.syncNext(_auth(now), leaseOwner: 'foreground'),
+        UploadSyncOutcome.synced);
+    expect(gateway.createCalls, 0);
+    expect(gateway.uploadedAssetIds, isEmpty);
+    expect(gateway.manifestKey, 'key');
+    expect(gateway.sentManifest!['assets'][0]['perceptualHash'],
+        'ffffffffffffffff');
+    expect(gateway.sentManifest!['assets'][0]['sha256'], 'a' * 64);
+    expect(gateway.commitCalls, 1);
+    final entry = await database.select(database.outboxEntries).getSingle();
+    expect(entry.manifestJson, original);
+    expect(entry.serverPackageId, 'server-package-id');
+    final asset = await database.select(database.localMediaAssets).getSingle();
+    expect(await File(asset.materializedPath).readAsBytes(), [1, 2, 3]);
+  });
+
   test('does not delete evidence when the server rejects an upload', () async {
     final synchronizer = UploadPackageSynchronizer(
       api: _FakeUploadGateway(error: 422),
@@ -134,6 +179,27 @@ void main() {
         await database.select(database.localMediaAssets).getSingle();
     expect(outbox.state, 'blocked');
     expect(await File(asset.materializedPath).exists(), isTrue);
+  });
+
+  test('clears the creating lease after a socket failure', () async {
+    final synchronizer = UploadPackageSynchronizer(
+      api: _FakeUploadGateway(socketFailure: true),
+      repository: DriftOutboxRepository(database),
+      reconnect: () async => _auth(now),
+      clock: () => now,
+      random: _FixedRandom(),
+    );
+
+    expect(await synchronizer.syncNext(_auth(now), leaseOwner: 'worker'),
+        UploadSyncOutcome.retryScheduled);
+    final OutboxEntry outbox =
+        await database.select(database.outboxEntries).getSingle();
+    expect(outbox.state, 'retry_wait');
+    expect(outbox.leaseOwner, equals(null));
+    expect(outbox.leaseExpiresAt, equals(null));
+    expect(outbox.error, '网络或服务器暂时不可用，将自动重试');
+    expect(outbox.attemptCount, 1);
+    expect(outbox.nextAttemptAt?.toUtc(), now.add(const Duration(seconds: 30)));
   });
 }
 
@@ -232,16 +298,20 @@ class _FakeUploadGateway implements UploadRemoteGateway {
     this.error,
     this.existingAssets = const <String>{},
     this.unauthorizedOnce = false,
+    this.socketFailure = false,
   });
   final int? error;
   final Set<String> existingAssets;
   final bool unauthorizedOnce;
+  final bool socketFailure;
   final List<String> uploadedAssetIds = <String>[];
   final List<String> accessTokens = <String>[];
   bool _returnedUnauthorized = false;
   int createCalls = 0;
   int packageCalls = 0;
   int commitCalls = 0;
+  Map<String, dynamic>? sentManifest;
+  String? manifestKey;
   void _recordAndThrowIfRequested(String accessToken) {
     accessTokens.add(accessToken);
     if (unauthorizedOnce && !_returnedUnauthorized) {
@@ -270,6 +340,9 @@ class _FakeUploadGateway implements UploadRemoteGateway {
       required String penId,
       required DateTime businessDate,
       required String captureKind}) async {
+    if (socketFailure) {
+      throw const SocketException('LAN discovery failed');
+    }
     _recordAndThrowIfRequested(accessToken);
     createCalls++;
     return RemoteUploadPackage(
@@ -303,11 +376,15 @@ class _FakeUploadGateway implements UploadRemoteGateway {
 
   @override
   Future<void> putManifest(
-          {required String accessToken,
-          required String idempotencyKey,
-          required String serverPackageId,
-          required Map<String, dynamic> manifest}) async =>
-      _recordAndThrowIfRequested(accessToken);
+      {required String accessToken,
+      required String idempotencyKey,
+      required String serverPackageId,
+      required Map<String, dynamic> manifest}) async {
+    _recordAndThrowIfRequested(accessToken);
+    sentManifest = manifest;
+    manifestKey = idempotencyKey;
+  }
+
   @override
   Future<RemoteCommitResult> commit(
       {required String accessToken,
@@ -318,4 +395,15 @@ class _FakeUploadGateway implements UploadRemoteGateway {
     return const RemoteCommitResult(
         sessionId: 'session-id', inferenceJobId: 'job-id');
   }
+}
+
+class _FixedRandom implements Random {
+  @override
+  bool nextBool() => false;
+
+  @override
+  double nextDouble() => 0;
+
+  @override
+  int nextInt(int max) => 0;
 }

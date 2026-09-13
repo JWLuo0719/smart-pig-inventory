@@ -45,6 +45,8 @@ try {
         'APP_BOOTSTRAP_ADMIN_DISPLAY_NAME' = 'Local E2E Administrator'
         'APP_BOOTSTRAP_ORGANIZATION_CODE' = 'DEV-E2E'
         'APP_BOOTSTRAP_ORGANIZATION_NAME' = 'Local E2E Synthetic Farm'
+        'INFERENCE_CALLBACK_TOKEN' = (New-HexSecret -Bytes 32)
+        'INFERENCE_DISPATCHER_ENABLED' = 'true'
     }
 
     foreach ($name in $required.Keys) {
@@ -57,8 +59,8 @@ try {
             }
         }
 
-        if ($name -eq 'SECURITY_ENABLED') {
-            $replacement = "$name=true"
+        if ($name -in @('SECURITY_ENABLED', 'INFERENCE_DISPATCHER_ENABLED')) {
+            $replacement = "$name=$($required[$name])"
             if ($index -ge 0) {
                 $lines[$index] = $replacement
             }

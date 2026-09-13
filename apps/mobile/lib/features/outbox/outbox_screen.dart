@@ -54,11 +54,13 @@ class _OutboxScreenState extends ConsumerState<OutboxScreen> {
                 subtitle: Text(row.error ?? '采集包 ${row.packageId}'),
                 trailing: row.state == 'synced'
                     ? const Icon(Icons.check_circle_outline)
-                    : TextButton(
-                        onPressed:
-                            _syncing ? null : () => _retry(row.packageId),
-                        child: const Text('重试'),
-                      ),
+                    : row.state == 'abandoned'
+                        ? const Icon(Icons.pause_circle_outline)
+                        : TextButton(
+                            onPressed:
+                                _syncing ? null : () => _retry(row.packageId),
+                            child: const Text('重试'),
+                          ),
               );
             },
           );
@@ -116,6 +118,7 @@ class _OutboxScreenState extends ConsumerState<OutboxScreen> {
         'retry_wait' => '等待自动重试',
         'waiting_authentication' => '等待重新登录',
         'blocked' => '上传已阻止',
+        'abandoned' => '已停止重试（原图保留在本机）',
         'synced' => '已提交，等待处理',
         _ => '上传状态未知',
       };

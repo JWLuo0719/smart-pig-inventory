@@ -75,15 +75,21 @@ class RbacOrganizationIsolationIntegrationTest {
         assertThatThrownBy(() -> actor.assertCanConfirm(primaryOrganization)).isInstanceOf(InventoryException.class)
                 .hasMessageContaining("not available");
         assertThatThrownBy(() -> actor.assertCanOverrideDelete(primaryOrganization)).isInstanceOf(InventoryException.class);
+        assertThatThrownBy(() -> actor.assertCanManageInference(primaryOrganization)).isInstanceOf(InventoryException.class);
+        assertThatThrownBy(() -> actor.assertCanCorrect(primaryOrganization)).isInstanceOf(InventoryException.class);
 
         authenticate("e2e-reviewer", primaryOrganization, "REVIEWER");
         assertThatCode(() -> actor.assertCanConfirm(primaryOrganization)).doesNotThrowAnyException();
         assertThatThrownBy(() -> actor.assertCanOverrideDelete(primaryOrganization)).isInstanceOf(InventoryException.class);
+        assertThatThrownBy(() -> actor.assertCanManageInference(primaryOrganization)).isInstanceOf(InventoryException.class);
+        assertThatThrownBy(() -> actor.assertCanCorrect(primaryOrganization)).isInstanceOf(InventoryException.class);
 
         authenticate("e2e-farm-admin", primaryOrganization, "FARM_ADMIN");
         assertThatCode(() -> actor.assertCanConfirm(primaryOrganization)).doesNotThrowAnyException();
         assertThatCode(() -> actor.assertCanOverrideDelete(primaryOrganization)).doesNotThrowAnyException();
         assertThatCode(() -> actor.assertCanAudit(primaryOrganization)).doesNotThrowAnyException();
+        assertThatCode(() -> actor.assertCanManageInference(primaryOrganization)).doesNotThrowAnyException();
+        assertThatCode(() -> actor.assertCanCorrect(primaryOrganization)).doesNotThrowAnyException();
 
         authenticate("e2e-second-operator", secondOrganization, "OPERATOR");
         assertThatCode(() -> actor.assertCanView(secondOrganization)).doesNotThrowAnyException();

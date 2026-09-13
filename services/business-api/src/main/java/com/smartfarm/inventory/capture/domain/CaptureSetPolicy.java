@@ -25,7 +25,6 @@ public final class CaptureSetPolicy {
     }
 
     public static boolean requiresManualReview(CaptureKind kind, boolean validatedMultiViewProvider) {
-        return kind == CaptureKind.LEFT_CENTER_RIGHT && !validatedMultiViewProvider;
+        return kind == CaptureKind.VIDEO || kind == CaptureKind.LEFT_CENTER_RIGHT && !validatedMultiViewProvider;
     }
 }
-

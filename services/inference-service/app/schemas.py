@@ -15,7 +15,7 @@ class ModelIdentity(BaseModel):
 
 class MediaReference(BaseModel):
     asset_id: UUID
-    view_position: Literal["single", "left", "center", "right"]
+    view_position: Literal["single", "left", "center", "right", "video"]
     object_uri: str
     sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     roi: dict[str, Any] | None = None
@@ -26,7 +26,7 @@ class CountingJobRequest(BaseModel):
     correlation_id: str
     organization_id: UUID
     capture_set_id: UUID
-    capture_kind: Literal["single", "left_center_right"]
+    capture_kind: Literal["single", "left_center_right", "video"]
     media: list[MediaReference]
     requested_model: ModelIdentity
 

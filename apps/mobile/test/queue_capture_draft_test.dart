@@ -8,6 +8,7 @@ import 'package:smart_pig_inventory/core/storage/app_database.dart';
 import 'package:smart_pig_inventory/core/storage/media_materializer.dart';
 import 'package:smart_pig_inventory/features/capture/application/create_single_image_draft.dart';
 import 'package:smart_pig_inventory/features/capture/application/create_three_view_draft.dart';
+import 'package:smart_pig_inventory/features/capture/application/create_video_draft.dart';
 import 'package:smart_pig_inventory/features/capture/data/drift_capture_draft_repository.dart';
 import 'package:smart_pig_inventory/features/outbox/application/queue_capture_draft.dart';
 
@@ -84,6 +85,37 @@ void main() {
     );
     expect(restored?.state, 'queued');
     expect(restored?.media.single.assetId, draft.assetId);
+  });
+
+  test(
+      'video evidence persists original bytes and queues one idempotent manual capture',
+      () async {
+    final source = File(path.join(sandbox.path, 'synthetic.mp4'))
+      ..writeAsBytesSync([0, 1, 2, 3, 4]);
+    final draft =
+        await CreateVideoDraft(materializer: materializer, repository: drafts)
+            .execute(
+                source: source,
+                originalName: 'synthetic.mp4',
+                organizationId: 'organization-1',
+                penId: 'pen-1',
+                businessDate: DateTime(2026, 9, 12),
+                width: 640,
+                height: 480);
+    final queue = QueueCaptureDraft(database);
+    final first = await queue.execute(draft.draftId);
+    expect((await queue.execute(draft.draftId)).packageId, first.packageId);
+    final manifest = jsonDecode(
+        (await database.select(database.outboxEntries).getSingle())
+            .manifestJson) as Map<String, dynamic>;
+    expect(manifest['captureKind'], 'video');
+    final asset = (manifest['assets'] as List).single as Map<String, dynamic>;
+    expect(asset['viewPosition'], 'video');
+    expect(asset['mediaType'], 'video/mp4');
+    expect(asset['perceptualHash'], isNull);
+    expect(asset['roi'], isNull);
+    expect(
+        await draft.materializedFile.readAsBytes(), await source.readAsBytes());
   });
 
   test('rejects an incomplete three-view draft without creating an outbox',

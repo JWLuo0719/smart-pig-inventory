@@ -70,6 +70,18 @@ public class SecurityReviewActor {
         assertRole(organizationId, List.of("FARM_ADMIN", "SYSTEM_ADMIN"));
     }
 
+    public void assertCanManageInference(UUID organizationId) {
+        assertRole(organizationId, List.of("FARM_ADMIN", "SYSTEM_ADMIN"));
+    }
+
+    public void assertCanCorrect(UUID organizationId) {
+        assertRole(organizationId, List.of("FARM_ADMIN", "SYSTEM_ADMIN"));
+    }
+
+    public void assertCanManageMasterData(UUID organizationId) {
+        assertRole(organizationId, List.of("FARM_ADMIN", "SYSTEM_ADMIN"));
+    }
+
     private void assertRole(UUID organizationId, List<String> allowedRoles) {
         if (!securityEnabled) {
             return;

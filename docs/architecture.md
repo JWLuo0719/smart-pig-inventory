@@ -72,6 +72,8 @@ draft -> submitted -> processing -> confirmed
 - Manifest 和 Commit 在 MySQL 事务内做状态 CAS；任务使用事务 Outbox 投递，避免“业务已提交但任务丢失”。
 - 媒体对象先写临时键并校验，再由业务事务记录正式引用；孤儿对象由定时任务按安全窗口回收。
 - 日盘点更正使用版本和审计事件，不覆盖历史值。推理结果保存 `model_key + version + checksum + adapter_version + source`。
+- 管理员重试失败推理时创建同一 `root_job_id` 下的新 `inference_job`，以 `retry_of_job_id + retry_sequence` 构成不可变线性谱系；原失败任务、失败码、媒体与请求模型身份不得覆盖。同一幂等键与规范化理由只重放同一后继任务，晚到回调不得把已确认会话降级回待复核。
+- PDF/XLSX 报表从同一组织隔离、日期受限的 confirmed-only 快照生成；两种格式不得各自查询形成口径漂移，也不得携带候选/失败/未确认、模型身份、媒体或内部对象地址。当前容量门禁为 366 天与 10,000 条；PDF 在容器内嵌入中文与拉丁字体，XLSX 外部文本必须保持字符串类型以防公式注入。
 - Redis/Celery 只作为任务传输，不是业务事实来源；重放任务必须幂等。
 
 ## 6. 安全、隐私与审计

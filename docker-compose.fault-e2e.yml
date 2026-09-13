@@ -1,0 +1,48 @@
+services:
+  inference-fault-runner:
+    image: python:3.12-slim
+    command: python /test-support/fault_runner.py
+    environment:
+      FAULT_CONTROL_TOKEN: local-e2e-only
+      FAULT_INITIAL_MODE: not_ready
+      FAULT_DELAY_SECONDS: ${FAULT_DELAY_SECONDS:-5}
+      MODEL_KEY: ${MODEL_KEY:-pending-license-review}
+      MODEL_VERSION: ${MODEL_VERSION:-unverified}
+      MODEL_CHECKSUM: ${MODEL_CHECKSUM:-unverified}
+      MODEL_ADAPTER_VERSION: ${MODEL_ADAPTER_VERSION:-http-v1}
+    volumes:
+      - ./test-support/inference-fault-runner:/test-support:ro
+    ports:
+      - "127.0.0.1:${FAULT_RUNNER_CONTROL_PORT:-19090}:9000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9000/health/live')"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  inference-api:
+    environment:
+      COUNTING_PROVIDER: research-http-yolo
+      MODEL_RESEARCH_ENABLED: "true"
+      MODEL_APPROVED: "false"
+      YOLO_HTTP_ENDPOINT: http://inference-fault-runner:9000/v1/count
+      YOLO_HTTP_READY_ENDPOINT: http://inference-fault-runner:9000/health/ready
+      YOLO_HTTP_TIMEOUT_SECONDS: ${FAULT_PROVIDER_TIMEOUT_SECONDS:-2}
+      YOLO_HTTP_CONNECT_TIMEOUT_SECONDS: 1
+    ports:
+      - "127.0.0.1:${FAULT_INFERENCE_PORT:-18000}:8000"
+    healthcheck:
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 2s
+
+  inference-worker:
+    environment:
+      COUNTING_PROVIDER: research-http-yolo
+      MODEL_RESEARCH_ENABLED: "true"
+      MODEL_APPROVED: "false"
+      YOLO_HTTP_ENDPOINT: http://inference-fault-runner:9000/v1/count
+      YOLO_HTTP_READY_ENDPOINT: http://inference-fault-runner:9000/health/ready
+      YOLO_HTTP_TIMEOUT_SECONDS: ${FAULT_PROVIDER_TIMEOUT_SECONDS:-2}
+      YOLO_HTTP_CONNECT_TIMEOUT_SECONDS: 1

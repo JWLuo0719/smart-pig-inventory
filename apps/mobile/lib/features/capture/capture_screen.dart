@@ -5,8 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
+import 'package:video_player/video_player.dart';
+import '../../shared/widgets/local_video_player.dart';
+import 'application/create_video_draft.dart';
 
 import '../../core/auth/auth_controller.dart';
+import '../../core/storage/app_database.dart';
 import '../../core/storage/database_provider.dart';
 import '../../core/storage/image_metadata_reader.dart';
 import '../../core/storage/media_materializer.dart';
@@ -14,6 +18,7 @@ import '../../core/storage/platform_image_metadata_reader.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/widgets/network_status_banner.dart';
 import 'application/add_capture_view.dart';
+import 'application/abandon_blocked_capture_draft.dart';
 import 'application/create_single_image_draft.dart';
 import 'application/create_three_view_draft.dart';
 import 'data/drift_capture_draft_repository.dart';
@@ -39,10 +44,13 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
   final List<_LocalEvidence> _savedEvidence = <_LocalEvidence>[];
   CreatedCaptureDraft? _savedDraft;
   bool _threeView = false;
+  bool _video = false;
   bool _saving = false;
   bool _restoring = true;
   bool _queueing = false;
   bool _isQueued = false;
+  bool _canAbandonBlockedDraft = false;
+  bool _abandoning = false;
   String? _error;
 
   bool get _threeViewComplete => _threeView && _savedPositions.length == 3;
@@ -93,8 +101,15 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
         });
         return;
       }
+      final OutboxEntry? outbox = await (ref.read(appDatabaseProvider).select(
+                ref.read(appDatabaseProvider).outboxEntries,
+              )
+            ..where((OutboxEntries entry) =>
+                entry.draftId.equals(snapshot.draftId)))
+          .getSingleOrNull();
       setState(() {
         _threeView = snapshot.captureKind == 'left_center_right';
+        _video = snapshot.captureKind == 'video';
         _savedDraft = CreatedCaptureDraft(
           draftId: snapshot.draftId,
           captureSetId: snapshot.captureSetId,
@@ -109,6 +124,8 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
           ..addAll(snapshot.media.map((media) => _LocalEvidence(
               position: media.position, file: File(media.materializedPath))));
         _isQueued = snapshot.state == 'queued';
+        _canAbandonBlockedDraft =
+            outbox?.state == 'blocked' && outbox?.sessionId == null;
       });
     } catch (_) {
       if (mounted) {
@@ -136,8 +153,10 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
   Future<void> _pickAndSave(ImageSource source) async {
     if (!_canAddPhoto) return;
     try {
-      final XFile? picked =
-          await _picker.pickImage(source: source, imageQuality: 92);
+      final XFile? picked = _video
+          ? await _picker.pickVideo(
+              source: source, maxDuration: const Duration(minutes: 2))
+          : await _picker.pickImage(source: source, imageQuality: 92);
       if (picked != null) await _savePicked(picked);
     } catch (_) {
       if (mounted) {
@@ -160,6 +179,10 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
 
     try {
       final File sourceFile = File(picked.path);
+      if (_video || picked.name.toLowerCase().endsWith('.mp4')) {
+        await _saveVideo(sourceFile, picked.name);
+        return;
+      }
       final ImageMetadata metadata = await _metadataReader.read(sourceFile);
       final Directory documents = await getApplicationDocumentsDirectory();
       final DriftCaptureDraftRepository repository =
@@ -200,6 +223,8 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
               _LocalEvidence(position: 'single', file: saved.materializedFile));
         });
       }
+    } on ArgumentError catch (error) {
+      if (mounted) setState(() => _error = error.message.toString());
     } on UnsupportedImageFormatException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } on FileSystemException catch (_) {
@@ -220,6 +245,44 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
       }
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _saveVideo(File source, String name) async {
+    if (!name.toLowerCase().endsWith('.mp4') ||
+        await source.length() > 30 * 1024 * 1024) {
+      throw ArgumentError('视频需为 MP4，且不超过 30 MB。');
+    }
+    final player = VideoPlayerController.file(source);
+    try {
+      await player.initialize();
+      if (player.value.duration > const Duration(minutes: 2) ||
+          player.value.duration <= Duration.zero) {
+        throw ArgumentError('视频时长需大于 0 且不超过 2 分钟。');
+      }
+      final saved = await CreateVideoDraft(
+        materializer:
+            MediaMaterializer(await getApplicationDocumentsDirectory()),
+        repository: DriftCaptureDraftRepository(ref.read(appDatabaseProvider)),
+      ).execute(
+          source: source,
+          originalName: name,
+          organizationId: widget.target.organizationId,
+          penId: widget.target.penId,
+          businessDate: widget.target.businessDate,
+          width: player.value.size.width.round(),
+          height: player.value.size.height.round());
+      if (!mounted) return;
+      setState(() {
+        _video = true;
+        _threeView = false;
+        _savedDraft = saved;
+        _savedPositions.add('video');
+        _savedEvidence.add(
+            _LocalEvidence(position: 'video', file: saved.materializedFile));
+      });
+    } finally {
+      await player.dispose();
     }
   }
 
@@ -249,6 +312,49 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
       }
     } finally {
       if (mounted) setState(() => _queueing = false);
+    }
+  }
+
+  Future<void> _abandonBlockedDraft() async {
+    final CreatedCaptureDraft? draft = _savedDraft;
+    if (draft == null || !_canAbandonBlockedDraft || _abandoning) return;
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('放弃失败草稿并重新采集？'),
+        content: const Text(
+          '这只会停止该失败草稿的重试，让本栏舍可以重新拍摄。手机原图会保留，服务器中已确认或已锁定的证据不会被修改。',
+        ),
+        actions: <Widget>[
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消')),
+          FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('停止重试')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _abandoning = true);
+    try {
+      await AbandonBlockedCaptureDraft(ref.read(appDatabaseProvider))
+          .execute(draft.draftId);
+      if (!mounted) return;
+      setState(() {
+        _savedDraft = null;
+        _savedPositions.clear();
+        _savedEvidence.clear();
+        _isQueued = false;
+        _canAbandonBlockedDraft = false;
+        _error = '失败草稿已停止重试。原图仍保留在本机，可以拍摄一张新图片。';
+      });
+    } on StateError catch (_) {
+      if (mounted) {
+        setState(() => _error = '该草稿已被提交，不能在本机放弃。请刷新上传队列。');
+      }
+    } finally {
+      if (mounted) setState(() => _abandoning = false);
     }
   }
 
@@ -336,9 +442,10 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
               value: _threeView,
-              onChanged: savedDraft == null && !_saving && !_restoring
-                  ? (bool value) => setState(() => _threeView = value)
-                  : null,
+              onChanged:
+                  savedDraft == null && !_saving && !_restoring && !_video
+                      ? (bool value) => setState(() => _threeView = value)
+                      : null,
               title: const Text('左 / 中 / 右三图模式',
                   style: TextStyle(fontWeight: FontWeight.w700)),
               subtitle: Text(
@@ -349,7 +456,23 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
             ),
           ),
           const SizedBox(height: 18),
-          Text(_threeView ? '左 / 中 / 右采集' : '单图采集',
+          SwitchListTile(
+            title: const Text('视频证据模式'),
+            subtitle: const Text('MP4，最多 2 分钟 / 30 MB；上传后人工复核，不生成自动计数。'),
+            value: _video,
+            onChanged: savedDraft == null && !_saving && !_restoring
+                ? (value) => setState(() {
+                      _video = value;
+                      if (value) _threeView = false;
+                    })
+                : null,
+          ),
+          Text(
+              _video
+                  ? '视频采集'
+                  : _threeView
+                      ? '左 / 中 / 右采集'
+                      : '单图采集',
               style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 4),
           Text(
@@ -361,7 +484,9 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
                         ? '采集组和待上传状态已恢复，尚未生成盘点数量。'
                         : _threeViewComplete
                             ? '三张照片已保存为同一采集组，等待加入上传队列。'
-                            : '已保存 ${_savedPositions.length}/3 张；当前需要：$_nextPositionLabel。',
+                            : !_threeView
+                                ? '媒体已保存，等待加入上传队列。'
+                                : '已保存 ${_savedPositions.length}/3 张；当前需要：$_nextPositionLabel。',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 12),
@@ -395,6 +520,14 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
                       : '已保存到待上传'),
             ),
           ],
+          if (_canAbandonBlockedDraft) ...<Widget>[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _abandoning ? null : _abandonBlockedDraft,
+              icon: const Icon(Icons.restart_alt_outlined),
+              label: Text(_abandoning ? '正在停止重试…' : '放弃失败草稿并重新采集'),
+            ),
+          ],
           if (_error != null) ...<Widget>[
             const SizedBox(height: 12),
             _CaptureError(message: _error!),
@@ -412,10 +545,12 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
                 : const Icon(Icons.camera_alt_outlined),
             label: Text(
               _saving
-                  ? '正在安全保存照片…'
+                  ? '正在安全保存媒体…'
                   : _threeViewComplete
                       ? '三张图片已安全保存'
-                      : '拍摄$_nextPositionLabel并保存',
+                      : _video
+                          ? '录制视频并保存'
+                          : '拍摄$_nextPositionLabel并保存',
             ),
           ),
           const SizedBox(height: 10),
@@ -510,6 +645,7 @@ class _EvidenceThumbnail extends StatelessWidget {
       'left' => '左图',
       'center' => '中图',
       'right' => '右图',
+      'video' => '视频',
       _ => '单图',
     };
   }
@@ -538,8 +674,12 @@ class _EvidenceThumbnail extends StatelessWidget {
                   ]),
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxHeight: 520),
-                    child: InteractiveViewer(
-                        child: Image.file(item.file, fit: BoxFit.contain)),
+                    child: item.position == 'video'
+                        ? SizedBox(
+                            height: 360,
+                            child: LocalVideoPlayer(file: item.file))
+                        : InteractiveViewer(
+                            child: Image.file(item.file, fit: BoxFit.contain)),
                   ),
                 ]),
               ),
@@ -553,18 +693,23 @@ class _EvidenceThumbnail extends StatelessWidget {
                 children: <Widget>[
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.file(
-                      item.file,
-                      width: 92,
-                      height: 92,
-                      cacheWidth: 240,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const SizedBox(
-                        width: 92,
-                        height: 92,
-                        child: Icon(Icons.broken_image_outlined),
-                      ),
-                    ),
+                    child: item.position == 'video'
+                        ? const SizedBox(
+                            width: 92,
+                            height: 92,
+                            child: Icon(Icons.play_circle_outline, size: 48))
+                        : Image.file(
+                            item.file,
+                            width: 92,
+                            height: 92,
+                            cacheWidth: 240,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const SizedBox(
+                              width: 92,
+                              height: 92,
+                              child: Icon(Icons.broken_image_outlined),
+                            ),
+                          ),
                   ),
                   const SizedBox(height: 4),
                   Text(_label,

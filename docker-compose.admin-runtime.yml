@@ -1,0 +1,8 @@
+# Test-only override. Never combine with the P0 project or research runner.
+services:
+  business-api:
+    environment:
+      ACCESS_TOKEN_TTL: PT5S
+  gateway:
+    ports: !override
+      - "127.0.0.1:8093:80"

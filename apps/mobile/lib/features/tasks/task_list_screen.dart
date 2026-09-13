@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/auth/auth_controller.dart';
+import '../../core/auth/authorized_retry.dart';
+import '../inventory/inventory_reports_screen.dart';
 import '../../core/network/inventory_api.dart';
 import '../../shared/widgets/network_status_banner.dart';
 import '../../shared/widgets/pen_plate.dart';
@@ -16,7 +18,7 @@ class TaskListScreen extends ConsumerStatefulWidget {
 }
 
 class _TaskListScreenState extends ConsumerState<TaskListScreen> {
-  final DateTime _businessDate = DateUtils.dateOnly(DateTime.now());
+  DateTime _businessDate = DateUtils.dateOnly(DateTime.now());
   List<RemoteInventoryTask>? _tasks;
   String? _error;
   bool _loading = true;
@@ -41,12 +43,13 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
       _error = null;
     });
     try {
-      final tasks = await InventoryRemoteApi(
-        baseUrl: ref.read(apiBaseUrlProvider),
-      ).tasks(
-        accessToken: auth.session.accessToken,
-        businessDate: _businessDate,
-      );
+      final tasks = await retryOnceAfterUnauthorized(
+          initialAuth: auth,
+          reconnect: () =>
+              ref.read(authControllerProvider.notifier).reconnect(),
+          request: (token) =>
+              InventoryRemoteApi(baseUrl: ref.read(apiBaseUrlProvider))
+                  .tasks(accessToken: token, businessDate: _businessDate));
       if (mounted) setState(() => _tasks = tasks);
     } on DioException catch (error) {
       if (mounted) setState(() => _error = _safeError(error));
@@ -65,6 +68,28 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
         children: <Widget>[
           Text('盘点任务', style: Theme.of(context).textTheme.headlineSmall),
+          Wrap(spacing: 8, children: [
+            TextButton(
+                onPressed: _loading
+                    ? null
+                    : () async {
+                        final selected = await showDatePicker(
+                            context: context,
+                            initialDate: _businessDate,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime.now());
+                        if (selected != null && mounted) {
+                          setState(() => _businessDate = selected);
+                          await _load();
+                        }
+                      },
+                child: const Text('选择盘点日期')),
+            TextButton(
+                onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                        builder: (_) => const InventoryReportsScreen())),
+                child: const Text('日报与综合盘点')),
+          ]),
           const SizedBox(height: 4),
           Text('$date · 只显示当前组织已启用栏舍的真实任务状态。',
               style: Theme.of(context).textTheme.bodyMedium),
@@ -83,7 +108,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
           else if (_tasks!.isEmpty)
             const Padding(
               padding: EdgeInsets.only(top: 48),
-              child: Center(child: Text('今天没有启用栏舍任务。')),
+              child: Center(child: Text('所选日期没有启用栏舍任务。')),
             )
           else
             ..._tasks!.map(_taskCard),

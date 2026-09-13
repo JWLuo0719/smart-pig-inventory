@@ -46,8 +46,21 @@ public class InferenceResultService {
         repository.insertResult(jobId, result);
         repository.insertReceipt(jobId, fingerprint);
         repository.finishJob(jobId, result);
-        repository.markSessionForReview(job.sessionId(), result.isSucceeded() ? result.count() : null);
+        repository.markSessionForReview(job.sessionId(), candidateCount(job.captureKind(), result));
         return CallbackOutcome.CREATED;
+    }
+
+    private Integer candidateCount(String captureKind, InferenceCallbackResult result) {
+        if (result.isSucceeded()) {
+            return result.count();
+        }
+        if ("single".equals(captureKind)
+                && result.isReviewRequired()
+                && result.detections() != null
+                && !result.detections().isEmpty()) {
+            return result.detections().size();
+        }
+        return null;
     }
 
     private void validate(InferenceCallbackResult result) {
@@ -63,6 +76,9 @@ public class InferenceResultService {
     }
 
     private InferenceCallbackResult normalizeForCaptureKind(String captureKind, InferenceCallbackResult result) {
+        if ("video".equals(captureKind) && !result.isFailed()) {
+            return result.requireManualReview("Video evidence requires manual review; automatic video counting is not enabled");
+        }
         if ("left_center_right".equals(captureKind) && result.isSucceeded() && !multiViewAutoCountEnabled) {
             return result.requireManualReview("Multi-view inference requires a validated multi-view provider before any automatic count is used");
         }

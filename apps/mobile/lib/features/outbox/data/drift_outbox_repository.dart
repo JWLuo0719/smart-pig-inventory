@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/storage/app_database.dart';
+import '../../../core/media/perceptual_hasher.dart';
 import '../../../core/storage/database_provider.dart';
 
 final outboxRepositoryProvider = Provider<DriftOutboxRepository>(
@@ -21,8 +22,18 @@ class UploadWork {
   final CaptureDraft draft;
   final List<LocalMediaAsset> assets;
 
-  Map<String, dynamic> get manifest =>
-      jsonDecode(entry.manifestJson) as Map<String, dynamic>;
+  Map<String, dynamic> get manifest {
+    final result = jsonDecode(entry.manifestJson) as Map<String, dynamic>;
+    // Keep persisted evidence and idempotency identities intact. Old negative
+    // dHashes were rejected before storage; repair only that wire encoding.
+    for (final asset in result['assets'] as List<dynamic>) {
+      final value = asset['perceptualHash'];
+      if (value is String) {
+        asset['perceptualHash'] = PerceptualHasher.normalizeLegacyHash(value);
+      }
+    }
+    return result;
+  }
 }
 
 class DriftOutboxRepository {
@@ -30,6 +41,28 @@ class DriftOutboxRepository {
   final AppDatabase _database;
 
   Stream<List<OutboxEntry>> watch() => _database.watchOutbox();
+
+  /// Avoid refreshing credentials from a background worker that has no work.
+  /// This matters when the foreground isolate is restoring a rotated session.
+  Future<bool> hasSynchronizableWork({required DateTime now}) async {
+    final OutboxEntry? entry = await (_database.select(_database.outboxEntries)
+          ..where((OutboxEntries row) =>
+              row.state.isIn(<String>[
+                'queued',
+                'retry_wait',
+                'creating_package',
+                'uploading_blobs',
+                'putting_manifest',
+                'committing',
+              ]) &
+              (row.nextAttemptAt.isNull() |
+                  row.nextAttemptAt.isSmallerOrEqualValue(now)) &
+              (row.leaseExpiresAt.isNull() |
+                  row.leaseExpiresAt.isSmallerOrEqualValue(now)))
+          ..limit(1))
+        .getSingleOrNull();
+    return entry != null;
+  }
 
   Future<UploadWork?> acquireNext({
     required String owner,
@@ -221,18 +254,17 @@ class DriftOutboxRepository {
   Future<void> _update(String packageId, OutboxEntriesCompanion values,
       {bool incrementAttempts = false}) async {
     if (incrementAttempts) {
-      await _database.customStatement(
-        'UPDATE outbox_entries SET state = ?, error = ?, next_attempt_at = ?, '
-        'lease_owner = NULL, lease_expires_at = NULL, updated_at = ?, '
-        'attempt_count = attempt_count + 1 WHERE package_id = ?',
-        <Object?>[
-          values.state.value,
-          values.error.value,
-          values.nextAttemptAt.value,
-          values.updatedAt.value,
-          packageId,
-        ],
-      );
+      await _database.transaction(() async {
+        final OutboxEntry entry = await (_database
+                .select(_database.outboxEntries)
+              ..where((OutboxEntries row) => row.packageId.equals(packageId)))
+            .getSingle();
+        await (_database.update(_database.outboxEntries)
+              ..where((OutboxEntries row) => row.packageId.equals(packageId)))
+            .write(values.copyWith(
+          attemptCount: Value<int>(entry.attemptCount + 1),
+        ));
+      });
       return;
     }
     await (_database.update(_database.outboxEntries)

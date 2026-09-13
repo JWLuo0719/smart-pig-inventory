@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'api_client.dart';
 
 abstract interface class InventoryRemoteGateway {
   Future<List<RemoteInventoryTask>> tasks({
@@ -22,7 +23,7 @@ abstract interface class InventoryRemoteGateway {
 
 class InventoryRemoteApi implements InventoryRemoteGateway {
   InventoryRemoteApi({required String baseUrl, Dio? dio})
-      : _dio = dio ?? Dio(BaseOptions(baseUrl: baseUrl));
+      : _dio = dio ?? createApiDio(BaseOptions(baseUrl: baseUrl));
 
   final Dio _dio;
 
@@ -128,20 +129,32 @@ class RemoteInventorySession {
     required this.penId,
     required this.businessDate,
     required this.status,
+    required this.version,
+    required this.supersedesSessionId,
+    required this.evidenceSessionId,
     required this.count,
     required this.rawModelCount,
     required this.inferenceSource,
     required this.warnings,
+    required this.inferenceStatus,
+    required this.failureCode,
+    required this.failureMessage,
   });
 
   final String id;
   final String penId;
   final String businessDate;
   final String status;
+  final int version;
+  final String? supersedesSessionId;
+  final String? evidenceSessionId;
   final int? count;
   final int? rawModelCount;
   final String? inferenceSource;
   final List<String> warnings;
+  final String? inferenceStatus;
+  final String? failureCode;
+  final String? failureMessage;
 
   bool get requiresReview => status == 'review_required';
   bool get confirmed => status == 'confirmed';
@@ -152,10 +165,16 @@ class RemoteInventorySession {
         penId: body['penId'] as String,
         businessDate: body['businessDate'] as String,
         status: body['status'] as String,
+        version: body['version'] as int? ?? 1,
+        supersedesSessionId: body['supersedesSessionId'] as String?,
+        evidenceSessionId: body['evidenceSessionId'] as String?,
         count: body['count'] as int?,
         rawModelCount: body['rawModelCount'] as int?,
         inferenceSource: body['inferenceSource'] as String?,
         warnings: (body['warnings'] as List<dynamic>? ?? const <dynamic>[])
             .cast<String>(),
+        inferenceStatus: body['inferenceStatus'] as String?,
+        failureCode: body['failureCode'] as String?,
+        failureMessage: body['failureMessage'] as String?,
       );
 }

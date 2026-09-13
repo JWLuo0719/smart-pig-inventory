@@ -19,7 +19,6 @@ import 'features/sync/outbox_background_sync.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Workmanager().initialize(outboxCallbackDispatcher);
-  await scheduleOutboxSync();
   final database = await AppDatabase.open();
   runApp(ProviderScope(
       overrides: [appDatabaseProvider.overrideWithValue(database)],

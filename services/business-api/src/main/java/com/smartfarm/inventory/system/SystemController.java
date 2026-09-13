@@ -25,7 +25,7 @@ public class SystemController {
         Map<String, Object> capabilities = Map.of(
                 "product", "smart-pig-inventory",
                 "api_version", "v1",
-                "capture_kinds", List.of("single", "left_center_right"),
+                "capture_kinds", List.of("single", "left_center_right", "video"),
                 "counting_provider", countingProvider.key(),
                 "counting_available", !"unavailable".equals(countingProvider.key()),
                 "video_counting", false,

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'api_client.dart';
 
 abstract interface class UploadRemoteGateway {
   Future<RemoteUploadPackage> createPackage({
@@ -38,7 +39,7 @@ abstract interface class UploadRemoteGateway {
 class UploadRemoteApi implements UploadRemoteGateway {
   UploadRemoteApi({required String baseUrl, Dio? dio})
       : _dio = dio ??
-            Dio(BaseOptions(
+            createApiDio(BaseOptions(
               baseUrl: baseUrl,
               connectTimeout: const Duration(seconds: 15),
               receiveTimeout: const Duration(seconds: 30),

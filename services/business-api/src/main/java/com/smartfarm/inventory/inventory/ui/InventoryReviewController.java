@@ -2,6 +2,8 @@ package com.smartfarm.inventory.inventory.ui;
 
 import com.smartfarm.inventory.common.CorrelationIdFilter;
 import com.smartfarm.inventory.inventory.application.InventoryReviewService;
+import com.smartfarm.inventory.inventory.application.InventoryReportExportService;
+import com.smartfarm.inventory.inventory.application.InventoryReportExportService.ExportDocument;
 import com.smartfarm.inventory.inventory.application.InventoryReviewService.AggregateInventoryReport;
 import com.smartfarm.inventory.inventory.application.InventoryReviewService.DailyInventoryRecord;
 import com.smartfarm.inventory.inventory.application.InventoryReviewService.InventorySessionView;
@@ -14,10 +16,13 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.MediaType;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -35,9 +40,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1")
 public class InventoryReviewController {
     private final InventoryReviewService service;
+    private final InventoryReportExportService reportExportService;
 
-    public InventoryReviewController(InventoryReviewService service) {
+    public InventoryReviewController(InventoryReviewService service, InventoryReportExportService reportExportService) {
         this.service = service;
+        this.reportExportService = reportExportService;
     }
 
     @GetMapping("/review/near-duplicates")
@@ -63,6 +70,21 @@ public class InventoryReviewController {
         return service.aggregateReport(penId, from, to);
     }
 
+    @GetMapping("/inventory-reports/exports/{format}")
+    ResponseEntity<byte[]> exportReport(
+            @PathVariable String format,
+            @RequestParam LocalDate from,
+            @RequestParam LocalDate to) {
+        ExportDocument document = reportExportService.export(format, from, to);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(document.contentType()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(document.filename(), StandardCharsets.UTF_8).build().toString())
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .contentLength(document.bytes().length)
+                .body(document.bytes());
+    }
+
     @GetMapping("/inventory-sessions/{sessionId}")
     InventorySessionView session(@PathVariable UUID sessionId) {
         return service.session(sessionId);
@@ -80,6 +102,13 @@ public class InventoryReviewController {
                 .contentLength(content.byteSize()).body(new InputStreamResource(content.stream()));
     }
 
+    @GetMapping("/media-assets")
+    List<com.smartfarm.inventory.inventory.infrastructure.JdbcInventoryReviewRepository.MediaLibraryRow> mediaLibrary(
+            @RequestParam LocalDate businessDate, @RequestParam(required = false) UUID penId,
+            @RequestParam(defaultValue = "0") int offset, @RequestParam(defaultValue = "50") int limit) {
+        return service.mediaLibrary(businessDate, penId, offset, limit);
+    }
+
     @GetMapping("/audit-events")
     List<InventoryReviewService.AuditEventView> auditEvents(
             @RequestParam(required = false) Instant before,
@@ -94,6 +123,16 @@ public class InventoryReviewController {
             @Valid @RequestBody ConfirmInventoryRequest request,
             HttpServletRequest servletRequest) {
         return service.confirm(sessionId, request.confirmedCount(), request.reason(), idempotencyKey,
+                correlationId(servletRequest));
+    }
+
+    @PostMapping("/inventory-sessions/{sessionId}/corrections")
+    InventorySessionView correct(
+            @PathVariable UUID sessionId,
+            @RequestHeader("X-Idempotency-Key") UUID idempotencyKey,
+            @Valid @RequestBody CorrectInventoryRequest request,
+            HttpServletRequest servletRequest) {
+        return service.correct(sessionId, request.correctedCount(), request.reason(), idempotencyKey,
                 correlationId(servletRequest));
     }
 
@@ -131,6 +170,9 @@ public class InventoryReviewController {
     }
 
     record ConfirmInventoryRequest(@Min(0) int confirmedCount, @Size(min = 8, max = 500) String reason) {
+    }
+
+    record CorrectInventoryRequest(@Min(0) int correctedCount, @Size(min = 8, max = 500) String reason) {
     }
 
     record OverrideDeleteRequest(@Size(min = 8, max = 500) String reason) {

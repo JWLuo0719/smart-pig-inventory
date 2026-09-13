@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Smart Pig Inventory Business API
-  version: 0.4.0
+  version: 0.8.0
   description: >-
     路线 B+ 的业务合同基线。所有写操作接受 X-Idempotency-Key，所有时间使用 ISO 8601；
     离线采集必须完成 package/blob/manifest/commit 后才创建正式推理任务。ROI 使用完成
@@ -17,8 +17,43 @@ tags:
   - {name: Upload}
   - {name: Inventory}
   - {name: Review}
+  - {name: InferenceOperations}
   - {name: InternalInference}
 paths:
+  /media-assets:
+    get:
+      tags: [Inventory]
+      summary: 按业务日期及可选栏舍分页查询当前组织媒体库
+      parameters:
+        - {name: businessDate, in: query, required: true, schema: {type: string, format: date}}
+        - {name: penId, in: query, schema: {type: string, format: uuid}}
+        - {name: offset, in: query, schema: {type: integer, minimum: 0, maximum: 10000, default: 0}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 50}}
+      responses:
+        '200': {description: 日期媒体列表，包含软删除标记但无内部地址, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/MediaLibraryEntry'}}}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /master-data/{entityType}/{entityId}:
+    put:
+      tags: [MasterData]
+      summary: 管理员维护当前猪场或新增编辑栋舍栏舍
+      description: 组织由部署初始化；只编辑当前组织。栋舍/栏舍的父级不可更换。expectedVersion 为 0 表示新增；编辑必须匹配版本。使用启停保留历史，禁用父级前须禁用其子级。同键同载荷重放同响应，异载荷返回 409；变更写入审计和递增同步版本。
+      parameters:
+        - {name: entityType, in: path, required: true, schema: {type: string, enum: [organizations, buildings, pens]}}
+        - {name: entityId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MaintainMasterData'}
+      responses:
+        '200': {description: 已保存或幂等重放, content: {application/json: {schema: {$ref: '#/components/schemas/NamedEntity'}}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
   /system/capabilities:
     get:
       tags: [System]
@@ -276,6 +311,38 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/AggregateInventoryReport'}
+  /inventory-reports/exports/{format}:
+    get:
+      tags: [Inventory]
+      summary: 下载当前组织指定日期范围内仅含已确认盘点的 PDF 或 Excel 报表
+      operationId: exportConfirmedInventoryReport
+      parameters:
+        - name: format
+          in: path
+          required: true
+          schema: {type: string, enum: [pdf, xlsx]}
+        - name: from
+          in: query
+          required: true
+          schema: {type: string, format: date}
+        - name: to
+          in: query
+          required: true
+          schema: {type: string, format: date}
+      responses:
+        '200':
+          description: 日期范围最多 366 天、最多 10,000 条；文件不包含候选、失败、模型或媒体内部信息
+          headers:
+            Content-Disposition:
+              schema: {type: string}
+              description: 使用固定日期文件名的附件响应
+          content:
+            application/pdf:
+              schema: {type: string, format: binary}
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: {type: string, format: binary}
+        '422':
+          description: 日期顺序、范围或记录数超过安全边界
   /review/near-duplicates:
     get:
       tags: [Review]
@@ -393,6 +460,8 @@ paths:
       description: >-
         仅允许受信任的推理服务身份调用。相同任务和相同结果重复回传视为成功；
         相同任务回传不同最终结果返回 409。Spring 数据库是任务状态的唯一业务事实来源。
+        X-Inference-Service-Key 始终必需，与终端用户登录认证开关独立；即使本地关闭
+        用户认证也不得省略。未配置、缺失或不匹配的服务密钥返回 401，用户 JWT 不可替代。
       operationId: putInferenceJobResult
       security:
         - inferenceServiceKey: []
@@ -409,6 +478,86 @@ paths:
         '204': {description: 结果首次处理成功}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /inventory-sessions/{sessionId}/corrections:
+    post:
+      tags: [Review]
+      summary: 管理员为已确认盘点创建不可变更正版本
+      description: |
+        仅 FARM_ADMIN 或 SYSTEM_ADMIN 可用。新版本沿用原始证据引用并成为同栏舍同业务日期
+        唯一的 confirmed 版本；被更正版本转为 superseded，原确认值、媒体和审计历史保持不变。
+      operationId: correctInventorySession
+      parameters:
+        - {$ref: '#/components/parameters/SessionId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CorrectInventory'}
+      responses:
+        '200':
+          description: 已创建更正版本，或以相同幂等键和相同意图重放已有版本
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InventorySession'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /inference-jobs/failed:
+    get:
+      tags: [InferenceOperations]
+      summary: 查询当前组织的失败推理任务
+      description: >-
+        仅猪场管理员或系统管理员可见。按任务创建时间倒序返回不可变的失败尝试、
+        原始失败码、请求模型身份和重试链；跨组织任务表现为不存在。
+      operationId: listFailedInferenceJobs
+      parameters:
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+        - name: before
+          in: query
+          description: 上一页末项的 createdAt；省略时从最新失败任务开始
+          schema: {type: string, format: date-time}
+      responses:
+        '200':
+          description: 当前组织范围内的失败推理尝试
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/FailedInferenceJob'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /inference-jobs/{jobId}/retries:
+    post:
+      tags: [InferenceOperations]
+      summary: 管理员为失败推理任务创建下一次幂等尝试
+      description: >-
+        原任务、原始失败结果、媒体和模型身份保持不变。首次请求创建具有新 jobId 的后继任务及事务 Outbox；
+        相同幂等键和原因重放返回同一后继。一个失败尝试最多有一个直接后继，已确认会话或缺失媒体不可重试。
+      operationId: retryFailedInferenceJob
+      parameters:
+        - {$ref: '#/components/parameters/JobId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RetryInferenceJob'}
+      responses:
+        '200':
+          description: 相同幂等请求已创建过该后继任务
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InferenceRetryResult'}
+        '201':
+          description: 后继推理任务与 Outbox 已原子创建
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InferenceRetryResult'}
         '404': {$ref: '#/components/responses/NotFound'}
         '409': {$ref: '#/components/responses/Conflict'}
         '422': {$ref: '#/components/responses/ValidationError'}
@@ -538,6 +687,31 @@ components:
         application/problem+json:
           schema: {$ref: '#/components/schemas/Problem'}
   schemas:
+    MediaLibraryEntry:
+      type: object
+      required: [assetId, sessionId, penId, buildingCode, penCode, businessDate, viewPosition, contentType, byteSize, locked, deleted]
+      properties:
+        assetId: {type: string, format: uuid}
+        sessionId: {type: string, format: uuid}
+        penId: {type: string, format: uuid}
+        buildingCode: {type: string}
+        penCode: {type: string}
+        businessDate: {type: string, format: date}
+        viewPosition: {type: string}
+        contentType: {type: string}
+        byteSize: {type: integer}
+        locked: {type: boolean}
+        deleted: {type: boolean}
+    MaintainMasterData:
+      type: object
+      required: [code, name, enabled, expectedVersion, reason]
+      properties:
+        parentId: {type: [string, 'null'], format: uuid}
+        code: {type: string, minLength: 1, maxLength: 64}
+        name: {type: string, minLength: 1, maxLength: 128}
+        enabled: {type: boolean}
+        expectedVersion: {type: integer, minimum: 0}
+        reason: {type: string, minLength: 1, maxLength: 500}
     ApiEnvelope:
       type: object
       required: [data, correlationId, timestamp]
@@ -632,7 +806,7 @@ components:
         organizationId: {type: string, format: uuid}
         penId: {type: string, format: uuid}
         businessDate: {type: string, format: date}
-        captureKind: {type: string, enum: [single, left_center_right]}
+        captureKind: {type: string, enum: [single, left_center_right, video]}
     UploadPackage:
       type: object
       required: [id, clientPackageId, state, existingAssets]
@@ -643,10 +817,11 @@ components:
         existingAssets: {type: array, items: {type: string, format: uuid}}
     CaptureManifest:
       type: object
+      description: 单图一份、三视图各方向一份、视频一份 MP4（最多 30 MiB，手机采集限制 2 分钟）；视频仅作为人工复核证据，不调用尚未批准的视频计数模型。视频不携带图像 ROI 或感知哈希。
       required: [captureSetId, captureKind, penId, assets]
       properties:
         captureSetId: {type: string, format: uuid}
-        captureKind: {type: string, enum: [single, left_center_right]}
+        captureKind: {type: string, enum: [single, left_center_right, video]}
         penId: {type: string, format: uuid}
         assets:
           type: array
@@ -659,7 +834,7 @@ components:
       required: [assetId, viewPosition, capturedAt, originalName, width, height, sha256, byteSize, mediaType, exif, roi]
       properties:
         assetId: {type: string, format: uuid}
-        viewPosition: {type: string, enum: [single, left, center, right]}
+        viewPosition: {type: string, enum: [single, left, center, right, video]}
         capturedAt:
           type: string
           format: date-time
@@ -676,7 +851,7 @@ components:
         sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
         perceptualHash: {type: [string, 'null']}
         byteSize: {type: integer, minimum: 1}
-        mediaType: {type: string, enum: [image/jpeg, image/png, image/heic]}
+        mediaType: {type: string, enum: [image/jpeg, image/png, image/heic, video/mp4]}
         exif: {$ref: '#/components/schemas/SafeExif'}
         roi: {$ref: '#/components/schemas/Roi'}
     SafeExif:
@@ -792,17 +967,31 @@ components:
           items: {type: string, format: date}
     InventorySession:
       type: object
-      required: [id, penId, businessDate, status]
+      required: [id, penId, businessDate, status, version, evidenceSessionId, detections, warnings]
       properties:
         id: {type: string, format: uuid}
         penId: {type: string, format: uuid}
         businessDate: {type: string, format: date}
-        status: {type: string, enum: [draft, submitted, processing, review_required, confirmed]}
+        status: {type: string, enum: [draft, submitted, processing, review_required, confirmed, superseded]}
+        version: {type: integer, minimum: 1}
+        supersedesSessionId: {type: [string, 'null'], format: uuid}
+        evidenceSessionId:
+          type: string
+          format: uuid
+          description: 原始媒体和推理证据所属会话；更正版本不会复制或改写证据。
         count: {type: [integer, 'null'], minimum: 0}
         rawModelCount: {type: [integer, 'null'], minimum: 0}
         inferenceSource: {type: [string, 'null'], enum: [server, device, manual, null]}
         model: {$ref: '#/components/schemas/ModelIdentity'}
+        detections:
+          type: array
+          description: 服务器归一化并按 ROI 过滤后的候选框；仅用于复核，不代表业务确认。
+          items: {$ref: '#/components/schemas/Detection'}
+        latencyMs: {type: [integer, 'null'], minimum: 0}
         warnings: {type: array, items: {type: string}}
+        inferenceStatus: {type: [string, 'null'], enum: [submitted, processing, succeeded, review_required, failed, null]}
+        failureCode: {type: [string, 'null'], maxLength: 128}
+        failureMessage: {type: [string, 'null'], maxLength: 1000}
     ModelIdentity:
       type: [object, 'null']
       required: [modelKey, version, checksum, adapterVersion]
@@ -817,6 +1006,63 @@ components:
       properties:
         confirmedCount: {type: integer, minimum: 0}
         reason: {type: [string, 'null'], minLength: 8, maxLength: 500}
+    CorrectInventory:
+      type: object
+      additionalProperties: false
+      required: [correctedCount, reason]
+      properties:
+        correctedCount: {type: integer, minimum: 0}
+        reason: {type: string, minLength: 8, maxLength: 500}
+    RetryInferenceJob:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: {type: string, minLength: 8, maxLength: 500}
+    InferenceModelIdentity:
+      type: object
+      additionalProperties: false
+      required: [modelKey, version, checksum, adapterVersion]
+      properties:
+        modelKey: {type: string, minLength: 1}
+        version: {type: string, minLength: 1}
+        checksum: {type: string, minLength: 1}
+        adapterVersion: {type: string, minLength: 1}
+    FailedInferenceJob:
+      type: object
+      additionalProperties: false
+      required: [jobId, rootJobId, sessionId, captureSetId, status, retrySequence, failureCode,
+        failureMessage, requestedModel, providerKey, retryable, createdAt]
+      properties:
+        jobId: {type: string, format: uuid}
+        rootJobId: {type: string, format: uuid}
+        retryOfJobId: {type: [string, 'null'], format: uuid}
+        retriedByJobId: {type: [string, 'null'], format: uuid}
+        sessionId: {type: string, format: uuid}
+        captureSetId: {type: string, format: uuid}
+        status: {type: string, enum: [failed]}
+        retrySequence: {type: integer, minimum: 0}
+        failureCode: {type: [string, 'null'], maxLength: 128}
+        failureMessage: {type: [string, 'null'], maxLength: 1000}
+        requestedModel: {$ref: '#/components/schemas/InferenceModelIdentity'}
+        providerKey: {type: string}
+        retryable: {type: boolean}
+        retryBlockedReason: {type: [string, 'null']}
+        startedAt: {type: [string, 'null'], format: date-time}
+        finishedAt: {type: [string, 'null'], format: date-time}
+        createdAt: {type: string, format: date-time}
+    InferenceRetryResult:
+      type: object
+      additionalProperties: false
+      required: [sourceJobId, retryJobId, rootJobId, retrySequence, status, replayed, requestedModel]
+      properties:
+        sourceJobId: {type: string, format: uuid}
+        retryJobId: {type: string, format: uuid}
+        rootJobId: {type: string, format: uuid}
+        retrySequence: {type: integer, minimum: 1}
+        status: {type: string, enum: [submitted]}
+        replayed: {type: boolean}
+        requestedModel: {$ref: '#/components/schemas/InferenceModelIdentity'}
     InferenceJobResult:
       type: object
       additionalProperties: false
@@ -845,10 +1091,10 @@ components:
         bbox:
           type: array
           prefixItems:
-            - {type: number}
-            - {type: number}
-            - {type: number}
-            - {type: number}
+            - {type: number, minimum: 0, maximum: 1}
+            - {type: number, minimum: 0, maximum: 1}
+            - {type: number, minimum: 0, maximum: 1}
+            - {type: number, minimum: 0, maximum: 1}
           minItems: 4
           maxItems: 4
         confidence: {type: number, minimum: 0, maximum: 1}

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
@@ -67,6 +68,15 @@ class UploadPackageSynchronizer {
       }
       await _handleDioFailure(work, error);
       return _outcomeFor(error);
+    } on SocketException {
+      await _handleTransientFailure(work);
+      return UploadSyncOutcome.retryScheduled;
+    } on HandshakeException {
+      await _handleTransientFailure(work);
+      return UploadSyncOutcome.retryScheduled;
+    } on TimeoutException {
+      await _handleTransientFailure(work);
+      return UploadSyncOutcome.retryScheduled;
     } on FileSystemException {
       await _repository.block(work.entry.packageId,
           now: _clock(), safeError: '本机原图不可读取，不能上传');
@@ -77,6 +87,14 @@ class UploadPackageSynchronizer {
       return UploadSyncOutcome.blocked;
     }
   }
+
+  Future<void> _handleTransientFailure(UploadWork work) =>
+      _repository.retryLater(
+        work.entry.packageId,
+        now: _clock(),
+        nextAttemptAt: _clock().add(_retryDelay(work.entry.attemptCount + 1)),
+        safeError: '网络或服务器暂时不可用，将自动重试',
+      );
 
   Future<void> _sync(UploadWork work, AuthState auth) async {
     final String serverPackageId;

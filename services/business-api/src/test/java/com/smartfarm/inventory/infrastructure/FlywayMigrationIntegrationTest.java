@@ -20,7 +20,7 @@ class FlywayMigrationIntegrationTest {
             .withPassword("integration-test-password");
 
     @Test
-    void appliesBaselineIdentityUploadInferenceReviewAndNearDuplicateResolutionMigrations() throws Exception {
+    void appliesBaselineThroughInventoryCorrectionLineageMigrations() throws Exception {
         Flyway.configure()
                 .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                 .locations("classpath:db/migration")
@@ -32,7 +32,7 @@ class FlywayMigrationIntegrationTest {
             try (ResultSet migrations = statement.executeQuery(
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1")) {
                 migrations.next();
-                assertEquals(8, migrations.getInt(1));
+                assertEquals(13, migrations.getInt(1));
             }
             try (ResultSet userTable = statement.executeQuery(
                     "SELECT COUNT(*) FROM information_schema.tables "
@@ -79,6 +79,23 @@ class FlywayMigrationIntegrationTest {
                             + "AND column_name IN ('state', 'resolved_at', 'resolution_idempotency_key')")) {
                 nearDuplicate.next();
                 assertEquals(3, nearDuplicate.getInt(1));
+            }
+            try (ResultSet retryLineage = statement.executeQuery(
+                    "SELECT COUNT(*) FROM information_schema.columns "
+                            + "WHERE table_schema = 'pig_inventory' AND table_name = 'inference_job' "
+                            + "AND column_name IN ('root_job_id', 'retry_of_job_id', 'retry_sequence', "
+                            + "'retry_idempotency_key', 'retry_reason', 'retry_requested_by', "
+                            + "'requested_model_version', 'requested_model_checksum', 'requested_adapter_version')")) {
+                retryLineage.next();
+                assertEquals(9, retryLineage.getInt(1));
+            }
+            try (ResultSet correctionLineage = statement.executeQuery(
+                    "SELECT COUNT(*) FROM information_schema.columns "
+                            + "WHERE table_schema = 'pig_inventory' AND table_name = 'inventory_session' "
+                            + "AND column_name IN ('supersedes_session_id', 'evidence_session_id', "
+                            + "'correction_idempotency_key', 'correction_reason', 'current_confirmation_marker')")) {
+                correctionLineage.next();
+                assertEquals(5, correctionLineage.getInt(1));
             }
         }
     }

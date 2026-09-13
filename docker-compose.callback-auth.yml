@@ -1,0 +1,5 @@
+# Only for the fixed pig-inventory-p0-callback-auth regression project.
+services:
+  business-api:
+    ports:
+      - "127.0.0.1:8094:8080"

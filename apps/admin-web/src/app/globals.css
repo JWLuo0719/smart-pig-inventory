@@ -107,12 +107,37 @@ h2 { font-size: 18px; letter-spacing: -.02em; }
 .muted-copy { color: var(--muted); font-size: 12px; line-height: 1.6; }
 .evidence-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 16px; }
 .evidence-card { margin: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: #fbfdfe; }
-.evidence-image { aspect-ratio: 4 / 3; display: grid; place-items: center; color: var(--muted); background: #e8f0f2; font-size: 12px; text-align: center; }
+.evidence-image { position: relative; aspect-ratio: 4 / 3; display: grid; place-items: center; overflow: hidden; color: var(--muted); background: #e8f0f2; font-size: 12px; text-align: center; }
 .evidence-image img { width: 100%; height: 100%; object-fit: cover; }
+.detection-box { position: absolute; z-index: 1; border: 2px solid #ffcf40; background: rgba(255, 207, 64, .05); box-shadow: 0 0 0 1px rgba(20, 36, 47, .65); pointer-events: none; }
+.detection-box small { position: absolute; top: -19px; left: -2px; padding: 2px 4px; color: #14242f; background: #ffcf40; font-size: 9px; font-weight: 850; line-height: 1.2; white-space: nowrap; }
 .evidence-card figcaption { display: flex; justify-content: space-between; gap: 8px; padding: 9px 10px; font-size: 11px; }
 .evidence-card figcaption span { color: var(--muted); }
+.candidate-count { color: var(--barn-blue); font-size: 15px; }
+.candidate-count strong { font-size: 28px; font-variant-numeric: tabular-nums; }
+.model-evidence { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 18px; margin: 16px 0 0; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: #f8fbfc; }
+.model-evidence div { min-width: 0; }
+.model-evidence dt { color: var(--muted); font-size: 10px; font-weight: 750; }
+.model-evidence dd { overflow: hidden; margin: 4px 0 0; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.inference-warnings { margin: 12px 0 0; padding: 10px 12px 10px 30px; color: #684600; background: #fff4d8; border-radius: 8px; font-size: 11px; line-height: 1.5; }
+.inference-failure { display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; margin: 12px 0; padding: 12px; color: #713b00; background: #fff0dc; border: 1px solid #e7a95f; border-radius: 8px; }
+.inference-failure span { font-family: monospace; font-size: 11px; }
+.inference-failure p { grid-column: 1 / -1; margin: 0; }
+.failed-job-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.failed-job-list > article { display: grid; align-content: start; gap: 10px; padding: 14px; border: 1px solid #e7a95f; border-radius: 10px; background: #fffaf3; }
+.failed-job-list > article > div:first-child { display: flex; justify-content: space-between; gap: 12px; }
+.failed-job-list > article > div:first-child strong { color: #713b00; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
+.failed-job-list > article > div:first-child span, .failed-job-list p { color: var(--muted); font-size: 11px; }
+.failed-job-list p { min-height: 34px; margin: 0; line-height: 1.5; }
+.failed-job-list dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.failed-job-list dl div { min-width: 0; }
+.failed-job-list dt { color: var(--muted); font-size: 9px; font-weight: 750; }
+.failed-job-list dd { overflow: hidden; margin: 3px 0 0; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .report-list { display: grid; gap: 8px; padding: 0; margin: 14px 0 0; list-style: none; font-size: 12px; }
 .report-list li { display: flex; justify-content: space-between; gap: 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+.report-export-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.report-export-controls label { display: grid; gap: 5px; color: var(--muted); font-size: 11px; font-weight: 750; }
+.report-export-controls input { min-height: 38px; padding: 7px 9px; color: var(--ink); border: 1px solid var(--line); border-radius: 8px; background: #fff; font: inherit; }
 .audit-list { display: grid; gap: 0; }
 .audit-list article { display: grid; grid-template-columns: minmax(180px, .7fr) minmax(180px, .6fr) minmax(0, 1.7fr); gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); font-size: 12px; }
 .audit-list article:first-child { border-top: 0; padding-top: 0; }

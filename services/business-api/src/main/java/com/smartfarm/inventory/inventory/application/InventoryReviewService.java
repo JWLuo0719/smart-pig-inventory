@@ -13,6 +13,7 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -105,6 +106,15 @@ public class InventoryReviewService {
     }
 
     @Transactional(readOnly = true)
+    public List<JdbcInventoryReviewRepository.MediaLibraryRow> mediaLibrary(LocalDate date, UUID penId, int offset, int limit) {
+        UUID organization = actor.activeOrganizationId();
+        actor.assertCanView(organization);
+        if (date == null || offset < 0 || offset > 10000 || limit < 1 || limit > 100) throw InventoryException.invalid("Invalid media page");
+        if (penId != null && !repository.organizationForPen(penId).filter(organization::equals).isPresent()) throw InventoryException.notFound();
+        return repository.mediaLibrary(organization, date, penId, offset, limit);
+    }
+
+    @Transactional(readOnly = true)
     public MediaContent evidenceContent(UUID assetId) {
         var media = repository.findMediaEvidence(assetId).orElseThrow(InventoryException::notFound);
         actor.assertCanView(media.organizationId());
@@ -147,6 +157,10 @@ public class InventoryReviewService {
             throw InventoryException.invalid("A reason is required when manually confirming or changing the candidate count");
         }
 
+        if (repository.hasDeletedEvidence(session.id())) {
+            throw InventoryException.conflict("Evidence was deleted; capture a new session before confirming");
+        }
+
         repository.confirm(session, confirmedCount, idempotencyKey, actor.subjectId());
         repository.lockEvidence(session.id());
         repository.insertAudit(session.organizationId(), actor.subjectId(), "inventory.confirmed", "inventory_session", session.id(),
@@ -155,7 +169,44 @@ public class InventoryReviewService {
     }
 
     @Transactional
+    public InventorySessionView correct(UUID sessionId, int correctedCount, String reason, UUID idempotencyKey,
+            String correlationId) {
+        String normalizedReason = normalizeReason(reason);
+        if (normalizedReason == null) {
+            throw InventoryException.invalid("An inventory correction requires a reason");
+        }
+        SessionRow source = repository.lockSession(sessionId).orElseThrow(InventoryException::notFound);
+        actor.assertCanCorrect(source.organizationId());
+        repository.lockPen(source.penId());
+
+        var existing = repository.lockCorrectionSuccessor(source.id());
+        if (existing.isPresent()) {
+            SessionRow successor = existing.get();
+            if (idempotencyKey.toString().equals(successor.correctionIdempotencyKey())
+                    && Objects.equals(correctedCount, successor.confirmedCount())
+                    && normalizedReason.equals(successor.correctionReason())) {
+                return view(successor);
+            }
+            throw InventoryException.conflict("This confirmed version has already been corrected");
+        }
+        if (!"confirmed".equals(source.status())) {
+            throw InventoryException.conflict("Only the current confirmed inventory version can be corrected");
+        }
+
+        UUID correctionId = UUID.randomUUID();
+        String subjectId = actor.subjectId();
+        repository.markSuperseded(source.id());
+        repository.createCorrection(source, correctionId, correctedCount, normalizedReason, idempotencyKey, subjectId);
+        repository.insertAudit(source.organizationId(), subjectId, "inventory.corrected", "inventory_session",
+                correctionId, normalizedReason, sessionSnapshot(source),
+                correctionSnapshot(source, correctionId, correctedCount), correlationId);
+        return session(correctionId);
+    }
+
+    @Transactional
     public void deleteUnlockedEvidence(UUID assetId, UUID idempotencyKey, String correlationId) {
+        UUID evidenceSession = repository.evidenceSessionForAsset(assetId).orElseThrow(InventoryException::notFound);
+        repository.lockSession(evidenceSession).orElseThrow(InventoryException::notFound);
         MediaRow media = repository.lockMediaByAssetId(assetId).orElseThrow(InventoryException::notFound);
         actor.assertCanView(media.organizationId());
         if (media.locked()) {
@@ -205,15 +256,20 @@ public class InventoryReviewService {
     private InventorySessionView view(SessionRow row) {
         Integer count = row.confirmedCount() != null ? row.confirmedCount() : row.candidateCount();
         String source = row.inferenceSource();
-        if (row.confirmedCount() != null && (row.candidateCount() == null || !row.confirmedCount().equals(row.candidateCount()))) {
+        if (row.supersedesSessionId() != null || (row.confirmedCount() != null
+                && (row.candidateCount() == null || !row.confirmedCount().equals(row.candidateCount())))) {
             source = "manual";
         } else if (source != null && !"device".equals(source) && !"manual".equals(source)) {
             source = "server";
         }
         ModelIdentity model = row.modelKey() == null ? null
                 : new ModelIdentity(row.modelKey(), row.modelVersion(), row.modelChecksum(), row.adapterVersion());
-        return new InventorySessionView(row.id(), row.penId(), row.businessDate().toString(), row.status(), count,
-                row.candidateCount(), source, model, row.warnings());
+        return new InventorySessionView(row.id(), row.penId(), row.businessDate().toString(), row.status(), row.version(),
+                row.supersedesSessionId(), row.evidenceSessionId() == null ? row.id() : row.evidenceSessionId(), count,
+                row.candidateCount(), source, model,
+                row.detections().stream().map(detection -> new DetectionView(detection.assetId(), detection.bbox(),
+                        detection.confidence(), detection.classId())).toList(),
+                row.latencyMs(), row.warnings(), row.inferenceStatus(), row.failureCode(), row.failureMessage());
     }
 
     private static String normalizeReason(String reason) {
@@ -228,6 +284,8 @@ public class InventoryReviewService {
     private static Map<String, Object> sessionSnapshot(SessionRow session) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("status", session.status());
+        snapshot.put("version", session.version());
+        snapshot.put("sessionId", session.id().toString());
         snapshot.put("candidateCount", session.candidateCount());
         snapshot.put("confirmedCount", session.confirmedCount());
         return snapshot;
@@ -235,6 +293,19 @@ public class InventoryReviewService {
 
     private static Map<String, Object> confirmationSnapshot(int confirmedCount) {
         return Map.of("status", "confirmed", "confirmedCount", confirmedCount, "evidenceLocked", true);
+    }
+
+    private static Map<String, Object> correctionSnapshot(SessionRow source, UUID correctionId, int correctedCount) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("status", "confirmed");
+        snapshot.put("version", source.version() + 1);
+        snapshot.put("sessionId", correctionId.toString());
+        snapshot.put("supersedesSessionId", source.id().toString());
+        snapshot.put("evidenceSessionId",
+                (source.evidenceSessionId() == null ? source.id() : source.evidenceSessionId()).toString());
+        snapshot.put("confirmedCount", correctedCount);
+        snapshot.put("evidenceLocked", true);
+        return snapshot;
     }
 
     private static Map<String, Object> mediaSnapshot(MediaRow media) {
@@ -269,10 +340,15 @@ public class InventoryReviewService {
             List<String> includedDates) {
     }
 
-    public record InventorySessionView(UUID id, UUID penId, String businessDate, String status, Integer count,
-            Integer rawModelCount, String inferenceSource, ModelIdentity model, List<String> warnings) {
+    public record InventorySessionView(UUID id, UUID penId, String businessDate, String status, int version,
+            UUID supersedesSessionId, UUID evidenceSessionId, Integer count, Integer rawModelCount,
+            String inferenceSource, ModelIdentity model, List<DetectionView> detections,
+            Integer latencyMs, List<String> warnings, String inferenceStatus, String failureCode, String failureMessage) {
     }
 
     public record ModelIdentity(String modelKey, String version, String checksum, String adapterVersion) {
+    }
+
+    public record DetectionView(UUID assetId, List<BigDecimal> bbox, BigDecimal confidence, int classId) {
     }
 }

@@ -1,42 +1,131 @@
 # 下一步
 
-完整实施顺序和阶段退出门禁见 `docs/development/mobile-development-sequence.md`；需要负责人确认的事项统一登记在 `docs/product/open-decisions.md`。后续实现必须按合同 -> 迁移 -> Domain/Application -> Infrastructure -> UI -> 验证的顺序执行。
 
-## Iteration 1：可运行开发底座
+## 2026-09-13 v16 真机启动与首页任务读回已验证
 
-1. 已完成 Android 原生壳、Drift 生成、analyze/test 与 debug APK；后续在真实 Android 设备验证相机、权限和后台上传。工作站规则见 `docs/development/workstation-setup.md`。
-2. 已恢复 Docker Desktop WSL 引擎并完成完整 Compose、MySQL Flyway V1/V2、私有 MinIO 桶和网关健康验证；后续持续保留 Compose smoke test。首个试点部署基线见 `docs/deployment/pilot-baseline.md`。
-3. 已按 ADR-0003 实现环境变量一次性管理员初始化、BCrypt、JWT、可撤销刷新令牌及 login/refresh/logout/me，并已接入 Flutter 安全存储、登录/刷新/登出和 7 天离线会话恢复；认证启用的 Compose 已完成 API smoke test，下一步在实机验证身份与主数据同步，后续通过身份适配器接入金蝶账号。
-4. 已增加 Testcontainers MySQL Flyway 集成测试；持续保留该门禁。下一步扩展至 BINARY UUID、JSON、CHECK、唯一索引、对象写入和并发语义，并补充 MinIO 集成测试。
+同签名 `0.1.0+16` 已覆盖安装到 Redmi K60，保留既有应用数据。无线 ADB `192.168.255.26:42187` 通过，局域网服务地址为 `192.168.255.99`，首页从认证恢复到在线后自动读取真实任务。服务端 `/me`、刷新后的 `/me` 和当日任务接口均为 200；UI 显示网络连接已验证、2 个真实任务、`0 / 2`，不再停留在未知或假零状态。
 
-## Iteration 2：AC-01 至 AC-04
+此次真机读回暴露并修复了首页只在首次构建读取任务的生命周期缺口：`apps/mobile/lib/features/home/home_screen.dart` 监听认证状态从加载/离线到在线的转变并重新加载，`home_task_state_test.dart` 新增两类恢复测试。v16 证据和 APK 见 `artifacts/functional-v16-device-ui.xml`、`artifacts/functional-v16-server-requests.log` 与 `artifacts/android-release/20260913-122203-772/`。
 
-1. 已实现以 JWT 激活组织为可信来源的主数据全量/增量同步、游标失效全量恢复和删除墓碑，并接入 Flutter 的组织隔离缓存、搜索、禁用栏舍拦截和真实 API；认证 Compose 与 realme GT 7 Pro 已验证登录、同步和离线缓存闭环。
-2. 已实现采集包 create/blob/manifest/commit 的 Controller、Application Service、JDBC Infrastructure、MinIO 暂存提升和事务 Outbox；Spring 现在可领取 Outbox、租约恢复后派发 Python 任务，Python Worker 通过服务密钥幂等回传最终结果。下一步完成 Compose 端到端派发/回调、失败重试可观测性以及 MinIO HTTP 集成测试。
-3. Flutter 已完成媒体物化、流式 SHA-256、单图/三图草稿、ROI 口径、本地完整采集组入队、草稿恢复 UI、主数据接线，以及带租约、退避和 Commit 后同步标记的前后台真实上传状态机；三视图断网强杀恢复、恢复网络后重试提交真机 E2E 已通过，三视图剩余 Blob 自动化续传已通过；WorkManager 已在 realme GT 7 Pro 验证网络恢复、应用重启后的自动提交。下一步接入任务状态/复核结果展示，完成服务端推理 Compose E2E。
-4. 断网三图、杀进程恢复和恢复网络重试已通过；仍需通过上传中途断流只续传剩余 Blob、WorkManager 后台执行、推理/复核和并发 Commit E2E。
+下一步按优先级保留为：用户手动完成采集/上传续传、图库、视频、报表和主数据同步的集中真机验收；随后在服务器、域名、账号确定后做正式部署检查。模型精度、视频自动计数、三图自动去重和金蝶接口仍不进入本次发布门槛。
 
-## Iteration 3：AC-05 至 AC-12
+操作顺序、预期状态和锁定证据边界见 `docs/development/manual-device-acceptance-v16.md`；每完成一步后进行无线 ADB 与服务端只读回读。
 
-1. 已完成不依赖人工测试的 P0 开发：管理端会话媒体预览/人工确认、日报/综合报表、审计页面；合成 OPERATOR/REVIEWER/FARM_ADMIN 与第二组织 fixture；RBAC/跨组织自动化 MySQL/JWT 集成测试；近重复告警带理由解决审计。下一步是在 `pig-inventory-p0` 隔离 Compose 中执行浏览器与真机验收，不得重置默认 MySQL 卷。P0 人工验收状态见 `docs/development/p0-manual-acceptance-runbook.md`。
-2. 管理端局域网 HTTP 登录的 `crypto.randomUUID` 兼容性已修复，但需要以 `docker compose -p pig-inventory-p0 up --build -d admin-web gateway` 部署回归。继续接入会话媒体预览/确认、组织栏舍、日报/综合报表、模型同步和审计 API。
-3. Flutter v`0.1.0+3` 已修复三图恢复证据预览、取消伪造离线队列数量，并在复核页 401 时自动 Refresh Token 后重试读取/确认。该路径及 Outbox 运行中 Access Token 过期后以同一幂等键重试均已有 Flutter 自动化测试；主流机固定为 realme GT 7 Pro，待实机回归，低端机优先 REDMI Note 14 5G（6GB+128GB）。
 
-## P1 准入项
+## 2026-09-12 最新推进：真机核验后置，恢复工具已验证
 
-- 取得金蝶正式接口文档后实现 Kingdee Provider；此前只用 Manual/Mock。
-- iMoonLab YOLOv13 Nano 已以产品仓库外的 `research-http-yolo` Runner 部署并完成隔离产品测试；它强制人工复核，不代表自动计数准入。取得部署许可或经批准的替代模型、权重 checksum 与金标集后，配置独立 HTTP 模型服务并启用 `http-yolo` Provider；通过回归门禁前不得自动计数。详见 `docs/research/yolov13-research-runner.md`。
-- 端侧、多视角、视频和 Agent 均以隔离 PoC 验证，不进入 P0 关键路径。
+用户明确真机核验后置，继续可以独立进行的开发，不再以手机连接为当前开发阻塞。功能候选 v14 保留，未修改手机功能或重建 APK；本轮补齐 `scripts/inventory_snapshot.py` 冷快照/完整校验/全新卷恢复工具与 `scripts/run_snapshot_e2e.py` 隔离合成演练。4 项安全测试及真实 MySQL/MinIO/Redis 恢复通过：当前确认 19、历史 17、同一证据 SHA-256、锁图删除 409、Redis 数据均保留；拒绝运行中备份、已有目标卷和损坏归档。演练容器/网络已清理，数据卷保留，未访问 P0 数据。
 
-## 已准备的测试数据边界
+说明见 `docs/deployment/backup-recovery.md`，证据为 `test-assets/generated/snapshot-recovery/f834c1f68553/summary.json`。备份是停写物理快照，需原镜像和受保护介质；本地演练不代表生产异机、加密密钥恢复、容量/RTO 或正式切换通过。补充交付包 `artifacts/releases/20260912-recovery-tools.zip` 仅含工具、说明和合成验证摘要，不含备份数据。
 
-- 已提供外部 YOLO 研究集的只读扫描脚本；它生成本机忽略的 SHA-256/标注摘要，不复制图片或标签。
-- 仍需取得经授权的业务金标、左中右采集组和弱网/重启场景媒体；具体准入规则见 `docs/development/test-data-governance.md`。
+接下来仍可在不依赖真机的范围维护自动回归和修复新暴露的问题。当前无已确认但未实现的首批功能缺口；金蝶需正式接口资料，模型精度/视频自动计数/三图去重随团队模型后续推进。生产目标、TLS/账号和异机介质未确定，正式上线仍未执行；真机集中验收按用户要求后置。
 
-## 仍需确认
+## 2026-09-12 功能候选：主数据、图库、历史报表与视频人工证据
 
-- 离线 Token 最长时限暂定 7 天，组织切换 UI 后置；正式试点前需复审。
-- 首次本地管理员初始化参数、生产 JWT 密钥轮换流程和后续金蝶账号接入时机。
-- 首批试点猪场、低端 Android 候选机是否可获得，以及边缘服务器规格。
-- 数据保留年限、备份恢复目标是否接受当前 NFR 草案。
-- 详细问题、临时假设和影响见 `docs/product/open-decisions.md`。
+用户要求模型精度后置，继续按原始需求完成功能；正式服务器/域名/猪场账号回答“尚未确定”。已经实现并部署 LAN：管理员维护当前猪场/栋舍/栏舍，按日期栏舍图库与错图删除，后台覆盖删除审计，历史任务/日报/均值，视频持久保存/上传/播放及人工确认流程。视频不生成自动数量，三视图不相加，模型仍未批准。金蝶需对方接口资料及账号。
+
+- Business V13 已部署到 P0，JAR 与本次构建 SHA-256 一致；Admin 构建编号已核对；Inference API/Worker 使用本次视频人工流程。P02 历史确认仍为候选 19 / 人工 24，锁定证据保留。升级前数据库快照和旧镜像信息在忽略的 artifacts 下。
+- Spring `mvn test` / `mvn verify` 各 69 项通过；Admin 24 项及 lint/typecheck/build 通过，隔离 Edge 完整流程、15 组面板异常/空数据、主数据/历史/图库/覆盖审计均通过。Inference 38 项及真实视频 API/MinIO/Celery/回调/锁定/删除 409 通过。
+- Flutter 启动请求节制与失败不显示假零已修正；analyze、39 项测试（含真实 TLS）、Debug 和同签名 v14 Release 构建通过。交付目录 artifacts/releases/20260912-functional-v14，APK SHA-256 为 1317f054464ea1575557fa05d60c800a70c65868f0291fcb51a5ae852447721d。中断前最后确定安装的是 v13，冷启动读回 P01 待复核、P02 确认 24；v14 覆盖安装命令结果丢失，恢复时手机无线 ADB 不可达，不能声称 v14 已安装。视频录制/播放、图库交互和新主数据手机同步仍待集中人工确认。
+- 正式部署 overlay、无密钥模板和配置检查已完成；正向/拒绝模型提前批准/拒绝占位域名均通过。还没有正式服务器部署，备份恢复演练与目标 TLS/账号验收仍待执行。见 docs/deployment/functional-release-candidate.md。
+- Review Hub 功能审计 audit-20260912055415-7e029451 零匹配；功能运行证据已补齐，正式目标与集中设备验收未完成。原 v12 上传问题已由用户确认续传成功。
+
+
+恢复检查（2026-09-12 18:58）：Docker 已启动，P0 核心容器恢复，带原 CA 的本机 HTTPS 健康为 UP；Business JAR SHA-256 与 Admin BUILD_ID 再次匹配交付源码。电脑当前网络已变化，手机旧无线地址不可达，不能沿用下午的手机联通结论。可分发文件为 artifacts/releases/20260912-functional-v14.zip（SHA-256 7811b44efc0bbf290c46a72572373dc1a35e39e6561e8dc618da937b38634af5），ZIP 完整性检查通过。
+
+下文为历史记录，不再执行旧版本重试、重新登录或模型精度采样指令；当前剩余工作以本节和 docs/product/functional-release-plan.md 为准。
+
+
+## 2026-09-12 用户最新优先级：完成原始功能，再准备正式交付
+
+v12 续传已通过用户与 HTTP/MySQL 核验，不再等待重试。按 `docs/product/functional-release-plan.md` 优先补人工主数据维护、按日期栏舍图库与删错图、历史日报和综合平均、采集体验及视频证据边界，然后集中验收并构建正式候选。模型精度与新模型切换后置，保持人工确认和 `MODEL_APPROVED=false`。正式服务器/域名未确定，当前仅能完成可部署候选及部署检查，现有 LAN/P0 不作为生产环境冒充发布。
+
+## 历史：v12 续传已由用户确认成功，不再重复执行
+
+v12 已安装并自动恢复登录。“放弃失败草稿”已通过用户真机验证；随后新图失败的 dHash 负号编码已修复并通过回归。现在在上传队列对现有新图失败项点一次“重试”，复用已上传原图；不再放弃或重拍。ADB 点击被系统权限拒绝，需要用户完成此一步。随后读回 manifest/Commit、候选数与待复核状态，按独立人工数复核。P02 已确认 24 的会话和锁图不变，`MODEL_APPROVED=false`。本节覆盖下文 v11 重新登录和 v9 采样版本指引，详见 `docs/development/manual-test-2026-09-12.md`。
+
+## 2026-09-12 已完成首个授权实猪单图；进入样本矩阵验收
+
+- 首轮 Redmi K60 单图闭环已完成：模型候选 **19**，独立人工确认 **24**，会话已确认、媒体已锁定、审计已写入。候选低估 5 头（约 20.8%），因此它是工作流成功证据，不是模型精度或自动入账的通过结论。
+- 继续在当前 v9 和冻结研究配置上进行：每张照片只上传一次，先记录独立人工真值，再记录候选、确认、耗时和失败详情。至少覆盖空栏、遮挡、不同光照和不同数量；不使用这些验收样本调参。
+- 通过阈值、样本数和独立人工计数方法尚未定义。定义后才能判断模型精度门槛是否通过；此前保持 `MODEL_APPROVED=false`、`review_required`，已确认数字只来自人工确认。
+
+## 先执行：v11 重新登录并释放 P01 的失败草稿
+
+- v11 已通过无线 ADB 无流式覆盖安装在 Redmi K60，系统回读 `versionCode=11`、`versionName=0.1.0`，冷启动进程存活；不需要重装。LAN 当前为 `192.168.255.99`，手机和服务端已验证可达。此前并发刷新使旧会话失效，先重新登录已有授权账号；不要卸载或清数据。
+- 打开 P01 的采集页，选择“放弃失败草稿并重新采集”并在确认框中选择“停止重试”；手机原图会保留，P02 已确认的 24 头记录不会变化。
+- 只为 P01 拍摄和上传一张未出现过的新图片。P02 已确认记录不可用新图片替换；如需更改其人工数，须走管理员更正流程且仍引用原证据，不能用于新的模型样本。
+
+## 2026-09-12 最新进展：v9 真机已登录，下一步为授权真实单图
+
+- Docker/LAN HTTPS/研究 Runner 已恢复并通过健康与身份检查；当前入口为 `https://pig-inventory.local:8443`，最新状态文件中的电脑热点地址为 `172.17.219.182`。
+- 签名 v9 已在 Redmi K60 冷启动，手机通过无线 ADB 接入；服务端已确认 `local-admin` refresh、`/api/v1/me` 和今日任务请求成功。
+- 下一步在取得图片和现场数据授权、独立人工真值后，使用一张真实猪只图片完成上传，记录候选数、人工确认数、任务状态和耗时。候选数只供复核，不能直接写入确认报表。
+
+## 当前执行项：K60 认证联网与真实单图验收
+
+Release v8 已签名并安装在 Redmi K60，启动崩溃已修复，mDNS/TLS 客户端代码和自动测试已完成。先由用户解锁设备，使用授权账号登录，记录是否能进入首页；再以一张已授权的真实猪只图片完成上传，核对候选数量、人工确认数和任务状态。若登录/上传失败，保留应用错误提示和时间，读取无线 ADB 日志，不卸载、不清数据、不关闭 TLS。完成后才合并空栏、遮挡、光照、弱网、后台恢复、三图不相加、纠正和报表的集中人工验收。研究模型仍不自动入账，`MODEL_APPROVED=false`。
+
+## 2026-09-11 局域网验收配置最新结果（覆盖下文历史状态）
+
+已完成 `https://pig-inventory.local:8443` 本机 HTTPS/mDNS 与当前用户登录监管，现有签名密钥/P0 卷/Debug 草稿保留。新联网候选 `0.1.0+5`：`artifacts/android-release/20260911-112011-947/inventory-release-lan-acceptance.apk`，SHA-256 `eb19857cfc7395634b66a1136db8b629bb3b2dec0fa9e16904b323efbaf58553`；不是旧保留域名 build-only 包。Flutter analyze、29 tests、11 项 Gradle 门禁通过。HTTPS 实际上传/推理/确认/报表/锁图回归通过：候选 29、独立 fixture 标注和确认 28；此为自动工作流验证，人工实猪验收仍待执行。签名加密本机备份及解密回读通过，异机备份仍待完成。
+
+防火墙已由管理员执行并回读核验：Private 入站 Allow 的 TCP 8443、UDP 5353。下一项是用保留旧 Debug 草稿的安装方案验证手机同网连接，随后集中开展授权实猪/弱网/重启恢复验收。校园网隔离/组播支持、手机安装、实际重启均未验证。MODEL_APPROVED=false 不变。完整步骤、证书有效期/更新和启动边界见 `docs/development/lan-real-pig-acceptance.md`；设计依据见 `docs/research/lan-https-options.md`。未提交/推送，旧证据保留。
+
+
+更新时间：2026-09-10。用户已调整目标：优先交付包含单图 AI 计数的签名 Release APK，之后集中进行含真实猪只计数的人工验收。新对话先读 `CURRENT_HANDOFF.md`、`AGENTS.md` 和 `PROJECT_STATUS.md`。
+
+## 当前开发起点
+
+2026-09-10 17:23 执行更新：独立签名配置和 `0.1.0+4` build-only APK 已完成；当前缺实际 HTTPS 入口，保留测试域名不能用于验收。Docker/P0 已恢复并迁移 V11，真实单图研究链路返回 28 个待复核候选，确认/业务数仍空。登录错误分类及单图 1/3 文案已修复，Flutter 27 tests 和签名门禁通过。后续从“实际 HTTPS 地址/证书、签名备份、Runner 监管及完整链路回归”继续，不重复生成密钥；产物、运行镜像 override 和证据见 `CURRENT_HANDOFF.md`、`docs/development/android-release.md`。
+
+当前为开发收尾，尚未发布。2026-09-09 真机已完成登录、栏舍同步、单图保存及上传到待复核；其余人工测试按用户要求集中后置。签名 Release 包先作为候选交付，统一验收通过后才发布。现有真实模型研究链路复用，不重写推理架构。
+
+## 推荐推进顺序
+
+1. **Release 构建与部署入口**：替换 Android 当前 release 复用 debug 签名的配置；通过本机忽略文件/环境注入发布密钥，缺失时明确失败。明确签名保管、版本号、升级兼容、稳定 HTTPS API 地址，生成并核验 Release APK 签名和 SHA-256。签名包不再依赖当前电脑 DHCP 地址；开发明文策略不能扩展到正式 Release。先完成可自动实现的构建脚本，最终密钥归属和部署地址待落实。
+2. **单图自动 AI 计数闭环**：复用团队权重、外部 Runner 与版本化 Provider，使 Release App 上传真实图片后自动获得 AI 候选数量、检测证据和失败提示，支持人工确认/更正进入报表。检查 Runner 常驻、readiness、Worker/回调、重启恢复、模型身份与移动端复核入口；统一服务镜像与当前源码版本。当前 P0 因 Docker Hub 访问失败使用过旧业务/管理端镜像，必须重建核验，不能据此验收最新功能。
+3. **候选版本自动回归与体验修复**：修复已暴露的登录错误统一显示“无法恢复登录状态”、单图进度显示 1/3 等问题；核对管理员复核操作入口。执行相关单元/集成与完整上传→真实推理→确认→报表回归，保留已有测试结果，生成可重复安装的签名候选包。自动测试随开发执行，不延期到人工验收。
+4. **统一人工验收（包含真实猪只计数）**：候选功能齐备后集中执行主流/低端手机、单图实猪 AI 计数、人工真值对照、空栏/遮挡/光照/不同数量、ROI、三图离线恢复/不相加、弱网续传、后台同步、复核确认/更正、报表与权限。先取得图片/现场数据授权及独立标注，冻结模型和阈值，事先明确通过标准；评估数据不得用于调参。真实图像只存授权的本机忽略目录或受控服务，不进入 Git。失败项修复后复测，不把假设通过写入记录。
+5. **最小发布收口**：在目标服务器核验 HTTPS、密钥、私有存储、备份恢复、版本回滚和基本故障可见性；完成模型/依赖准入与负责人签署后发布。Prometheus 深化、完整 Worker/Broker 指标体系移出首项，基本故障发现和恢复能力仍需发布前验证。
+6. **后续迭代**：金蝶、设备推送、更细 RBAC、扩展监控和 P2 多视角去重/视频/端侧/Agent 后置，按产品输入推进。
+
+本轮“自动 AI 计数”指服务器自动推理并给出真实候选数；正式报表继续只读取人工确认数。免人工自动入账不在本轮默认范围。研究准入未完成前继续使用 research Provider 和 MODEL_APPROVED=false；Release 签名不等于模型批准。
+
+## 已完成，不要重复
+
+- 2026-09-08 Spring 业务指标与本地规则基线：61 tests、V11 索引、6 组 promtool、真实隔离 HTTP/MySQL 的上传/重放/重复拦截/回调/重试/更正/队列/耗时/监控密钥验证通过。`MONITORING_SERVICE_KEY` 与用户 JWT 独立，空配置 fail-closed；详见 `docs/development/business-observability.md`。
+
+- 2026-09-08 管理端三个可选面板显式状态、失败不显示零条、权限预判只读当前组织、404 不猜测无权限、刷新恢复；管理端 24 tests 与 lint/typecheck/build 通过。固定隔离 Edge 回归新增 15 组故障/空数组场景及 OPERATOR/REVIEWER 页面，原有真实过期、更正、重试、锁定和报表链路全部通过。
+
+- 2026-09-08 回调密钥始终验证，与用户登录开关独立；管理员 JWT 不可替代。Spring 54 tests、Python 37 tests，`run-callback-auth-e2e.ps1` 实际验证两种模式非法请求无写入、204/200/409 幂等和未配置密钥拒绝；固定项目 `pig-inventory-p0-callback-auth`，P0 未动。
+
+- 2026-09-08 管理端真实过期令牌、页面更正、失败任务重试、媒体锁定、日报/审计读回、幂等与越权隔离回归；固定项目 `pig-inventory-p0-admin-runtime`，操作说明见 `docs/development/admin-runtime-e2e.md`。Spring 46 tests、管理端 9 tests，Prometheus 真实鉴权 200/匿名 401；晚到回调同时保护 confirmed/superseded。
+
+- P0 create/blob/manifest/commit、SHA-256 去重、事务 Outbox、MinIO、Celery、回调、人工确认、媒体锁定、报表、审计、RBAC 和跨组织自动化闭环。
+- 管理端代理白名单、Access Token 401 单次 Refresh/原请求重放、失败任务与更正路由；移动端首页/图库/我的已移除硬编码业务数据并接入组织隔离的真实 API/Drift 状态。
+- 确认后不可变更正：OpenAPI 0.7.0、Flyway V10、管理员权限、版本/证据谱系、幂等重放、审计和 confirmed-only 报表切换。
+- Flutter 单图/三图离线草稿、续传、WorkManager、401 刷新重试和复核失败展示；管理端媒体复核、候选框、报表、审计和结构化失败展示。
+- 团队 `v3_aligned_baseline` 的 checksum/readiness/ROI、真实单图研究 E2E、val 选阈值/test 一次性评估、故障注入、研究发布清单、不可覆盖本机漂移基线和版本回滚演练。
+- 失败推理任务按组织查询、管理员权限、不可变线性重试谱系、同键同理由并发幂等、事务 Outbox/AuditEvent、管理端入口和隔离 `pig-inventory-p1-retry` E2E。
+- 只含已确认盘点的 PDF/XLSX 导出、组织/日期边界、366 天/10,000 条限制、中文/拉丁双字体 PDF、公式注入安全、管理端下载入口和隔离 `pig-inventory-p1-report-export` E2E。
+
+## 后置但仍未通过
+
+- P0 人工键盘与 130% 字体验收、复核实机回归、真机弱网/中断时序、低端 Android、生产 TLS/备份/恢复。
+- 模型与依赖许可、授权业务金标准入、真实目标硬件冷启动/吞吐、负责人批准自动计数。
+- 金蝶正式接口文档和身份/主数据 Provider。
+- 试点猪场、边缘服务器规格、低端机取得、品牌商标和 MinIO 分发法律结论。
+
+批准前始终保持 `research-http-yolo`、`MODEL_APPROVED=false`、`review_required`，三视图禁止简单相加。
+
+## 新模型到来时的固定门禁
+
+1. 使用验证集选择阈值，固定后只在测试集评估一次。
+2. 运行 `scripts/run-team-yolo-regression.ps1` 并生成本机忽略摘要。
+3. 通过 `scripts/model_release_gate.py` 生成/校验新版本清单，与明确指定的不可覆盖基线比较。
+4. 在 `pig-inventory-p1-rollback` 执行版本切换、身份损坏和回滚演练；涉及 Runner 故障逻辑时同时重跑 `pig-inventory-p1-fault`。
+5. 任何产物均留在被忽略的 `test-assets/generated/`；不得提交权重、外部路径、研究图片或数据集清单。
+# 当前优先项（2026-09-13 v18）
+
+步骤 2 暴露的移动端上传包租约卡死已修复并完成真机闭环：Socket/TLS/超时异常进入 `retry_wait`、清除租约并自动退避，Drift 重试时间使用类型化绑定；登录应用启动时会在确有可同步任务时重新安排后台任务。v18 同签名 LAN APK 已覆盖安装，原包自动完成创建、Blob、Manifest、Commit，服务端会话进入 `review_required`，候选 21。后续只需人工独立清点后决定是否确认，不能把候选自动写入报表。不要操作已确认/锁定证据。

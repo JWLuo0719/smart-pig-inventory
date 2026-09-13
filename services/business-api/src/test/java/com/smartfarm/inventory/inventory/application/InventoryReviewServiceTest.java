@@ -3,6 +3,7 @@ package com.smartfarm.inventory.inventory.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -125,6 +126,8 @@ class InventoryReviewServiceTest {
     @Test
     void rejectsOrdinaryDeletionOfConfirmedEvidence() {
         UUID assetId = UUID.randomUUID();
+        when(repository.evidenceSessionForAsset(assetId)).thenReturn(Optional.of(sessionId));
+        when(repository.lockSession(sessionId)).thenReturn(Optional.of(session("confirmed", 9, 9, null)));
         when(repository.lockMediaByAssetId(assetId)).thenReturn(Optional.of(
                 new MediaRow(UUID.randomUUID(), assetId, organizationId, true, false)));
 
@@ -147,9 +150,58 @@ class InventoryReviewServiceTest {
         verify(repository, never()).lockEvidence(any());
     }
 
+    @Test
+    void administrativeCorrectionCreatesANewVersionAndPreservesTheEvidenceSession() {
+        UUID idempotencyKey = UUID.randomUUID();
+        SessionRow source = session("confirmed", 7, 7, UUID.randomUUID().toString());
+        UUID correctedId = UUID.randomUUID();
+        SessionRow corrected = new SessionRow(correctedId, source.penId(), organizationId, source.businessDate(),
+                "confirmed", 7, 9, 2, source.id(), source.id(), null, idempotencyKey.toString(),
+                "复盘视频后确认遮挡区域数量", "test-model", "1.0.0", "a".repeat(64), "http-v1",
+                "test-provider", List.of(), 123, List.of(), "review_required", null, null);
+        when(repository.lockSession(sessionId)).thenReturn(Optional.of(source));
+        when(repository.lockCorrectionSuccessor(sessionId)).thenReturn(Optional.empty());
+        when(repository.findSession(any(UUID.class))).thenReturn(Optional.of(corrected));
+        when(actor.subjectId()).thenReturn("farm-admin-1");
+
+        var result = service.correct(sessionId, 9, "复盘视频后确认遮挡区域数量", idempotencyKey, "corr-2");
+
+        assertThat(result.version()).isEqualTo(2);
+        assertThat(result.supersedesSessionId()).isEqualTo(sessionId);
+        assertThat(result.evidenceSessionId()).isEqualTo(sessionId);
+        assertThat(result.count()).isEqualTo(9);
+        assertThat(result.inferenceSource()).isEqualTo("manual");
+        verify(actor).assertCanCorrect(organizationId);
+        verify(repository).createCorrection(eq(source), any(UUID.class), eq(9),
+                eq("复盘视频后确认遮挡区域数量"), eq(idempotencyKey), eq("farm-admin-1"));
+        verify(repository).markSuperseded(sessionId);
+        verify(repository).insertAudit(eq(organizationId), eq("farm-admin-1"), eq("inventory.corrected"),
+                eq("inventory_session"), any(UUID.class), eq("复盘视频后确认遮挡区域数量"), any(), any(), eq("corr-2"));
+    }
+
+    @Test
+    void correctionReplayReturnsTheSameSuccessorWithoutWritingAgain() {
+        UUID idempotencyKey = UUID.randomUUID();
+        SessionRow source = session("superseded", 7, 7, UUID.randomUUID().toString());
+        SessionRow successor = new SessionRow(UUID.randomUUID(), source.penId(), organizationId,
+                source.businessDate(), "confirmed", 7, 9, 2, source.id(), source.id(), null,
+                idempotencyKey.toString(), "复盘视频后确认遮挡区域数量", "test-model", "1.0.0",
+                "a".repeat(64), "http-v1", "test-provider", List.of(), 123, List.of(),
+                "review_required", null, null);
+        when(repository.lockSession(sessionId)).thenReturn(Optional.of(source));
+        when(repository.lockCorrectionSuccessor(sessionId)).thenReturn(Optional.of(successor));
+
+        var result = service.correct(sessionId, 9, "复盘视频后确认遮挡区域数量", idempotencyKey, "corr-2");
+
+        assertThat(result.id()).isEqualTo(successor.id());
+        verify(repository, never()).createCorrection(any(), any(), anyInt(), any(), any(), any());
+        verify(repository, never()).markSuperseded(any());
+    }
+
     private SessionRow session(String status, Integer candidate, Integer confirmed, String idempotencyKey) {
         return new SessionRow(sessionId, UUID.randomUUID(), organizationId, LocalDate.of(2026, 8, 27), status,
-                candidate, confirmed, idempotencyKey, "test-model", "1.0.0", "a".repeat(64), "http-v1",
-                "test-provider", List.of("Provider requires review"));
+                candidate, confirmed, 1, null, null, idempotencyKey, null, null,
+                "test-model", "1.0.0", "a".repeat(64), "http-v1",
+                "test-provider", List.of(), 123, List.of("Provider requires review"), "review_required", null, null);
     }
 }

@@ -1,0 +1,12 @@
+# Fixed project pig-inventory-p0-observability only. Never use with P0.
+services:
+  business-api:
+    ports: ["127.0.0.1:8095:8080"]
+  promtool:
+    image: prom/prometheus:v3.5.0
+    entrypoint: /bin/promtool
+    command: ["test", "rules", "/rules/business-rules.test.yml"]
+    volumes: ["./infra/monitoring:/rules:ro"]
+    working_dir: /rules
+    network_mode: none
+    profiles: ["tools"]

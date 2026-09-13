@@ -29,9 +29,32 @@ void main() {
     expect(await PerceptualHasher().hash(file), result);
   });
 
+  test('keeps all 64 set bits unsigned in a uniform image', () async {
+    final image.Image pixels = image.Image(width: 9, height: 8);
+    final File file = File(path.join(sandbox.path, 'uniform.png'))
+      ..writeAsBytesSync(image.encodePng(pixels));
+    expect(await PerceptualHasher().hash(file), 'ffffffffffffffff');
+  });
+
   test('does not treat undecodable bytes as a perceptual hash', () async {
     final File file = File(path.join(sandbox.path, 'invalid.jpg'))
       ..writeAsBytesSync(<int>[1, 2, 3]);
     expect(await PerceptualHasher().hash(file), isNull);
+  });
+
+  test('repairs only legacy signed 64-bit encodings', () {
+    expect(PerceptualHasher.normalizeLegacyHash('00000000000000-1'),
+        'ffffffffffffffff');
+    expect(PerceptualHasher.normalizeLegacyHash('-8000000000000000'),
+        '8000000000000000');
+    for (final value in [
+      '0123456789abcdef',
+      'ffffffffffffffff',
+      '-8000000000000001',
+      'invalid',
+      '-0'
+    ]) {
+      expect(PerceptualHasher.normalizeLegacyHash(value), value);
+    }
   });
 }

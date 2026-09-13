@@ -1,0 +1,6 @@
+{
+  "name": "pig-inventory-lan-acceptance-tools",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": { "multicast-dns": "7.2.5" }
+}

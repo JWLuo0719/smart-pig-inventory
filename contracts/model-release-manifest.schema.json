@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smart-pig-inventory.local/contracts/model-release-manifest.schema.json",
+  "title": "Research model release candidate manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "release_kind",
+    "release_id",
+    "generated_at_utc",
+    "model",
+    "artifact",
+    "inference",
+    "regression_evidence",
+    "safety"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "release_kind": { "const": "research_candidate" },
+    "release_id": { "type": "string", "minLength": 1 },
+    "generated_at_utc": { "type": "string", "format": "date-time" },
+    "model": { "$ref": "#/$defs/modelIdentity" },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file_name", "size_bytes", "sha256"],
+      "properties": {
+        "file_name": { "type": "string", "pattern": "^[^/\\\\]+$" },
+        "size_bytes": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "inference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selected_threshold", "image_size", "iou_threshold"],
+      "properties": {
+        "selected_threshold": { "type": "number", "minimum": 0, "maximum": 1 },
+        "image_size": { "type": "integer", "minimum": 1 },
+        "iou_threshold": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "regression_evidence": {
+      "type": "object",
+      "required": [
+        "summary_sha256",
+        "threshold_selection_split",
+        "held_out_evaluation_split",
+        "validation",
+        "test",
+        "latency_ms",
+        "runtime"
+      ],
+      "properties": {
+        "summary_sha256": { "$ref": "#/$defs/sha256" },
+        "threshold_selection_split": { "const": "val" },
+        "held_out_evaluation_split": { "const": "test" },
+        "validation": { "type": "object" },
+        "test": { "type": "object" },
+        "latency_ms": { "type": "object" },
+        "runtime": { "type": "object" }
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_approved",
+        "automatic_counting_enabled",
+        "manual_review_required",
+        "multiview_aggregation_enabled",
+        "license_status",
+        "business_gold_set_status",
+        "owner_approval_status",
+        "blockers"
+      ],
+      "properties": {
+        "model_approved": { "const": false },
+        "automatic_counting_enabled": { "const": false },
+        "manual_review_required": { "const": true },
+        "multiview_aggregation_enabled": { "const": false },
+        "license_status": { "const": "pending" },
+        "business_gold_set_status": { "const": "pending" },
+        "owner_approval_status": { "const": "pending" },
+        "blockers": {
+          "type": "array",
+          "uniqueItems": true,
+          "minItems": 3,
+          "items": {
+            "enum": [
+              "license_approval",
+              "authorized_business_gold_set",
+              "owner_automatic_counting_approval"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "modelIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model_key", "model_version", "model_checksum", "adapter_version"],
+      "properties": {
+        "model_key": { "type": "string", "minLength": 1 },
+        "model_version": { "type": "string", "minLength": 1 },
+        "model_checksum": { "$ref": "#/$defs/sha256" },
+        "adapter_version": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

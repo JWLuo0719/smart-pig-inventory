@@ -137,8 +137,9 @@ class QueueCaptureDraft {
         asset.height == null) {
       throw StateError('Media metadata is incomplete and cannot be uploaded');
     }
-    final String? perceptualHash =
-        await _perceptualHasher.hash(File(asset.materializedPath));
+    final String? perceptualHash = asset.contentType.startsWith('video/')
+        ? null
+        : await _perceptualHasher.hash(File(asset.materializedPath));
     return <String, Object?>{
       'assetId': asset.id,
       'viewPosition': asset.viewPosition,
@@ -177,6 +178,7 @@ class QueueCaptureDraft {
         assets.map((LocalMediaAsset asset) => asset.viewPosition).toSet();
     final Set<String> expected = switch (captureKind) {
       'single' => <String>{'single'},
+      'video' => <String>{'video'},
       'left_center_right' => <String>{'left', 'center', 'right'},
       _ => throw StateError('Unsupported capture kind'),
     };

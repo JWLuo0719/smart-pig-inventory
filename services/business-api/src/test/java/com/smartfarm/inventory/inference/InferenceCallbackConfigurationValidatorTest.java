@@ -7,9 +7,9 @@ import org.junit.jupiter.api.Test;
 
 class InferenceCallbackConfigurationValidatorTest {
     @Test
-    void rejectsAnEnabledSecureDispatcherWithoutCallbackCredential() {
+    void rejectsAnEnabledDispatcherWithoutCallbackCredential() {
         InferenceCallbackConfigurationValidator validator =
-                new InferenceCallbackConfigurationValidator(true, true, "");
+                new InferenceCallbackConfigurationValidator(true, "");
 
         assertThatThrownBy(validator::requireCallbackCredentialWhenDispatching)
                 .isInstanceOf(IllegalStateException.class)
@@ -18,9 +18,9 @@ class InferenceCallbackConfigurationValidatorTest {
 
     @Test
     void allowsDisabledDispatcherOrAConfiguredCredential() {
-        assertThatCode(() -> new InferenceCallbackConfigurationValidator(true, false, "")
+        assertThatCode(() -> new InferenceCallbackConfigurationValidator(false, "")
                 .requireCallbackCredentialWhenDispatching()).doesNotThrowAnyException();
-        assertThatCode(() -> new InferenceCallbackConfigurationValidator(true, true, "local-e2e-secret")
+        assertThatCode(() -> new InferenceCallbackConfigurationValidator(true, "local-e2e-secret")
                 .requireCallbackCredentialWhenDispatching()).doesNotThrowAnyException();
     }
 }

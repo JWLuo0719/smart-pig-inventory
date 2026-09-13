@@ -17,6 +17,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 public class UploadProblemHandler {
     @ExceptionHandler(UploadException.class)
     ResponseEntity<Map<String, Object>> uploadException(UploadException exception, HttpServletRequest request) {
+        request.setAttribute(com.smartfarm.inventory.observability.UploadMetricsConfiguration.ERROR_CODE, exception.code());
         return problem(exception.status(), exception.code(), exception.getMessage(), request);
     }
 

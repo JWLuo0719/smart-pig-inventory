@@ -1,0 +1,121 @@
+rule_files: [business-rules.yml]
+evaluation_interval: 1m
+tests:
+  - name: scrape-down-and-recovery
+    interval: 1m
+    input_series:
+      - series: 'up{job="business-api",instance="test"}'
+        values: '0x4 1x6'
+      - series: 'pig_metrics_snapshot_available{job="business-api",instance="test"}'
+        values: '1x10'
+      - series: 'pig_metrics_snapshot_last_success_timestamp_seconds{job="business-api",instance="test"}'
+        values: '0+60x10'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: PigMetricsScrapeDown
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: PigMetricsScrapeDown
+        exp_alerts:
+          - exp_labels: {job: business-api, instance: test, severity: warning}
+            exp_annotations: {summary: "Business metrics scrape is unavailable"}
+      - eval_time: 6m
+        alertname: PigMetricsScrapeDown
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: PigMetricsSnapshotUnavailable
+        exp_alerts: []
+  - name: snapshot-missing-is-not-a-healthy-empty-queue
+    input_series:
+      - series: 'up{job="business-api",instance="test"}'
+        values: '1x8'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: PigMetricsSnapshotUnavailable
+        exp_alerts:
+          - exp_labels: {job: business-api, instance: test, severity: warning}
+            exp_annotations: {summary: "Business database metrics are missing or stale"}
+      - eval_time: 6m
+        alertname: PigInferenceDispatchBacklog
+        exp_alerts: []
+  - name: snapshot-failure-staleness-and-recovery
+    input_series:
+      - series: 'up{job="business-api",instance="test"}'
+        values: '1x12'
+      - series: 'pig_metrics_snapshot_available{job="business-api",instance="test"}'
+        values: '0x4 1x8'
+      - series: 'pig_metrics_snapshot_last_success_timestamp_seconds{job="business-api",instance="test"}'
+        values: '0x4 300+60x8'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: PigMetricsSnapshotUnavailable
+        exp_alerts:
+          - exp_labels: {job: business-api, instance: test, severity: warning}
+            exp_annotations: {summary: "Business database metrics are missing or stale"}
+      - eval_time: 6m
+        alertname: PigMetricsSnapshotUnavailable
+        exp_alerts: []
+  - name: backlog-for-duration-and-recovery
+    input_series:
+      - series: 'pig_metrics_snapshot_available{job="business-api",instance="test"}'
+        values: '1x12'
+      - series: 'pig_inference_outbox_oldest_seconds{job="business-api",instance="test"}'
+        values: '301x7 0x5'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: PigInferenceDispatchBacklog
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: PigInferenceDispatchBacklog
+        exp_alerts:
+          - exp_labels: {job: business-api, instance: test, severity: warning}
+            exp_annotations: {summary: "Inference outbox has waited more than five minutes"}
+      - eval_time: 9m
+        alertname: PigInferenceDispatchBacklog
+        exp_alerts: []
+  - name: upload-failures-minimum-volume-and-counter-reset
+    input_series:
+      - series: 'pig_upload_requests_total{job="business-api",instance="test",step="commit",outcome="failed"}'
+        values: '0+4x6 0+0x10'
+      - series: 'pig_upload_requests_total{job="business-api",instance="test",step="commit",outcome="created"}'
+        values: '0+16x6 0+20x10'
+      - series: 'pig_upload_requests_total{job="business-api",instance="quiet",step="commit",outcome="failed"}'
+        values: '0+0.1x16'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: PigUploadServerFailures
+        exp_alerts:
+          - exp_labels: {job: business-api, instance: test, step: commit, severity: warning}
+            exp_annotations: {summary: "Upload server failures exceed local diagnostic threshold"}
+      - eval_time: 14m
+        alertname: PigUploadServerFailures
+        exp_alerts: []
+    promql_expr_test:
+      - expr: 'pig:upload_request_success:ratio5m{instance="test"}'
+        eval_time: 5m
+        exp_samples:
+          - labels: 'pig:upload_request_success:ratio5m{job="business-api",instance="test",step="commit"}'
+            value: 0.8
+  - name: review-rate-and-zero-denominator
+    input_series:
+      - series: 'pig_inference_results_succeeded_last24h{job="business-api",instance="test"}'
+        values: '60x5'
+      - series: 'pig_inference_results_review_required_last24h{job="business-api",instance="test"}'
+        values: '20x5'
+      - series: 'pig_inference_results_failed_last24h{job="business-api",instance="test"}'
+        values: '20x5'
+      - series: 'pig_inference_results_succeeded_last24h{job="business-api",instance="empty"}'
+        values: '0x5'
+      - series: 'pig_inference_results_review_required_last24h{job="business-api",instance="empty"}'
+        values: '0x5'
+      - series: 'pig_inference_results_failed_last24h{job="business-api",instance="empty"}'
+        values: '0x5'
+    promql_expr_test:
+      - expr: 'pig:inference_review:ratio24h{instance="test"}'
+        eval_time: 3m
+        exp_samples:
+          - labels: 'pig:inference_review:ratio24h{job="business-api",instance="test"}'
+            value: 0.2
+      - expr: 'pig:inference_review:ratio24h{instance="empty"} >= 0'
+        eval_time: 3m
+        exp_samples: []

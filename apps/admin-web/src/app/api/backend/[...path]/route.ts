@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { isPermittedBackendRoute } from "@/lib/backend-route-policy";
+
 const upstream = process.env.BUSINESS_API_BASE_URL;
 
 type RouteContext = { params: Promise<{ path: string[] }> };
@@ -14,20 +16,7 @@ async function proxy(request: Request, { params }: RouteContext) {
 
   const { path } = await params;
   const route = path.join("/");
-  const permitted = (request.method === "POST" && (
-    route === "auth/login"
-    || /^inventory-sessions\/[^/]+\/confirm$/.test(route)
-    || /^review\/near-duplicates\/[^/]+\/resolve$/.test(route)
-  )) || (request.method === "GET" && (
-    route === "inventory-tasks"
-    || route === "review/near-duplicates"
-    || route === "inventory-reports/daily"
-    || route === "inventory-reports/aggregate"
-    || route === "audit-events"
-    || /^inventory-sessions\/[^/]+$/.test(route)
-    || /^inventory-sessions\/[^/]+\/media$/.test(route)
-    || /^media-assets\/[^/]+\/content$/.test(route)
-  ));
+  const permitted = isPermittedBackendRoute(request.method, route);
   if (!permitted) {
     return NextResponse.json({ code: "ROUTE_NOT_ALLOWED" }, { status: 404 });
   }
@@ -48,10 +37,17 @@ async function proxy(request: Request, { params }: RouteContext) {
   });
   return new Response(response.body, {
     status: response.status,
-    headers: {
-      "content-type": response.headers.get("content-type") ?? "application/json",
-      "cache-control": "no-store",
-    },
+    headers: (() => {
+      const outgoing = new Headers({
+        "content-type": response.headers.get("content-type") ?? "application/json",
+        "cache-control": "no-store",
+      });
+      const disposition = response.headers.get("content-disposition");
+      if (disposition) outgoing.set("content-disposition", disposition);
+      const length = response.headers.get("content-length");
+      if (length) outgoing.set("content-length", length);
+      return outgoing;
+    })(),
   });
 }
 

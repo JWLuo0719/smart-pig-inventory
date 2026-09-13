@@ -10,7 +10,7 @@
     "correlation_id": {"type": "string", "minLength": 1},
     "organization_id": {"type": "string", "format": "uuid"},
     "capture_set_id": {"type": "string", "format": "uuid"},
-    "capture_kind": {"enum": ["single", "left_center_right"]},
+    "capture_kind": {"enum": ["single", "left_center_right", "video"]},
     "media": {
       "type": "array",
       "minItems": 1,
@@ -21,7 +21,7 @@
         "required": ["asset_id", "view_position", "object_uri", "sha256"],
         "properties": {
           "asset_id": {"type": "string", "format": "uuid"},
-          "view_position": {"enum": ["single", "left", "center", "right"]},
+          "view_position": {"enum": ["single", "left", "center", "right", "video"]},
           "object_uri": {"type": "string", "pattern": "^s3://"},
           "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
           "roi": {

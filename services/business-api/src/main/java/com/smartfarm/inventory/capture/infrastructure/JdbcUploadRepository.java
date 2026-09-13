@@ -11,6 +11,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
@@ -19,10 +20,24 @@ import org.springframework.stereotype.Repository;
 public class JdbcUploadRepository {
     private final JdbcTemplate jdbc;
     private final ObjectMapper objectMapper;
+    private final String requestedModelKey;
+    private final String requestedModelVersion;
+    private final String requestedModelChecksum;
+    private final String requestedAdapterVersion;
 
-    public JdbcUploadRepository(JdbcTemplate jdbc, ObjectMapper objectMapper) {
+    public JdbcUploadRepository(
+            JdbcTemplate jdbc,
+            ObjectMapper objectMapper,
+            @Value("${app.inference.model-key:pending-license-review}") String requestedModelKey,
+            @Value("${app.inference.model-version:unverified}") String requestedModelVersion,
+            @Value("${app.inference.model-checksum:unverified}") String requestedModelChecksum,
+            @Value("${app.inference.adapter-version:http-v1}") String requestedAdapterVersion) {
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
+        this.requestedModelKey = requestedModelKey;
+        this.requestedModelVersion = requestedModelVersion;
+        this.requestedModelChecksum = requestedModelChecksum;
+        this.requestedAdapterVersion = requestedAdapterVersion;
     }
 
     public boolean isEnabledPenInOrganization(UUID penId, UUID organizationId) {
@@ -143,9 +158,12 @@ public class JdbcUploadRepository {
 
     public void insertInferenceJob(UUID jobId, UUID sessionId, UUID captureSetId, String correlationId) {
         jdbc.update("""
-                INSERT INTO inference_job (id, session_id, capture_set_id, status, provider_key, correlation_id)
-                VALUES (?, ?, ?, 'submitted', 'unavailable', ?)
-                """, bytes(jobId), bytes(sessionId), bytes(captureSetId), correlationId);
+                INSERT INTO inference_job
+                  (id, root_job_id, session_id, capture_set_id, status, provider_key, correlation_id,
+                   requested_model_key, requested_model_version, requested_model_checksum, requested_adapter_version)
+                VALUES (?, ?, ?, ?, 'submitted', 'unavailable', ?, ?, ?, ?, ?)
+                """, bytes(jobId), bytes(jobId), bytes(sessionId), bytes(captureSetId), correlationId,
+                requestedModelKey, requestedModelVersion, requestedModelChecksum, requestedAdapterVersion);
     }
 
     public void insertOutbox(UUID eventId, UUID packageId, String correlationId, String payloadJson) {
@@ -168,7 +186,7 @@ public class JdbcUploadRepository {
                 SELECT p.session_id, j.id AS job_id
                 FROM upload_package p
                 JOIN capture_set c ON c.session_id = p.session_id AND c.upload_package_id = p.id
-                JOIN inference_job j ON j.capture_set_id = c.id
+                JOIN inference_job j ON j.capture_set_id = c.id AND j.retry_sequence = 0
                 WHERE p.id = ?
                 """, (resultSet, rowNumber) -> new CommittedReferences(
                 readUuid(resultSet, "session_id"), readUuid(resultSet, "job_id")), bytes(packageId));

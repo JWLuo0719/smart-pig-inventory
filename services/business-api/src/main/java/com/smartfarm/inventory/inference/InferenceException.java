@@ -22,8 +22,16 @@ public class InferenceException extends RuntimeException {
         return new InferenceException(409, "INFERENCE_RESULT_CONFLICT", message);
     }
 
+    public static InferenceException retryConflict(String message) {
+        return new InferenceException(409, "INFERENCE_RETRY_CONFLICT", message);
+    }
+
     public static InferenceException invalid(String message) {
         return new InferenceException(422, "INFERENCE_RESULT_INVALID", message);
+    }
+
+    public static InferenceException retryInvalid(String message) {
+        return new InferenceException(422, "INFERENCE_RETRY_INVALID", message);
     }
 
     public int status() { return status; }

@@ -43,6 +43,8 @@ Agent 是受限 Sidecar，而不是计算结果或业务事实的来源：只读
 - Runner 已从私有 MinIO 读取一张合成/非业务烟测图片并完成原始模型推理，返回 `review_required`、空计数与检测列表；首个请求约 2.6 秒。
 - `pig-inventory-yolo-research` 隔离 Compose 项目已健康启动，Spring 已应用 Flyway V1–V5；产品 Worker 的 `research-http-yolo` Provider 已调用该 Runner，并再次标准化为 `review_required` 与 `count=null`。
 - 真实猪场图像、外部研究数据集和人员现场媒体均未复制进产品仓库、镜像上下文或跟踪文件。
+- 团队权重的后续计数回归使用 `scripts/run-team-yolo-regression.ps1`：只在验证集选择阈值，再固定阈值评估测试集，并把本机产物写入 Git 忽略目录。可复现结果和适用边界见 `docs/research/team-yolov13-candidate-evaluation.md`。
+- 产品 HTTP Provider 分别配置连接超时和总超时。Provider 超时形成终态失败结果；回调网络超时、429 与 5xx 由 Celery 重试并保持原始任务 ID，永久 4xx 不盲目重试。
 
 ## 进入正式模型的门禁
 

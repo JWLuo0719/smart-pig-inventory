@@ -8,7 +8,8 @@
 
 - realme GT 7 Pro 已通过 AC-01 的完整三视图强制停止恢复：左/中/右图片保存为同一采集组，重开后 3/3 缩略图可查看且不显示数量。
 - 一个完整三视图包已在联网状态自动完成 Commit 并进入 `已提交，等待处理`；复核页因 Access Token 过期暴露未自动刷新缺陷。修复包含在 Flutter v`0.1.0+3`，待更新 APK 后回归，故 AC-06/AC-08/AC-09 尚未由本轮实机签署。
-- 管理端 LAN HTTP 登录发现 `crypto.randomUUID` 不可用；代码已改为兼容 fallback，待重建 `admin-web` 后回归。
+- 2026-08-30 已用 Playwright 在 `pig-inventory-p0` 的 LAN HTTP 入口回归登录：登录与任务、近重复、审计、日报、综合报表请求均经同源代理返回 200，`localStorage`/`sessionStorage` 为空。仅发现缺失 `favicon.ico` 的 404；键盘、130% 字体和完整媒体复核仍待人工验收。
+- 2026-08-30 重建业务 API/管理端后再次用真实 Chromium 自动回归团队权重研究会话：OPERATOR 可见 25 个 AI 待复核候选、25 个检测框及置信度、精确模型版本/checksum 和 2672 ms 耗时；栏舍任务仍显示“—”，日报仍为 0，证明候选未成为业务确认。浏览器存储仍为空。OPERATOR 访问复核队列/审计得到用于防枚举的 404，符合角色边界；人工键盘与 130% 字体仍后置。
 
 ## 0. 安全启动测试环境
 
@@ -18,7 +19,7 @@
 # 仅首次且不存在 .env 时执行；不会显示或提交生成的口令。
 .\scripts\initialize-local-dev.ps1
 
-# 已存在 .env 但缺认证配置时使用；不要用 -Force 覆盖。
+# 已存在 .env 但缺认证/推理闭环配置时使用；脚本只补空值并强制启用本机安全身份与派发，不覆盖已有非空秘密。
 .\scripts\configure-local-e2e-identity.ps1
 
 # 新建独立的 Docker 卷/容器，避免影响默认开发数据。

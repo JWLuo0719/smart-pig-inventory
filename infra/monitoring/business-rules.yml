@@ -1,0 +1,28 @@
+groups:
+  - name: pig-business
+    interval: 30s
+    rules:
+      - record: pig:upload_request_success:ratio5m
+        expr: sum by (job, instance, step) (rate(pig_upload_requests_total{outcome=~"created|replayed"}[5m])) / sum by (job, instance, step) (rate(pig_upload_requests_total[5m]))
+      - record: pig:inference_review:ratio24h
+        expr: pig_inference_results_review_required_last24h / (pig_inference_results_succeeded_last24h + pig_inference_results_review_required_last24h + pig_inference_results_failed_last24h)
+      - alert: PigMetricsScrapeDown
+        expr: up{job="business-api"} == 0
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "Business metrics scrape is unavailable"}
+      - alert: PigMetricsSnapshotUnavailable
+        expr: (up{job="business-api"} == 1 unless on(job, instance) pig_metrics_snapshot_available == 1) or (time() - pig_metrics_snapshot_last_success_timestamp_seconds > 90)
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "Business database metrics are missing or stale"}
+      - alert: PigInferenceDispatchBacklog
+        expr: (pig_inference_outbox_oldest_seconds > 300) and on(job, instance) (pig_metrics_snapshot_available == 1)
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Inference outbox has waited more than five minutes"}
+      - alert: PigUploadServerFailures
+        expr: (sum by(job, instance, step) (increase(pig_upload_requests_total{outcome="failed"}[5m])) / sum by(job, instance, step) (increase(pig_upload_requests_total[5m])) > 0.1) and (sum by(job, instance, step) (increase(pig_upload_requests_total[5m])) >= 10)
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "Upload server failures exceed local diagnostic threshold"}

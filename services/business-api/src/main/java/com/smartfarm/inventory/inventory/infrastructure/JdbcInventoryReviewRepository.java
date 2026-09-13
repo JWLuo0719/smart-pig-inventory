@@ -3,6 +3,7 @@ package com.smartfarm.inventory.inventory.infrastructure;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -63,8 +64,8 @@ public class JdbcInventoryReviewRepository {
                 JOIN building b ON b.id = p.building_id
                 LEFT JOIN inventory_session s ON s.id = (
                     SELECT candidate.id FROM inventory_session candidate
-                    WHERE candidate.pen_id = p.id AND candidate.business_date = ?
-                    ORDER BY candidate.updated_at DESC, candidate.created_at DESC LIMIT 1
+                    WHERE candidate.pen_id = p.id AND candidate.business_date = ? AND candidate.status <> 'superseded'
+                    ORDER BY (candidate.status = 'confirmed') DESC, candidate.updated_at DESC, candidate.created_at DESC, candidate.id DESC LIMIT 1
                 )
                 WHERE b.organization_id = ? AND b.enabled = TRUE AND p.enabled = TRUE
                 ORDER BY b.code, p.code
@@ -88,6 +89,31 @@ public class JdbcInventoryReviewRepository {
                 resultSet.getString("building_name"), resultSet.getString("pen_code"), resultSet.getString("pen_name"),
                 resultSet.getObject("business_date", LocalDate.class), resultSet.getInt("confirmed_count")),
                 bytes(organizationId), businessDate);
+    }
+
+    public Optional<OrganizationRow> findOrganization(UUID organizationId) {
+        return jdbc.query("SELECT code, name FROM farm_organization WHERE id = ? AND enabled = TRUE",
+                (resultSet, rowNumber) -> new OrganizationRow(resultSet.getString("code"), resultSet.getString("name")),
+                bytes(organizationId)).stream().findFirst();
+    }
+
+    public List<ReportExportRow> listConfirmedForExport(UUID organizationId, LocalDate from, LocalDate to, int limit) {
+        return jdbc.query("""
+                SELECT s.business_date, b.code AS building_code, b.name AS building_name,
+                       p.code AS pen_code, p.name AS pen_name, s.confirmed_count
+                FROM inventory_session s
+                JOIN pen p ON p.id = s.pen_id
+                JOIN building b ON b.id = p.building_id
+                WHERE b.organization_id = ?
+                  AND s.status = 'confirmed'
+                  AND s.business_date BETWEEN ? AND ?
+                ORDER BY s.business_date, b.code, p.code, s.confirmed_at
+                LIMIT ?
+                """, (resultSet, rowNumber) -> new ReportExportRow(
+                resultSet.getObject("business_date", LocalDate.class), resultSet.getString("building_code"),
+                resultSet.getString("building_name"), resultSet.getString("pen_code"),
+                resultSet.getString("pen_name"), resultSet.getInt("confirmed_count")),
+                bytes(organizationId), from, to, limit);
     }
 
     public Optional<UUID> organizationForPen(UUID penId) {
@@ -118,15 +144,45 @@ public class JdbcInventoryReviewRepository {
         return jdbc.query("""
                 SELECT m.asset_id, m.view_position, m.content_type, m.byte_size, m.state, m.locked_at, m.deleted_at,
                        m.storage_key, b.organization_id
-                FROM media_asset m
-                JOIN capture_set c ON c.id = m.capture_set_id
-                JOIN inventory_session s ON s.id = c.session_id
-                JOIN pen p ON p.id = s.pen_id
+                FROM inventory_session requested
+                JOIN inventory_session evidence ON evidence.id = COALESCE(requested.evidence_session_id, requested.id)
+                JOIN capture_set c ON c.session_id = evidence.id
+                JOIN media_asset m ON m.capture_set_id = c.id
+                JOIN pen p ON p.id = requested.pen_id
                 JOIN building b ON b.id = p.building_id
-                WHERE c.session_id = ?
+                WHERE requested.id = ?
                 ORDER BY FIELD(m.view_position, 'single', 'left', 'center', 'right'), m.created_at
                 """, this::mapMediaEvidence, bytes(sessionId));
     }
+
+    public List<MediaLibraryRow> mediaLibrary(UUID organizationId, LocalDate date, UUID penId, int offset, int limit) {
+        return jdbc.query("""
+                SELECT m.asset_id,c.session_id,p.id AS pen_id,b.code AS building_code,p.code AS pen_code,
+                       s.business_date,m.view_position,m.content_type,m.byte_size,m.locked_at,m.deleted_at
+                FROM media_asset m JOIN capture_set c ON c.id=m.capture_set_id
+                JOIN inventory_session s ON s.id=c.session_id
+                JOIN pen p ON p.id=s.pen_id JOIN building b ON b.id=p.building_id
+                WHERE b.organization_id=? AND s.business_date=?
+                """ + (penId == null ? "" : " AND p.id=?") + " ORDER BY m.created_at DESC,m.id DESC LIMIT ? OFFSET ?",
+                (rs, n) -> new MediaLibraryRow(readUuid(rs,"asset_id"), readUuid(rs,"session_id"), readUuid(rs,"pen_id"),
+                    rs.getString("building_code"),rs.getString("pen_code"),rs.getObject("business_date",LocalDate.class),
+                    rs.getString("view_position"),rs.getString("content_type"),rs.getLong("byte_size"),
+                    rs.getTimestamp("locked_at") != null,rs.getTimestamp("deleted_at") != null),
+                penId == null ? new Object[]{bytes(organizationId),date,limit,offset} : new Object[]{bytes(organizationId),date,bytes(penId),limit,offset});
+    }
+
+    public Optional<UUID> evidenceSessionForAsset(UUID assetId) {
+        return jdbc.query("SELECT c.session_id FROM media_asset m JOIN capture_set c ON c.id=m.capture_set_id WHERE m.asset_id=?",
+                (rs,n) -> readUuid(rs,"session_id"),bytes(assetId)).stream().findFirst();
+    }
+
+    public boolean hasDeletedEvidence(UUID sessionId) {
+        return jdbc.queryForObject("SELECT COUNT(*) FROM media_asset m JOIN capture_set c ON c.id=m.capture_set_id WHERE c.session_id=? AND m.deleted_at IS NOT NULL",
+                Integer.class,bytes(sessionId)) > 0;
+    }
+
+    public record MediaLibraryRow(UUID assetId, UUID sessionId, UUID penId, String buildingCode, String penCode,
+            LocalDate businessDate, String viewPosition, String contentType, long byteSize, boolean locked, boolean deleted) { }
 
     public Optional<MediaEvidenceRow> findMediaEvidence(UUID assetId) {
         return jdbc.query("""
@@ -175,6 +231,31 @@ public class JdbcInventoryReviewRepository {
                     confirmation_idempotency_key = ?
                 WHERE id = ? AND status = 'review_required'
                 """, confirmedCount, subjectId, idempotencyKey.toString(), bytes(session.id()));
+    }
+
+    public Optional<SessionRow> lockCorrectionSuccessor(UUID sessionId) {
+        return querySession("WHERE s.supersedes_session_id = ? FOR UPDATE", bytes(sessionId));
+    }
+
+    public void createCorrection(SessionRow source, UUID correctionId, int correctedCount, String reason,
+            UUID idempotencyKey, String subjectId) {
+        UUID evidenceSessionId = source.evidenceSessionId() == null ? source.id() : source.evidenceSessionId();
+        jdbc.update("""
+                INSERT INTO inventory_session
+                  (id, campaign_id, pen_id, business_date, status, candidate_count, confirmed_count, raw_mean,
+                   version, supersedes_session_id, evidence_session_id, created_by, confirmed_by, confirmed_at,
+                   correction_idempotency_key, correction_reason)
+                SELECT ?, campaign_id, pen_id, business_date, 'confirmed', candidate_count, ?, raw_mean,
+                       version + 1, id, ?, ?, ?, CURRENT_TIMESTAMP(6), ?, ?
+                FROM inventory_session
+                WHERE id = ? AND status = 'superseded'
+                """, bytes(correctionId), correctedCount, bytes(evidenceSessionId), subjectId, subjectId,
+                idempotencyKey.toString(), reason, bytes(source.id()));
+    }
+
+    public void markSuperseded(UUID sessionId) {
+        jdbc.update("UPDATE inventory_session SET status = 'superseded' WHERE id = ? AND status = 'confirmed'",
+                bytes(sessionId));
     }
 
     public void lockEvidence(UUID sessionId) {
@@ -228,21 +309,35 @@ public class JdbcInventoryReviewRepository {
     private Optional<SessionRow> querySession(String predicate, Object... args) {
         List<SessionRow> rows = jdbc.query("""
                 SELECT s.id, s.pen_id, b.organization_id, s.business_date, s.status, s.candidate_count, s.confirmed_count,
-                       s.confirmation_idempotency_key, r.model_key, r.model_version, r.model_checksum, r.adapter_version,
-                       r.inference_source, r.warnings_json
+                       s.version, s.supersedes_session_id, s.evidence_session_id, s.confirmation_idempotency_key,
+                       s.correction_idempotency_key, s.correction_reason,
+                       r.model_key, r.model_version, r.model_checksum, r.adapter_version,
+                       r.inference_source, r.detections_json, r.latency_ms, r.warnings_json,
+                       j.status AS inference_status, j.failure_code, j.failure_message
                 FROM inventory_session s
                 JOIN pen p ON p.id = s.pen_id
                 JOIN building b ON b.id = p.building_id
-                LEFT JOIN inference_job j ON j.session_id = s.id
+                LEFT JOIN inference_job j ON j.id = (
+                    SELECT candidate.id FROM inference_job candidate
+                    WHERE candidate.session_id = COALESCE(s.evidence_session_id, s.id)
+                    ORDER BY candidate.retry_sequence DESC
+                    LIMIT 1
+                )
                 LEFT JOIN count_result r ON r.inference_job_id = j.id
                 %s
                 """.formatted(predicate), (resultSet, rowNumber) -> new SessionRow(
                 readUuid(resultSet, "id"), readUuid(resultSet, "pen_id"), readUuid(resultSet, "organization_id"),
                 resultSet.getObject("business_date", LocalDate.class), resultSet.getString("status"),
                 nullableInt(resultSet, "candidate_count"), nullableInt(resultSet, "confirmed_count"),
-                resultSet.getString("confirmation_idempotency_key"), resultSet.getString("model_key"),
+                resultSet.getInt("version"), readUuid(resultSet, "supersedes_session_id"),
+                readUuid(resultSet, "evidence_session_id"), resultSet.getString("confirmation_idempotency_key"),
+                resultSet.getString("correction_idempotency_key"), resultSet.getString("correction_reason"),
+                resultSet.getString("model_key"),
                 resultSet.getString("model_version"), resultSet.getString("model_checksum"), resultSet.getString("adapter_version"),
-                resultSet.getString("inference_source"), stringList(resultSet.getString("warnings_json"))), args);
+                resultSet.getString("inference_source"), detectionList(resultSet.getString("detections_json")),
+                nullableInt(resultSet, "latency_ms"), stringList(resultSet.getString("warnings_json")),
+                resultSet.getString("inference_status"), resultSet.getString("failure_code"),
+                resultSet.getString("failure_message")), args);
         return rows.stream().findFirst();
     }
 
@@ -277,6 +372,15 @@ public class JdbcInventoryReviewRepository {
             return objectMapper.readValue(value, new TypeReference<>() { });
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Cannot read persisted inference warnings", exception);
+        }
+    }
+
+    private List<DetectionRow> detectionList(String value) {
+        if (value == null) return List.of();
+        try {
+            return objectMapper.readValue(value, new TypeReference<>() { });
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Cannot read persisted inference detections", exception);
         }
     }
 
@@ -323,12 +427,25 @@ public class JdbcInventoryReviewRepository {
             String penName, LocalDate businessDate, int confirmedCount) {
     }
 
+    public record OrganizationRow(String code, String name) {
+    }
+
+    public record ReportExportRow(LocalDate businessDate, String buildingCode, String buildingName, String penCode,
+            String penName, int confirmedCount) {
+    }
+
     public record ConfirmedCountRow(LocalDate businessDate, int confirmedCount) {
     }
 
     public record SessionRow(UUID id, UUID penId, UUID organizationId, LocalDate businessDate, String status,
-            Integer candidateCount, Integer confirmedCount, String confirmationIdempotencyKey, String modelKey,
-            String modelVersion, String modelChecksum, String adapterVersion, String inferenceSource, List<String> warnings) {
+            Integer candidateCount, Integer confirmedCount, int version, UUID supersedesSessionId, UUID evidenceSessionId,
+            String confirmationIdempotencyKey, String correctionIdempotencyKey, String correctionReason, String modelKey,
+            String modelVersion, String modelChecksum, String adapterVersion, String inferenceSource,
+            List<DetectionRow> detections, Integer latencyMs, List<String> warnings, String inferenceStatus,
+            String failureCode, String failureMessage) {
+    }
+
+    public record DetectionRow(UUID assetId, List<BigDecimal> bbox, BigDecimal confidence, int classId) {
     }
 
     public record MediaRow(UUID id, UUID assetId, UUID organizationId, boolean locked, boolean deleted) {

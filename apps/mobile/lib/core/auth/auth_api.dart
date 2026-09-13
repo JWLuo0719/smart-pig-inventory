@@ -2,11 +2,12 @@ import 'package:dio/dio.dart';
 import 'package:uuid/uuid.dart';
 
 import 'auth_session.dart';
+import '../network/api_client.dart';
 
 class AuthApi {
   AuthApi({required String baseUrl, Dio? dio})
       : _dio = dio ??
-            Dio(BaseOptions(
+            createApiDio(BaseOptions(
                 baseUrl: baseUrl,
                 connectTimeout: const Duration(seconds: 15),
                 receiveTimeout: const Duration(seconds: 30)));

@@ -134,9 +134,9 @@ class MediaMaterializer {
   String _supportedExtension(String originalName) {
     final String extension = path.extension(originalName).toLowerCase();
     return switch (extension) {
-      '.jpg' || '.jpeg' || '.png' || '.heic' => extension,
+      '.jpg' || '.jpeg' || '.png' || '.heic' || '.mp4' => extension,
       _ => throw ArgumentError.value(
-          originalName, 'originalName', 'Unsupported image extension'),
+          originalName, 'originalName', 'Unsupported media extension'),
     };
   }
 }

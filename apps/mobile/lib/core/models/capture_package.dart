@@ -5,14 +5,15 @@ import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as path;
 import 'package:uuid/uuid.dart';
 
-enum CaptureKind { single, leftCenterRight }
+enum CaptureKind { single, leftCenterRight, video }
 
-enum ViewPosition { single, left, center, right }
+enum ViewPosition { single, left, center, right, video }
 
 extension CaptureKindWire on CaptureKind {
   String get wireName => switch (this) {
         CaptureKind.single => 'single',
         CaptureKind.leftCenterRight => 'left_center_right',
+        CaptureKind.video => 'video',
       };
 }
 

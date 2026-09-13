@@ -20,24 +20,19 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 public class JdbcInferenceRepository {
     private static final String COMMITTED_CAPTURE_EVENT = "capture_package.committed.v1";
+    private static final String RETRY_REQUESTED_EVENT = "inference_job.retry_requested.v1";
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper objectMapper;
     private final String bucket;
-    private final CountingRequest.ModelIdentity requestedModel;
 
     public JdbcInferenceRepository(
             JdbcTemplate jdbc,
             ObjectMapper objectMapper,
-            @Value("${app.object-storage.bucket}") String bucket,
-            @Value("${app.inference.model-key:pending-license-review}") String modelKey,
-            @Value("${app.inference.model-version:unverified}") String modelVersion,
-            @Value("${app.inference.model-checksum:unverified}") String modelChecksum,
-            @Value("${app.inference.adapter-version:http-v1}") String adapterVersion) {
+            @Value("${app.object-storage.bucket}") String bucket) {
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
         this.bucket = bucket;
-        this.requestedModel = new CountingRequest.ModelIdentity(modelKey, modelVersion, modelChecksum, adapterVersion);
     }
 
     @Transactional
@@ -49,10 +44,10 @@ public class JdbcInferenceRepository {
                 """);
         List<UUID> eventIds = jdbc.query("""
                 SELECT id FROM domain_event_outbox
-                WHERE event_type = ? AND state = 'PENDING' AND available_at <= CURRENT_TIMESTAMP(6)
+                WHERE event_type IN (?, ?) AND state = 'PENDING' AND available_at <= CURRENT_TIMESTAMP(6)
                 ORDER BY created_at
                 LIMIT 1 FOR UPDATE SKIP LOCKED
-                """, (resultSet, rowNumber) -> readUuid(resultSet, "id"), COMMITTED_CAPTURE_EVENT);
+                """, (resultSet, rowNumber) -> readUuid(resultSet, "id"), COMMITTED_CAPTURE_EVENT, RETRY_REQUESTED_EVENT);
         if (eventIds.isEmpty()) {
             return Optional.empty();
         }
@@ -134,14 +129,16 @@ public class JdbcInferenceRepository {
         jdbc.update("""
                 UPDATE inventory_session
                 SET status = 'review_required', candidate_count = ?
-                WHERE id = ?
+                WHERE id = ? AND status NOT IN ('confirmed', 'superseded')
                 """, candidateCount, bytes(sessionId));
     }
 
     private DispatchableJob loadDispatchableJob(UUID eventId) {
         List<DispatchRow> rows = jdbc.query("""
                 SELECT o.id AS event_id, j.id AS job_id, j.correlation_id, u.organization_id, c.id AS capture_set_id,
-                       c.kind AS capture_kind, m.asset_id, m.view_position, m.storage_key, m.sha256, m.roi_json
+                       c.kind AS capture_kind, m.asset_id, m.view_position, m.storage_key, m.sha256, m.roi_json,
+                       j.requested_model_key, j.requested_model_version, j.requested_model_checksum,
+                       j.requested_adapter_version
                 FROM domain_event_outbox o
                 JOIN inference_job j ON BIN_TO_UUID(j.id) = JSON_UNQUOTE(JSON_EXTRACT(o.payload_json, '$.inferenceJobId'))
                 JOIN capture_set c ON c.id = j.capture_set_id
@@ -153,7 +150,9 @@ public class JdbcInferenceRepository {
                 readUuid(resultSet, "event_id"), readUuid(resultSet, "job_id"), resultSet.getString("correlation_id"),
                 readUuid(resultSet, "organization_id"), readUuid(resultSet, "capture_set_id"), resultSet.getString("capture_kind"),
                 readUuid(resultSet, "asset_id"), resultSet.getString("view_position"), resultSet.getString("storage_key"),
-                resultSet.getString("sha256"), resultSet.getString("roi_json")), bytes(eventId));
+                resultSet.getString("sha256"), resultSet.getString("roi_json"),
+                resultSet.getString("requested_model_key"), resultSet.getString("requested_model_version"),
+                resultSet.getString("requested_model_checksum"), resultSet.getString("requested_adapter_version")), bytes(eventId));
         if (rows.isEmpty()) {
             throw new IllegalStateException("An inference outbox event has no committed media");
         }
@@ -163,6 +162,9 @@ public class JdbcInferenceRepository {
             media.add(new CountingRequest.MediaReference(row.assetId(), row.viewPosition(), "s3://" + bucket + "/" + row.storageKey(),
                     row.sha256(), row.roiJson() == null ? null : map(row.roiJson())));
         }
+        CountingRequest.ModelIdentity requestedModel = new CountingRequest.ModelIdentity(
+                first.requestedModelKey(), first.requestedModelVersion(), first.requestedModelChecksum(),
+                first.requestedAdapterVersion());
         return new DispatchableJob(first.eventId(), new CountingRequest(first.jobId(), first.correlationId(), first.organizationId(),
                 first.captureSetId(), first.captureKind(), List.copyOf(media), requestedModel));
     }
@@ -206,5 +208,7 @@ public class JdbcInferenceRepository {
 
     private record DispatchRow(
             UUID eventId, UUID jobId, String correlationId, UUID organizationId, UUID captureSetId, String captureKind,
-            UUID assetId, String viewPosition, String storageKey, String sha256, String roiJson) { }
+            UUID assetId, String viewPosition, String storageKey, String sha256, String roiJson,
+            String requestedModelKey, String requestedModelVersion, String requestedModelChecksum,
+            String requestedAdapterVersion) { }
 }

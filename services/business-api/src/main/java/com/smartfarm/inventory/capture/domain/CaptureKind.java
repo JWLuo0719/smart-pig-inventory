@@ -9,6 +9,7 @@ public enum CaptureKind {
         return switch (value) {
             case "single" -> SINGLE;
             case "left_center_right" -> LEFT_CENTER_RIGHT;
+            case "video" -> VIDEO;
             default -> throw new IllegalArgumentException("Unsupported capture kind: " + value);
         };
     }
@@ -21,4 +22,3 @@ public enum CaptureKind {
         };
     }
 }
-

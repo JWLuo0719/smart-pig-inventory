@@ -10,8 +10,9 @@ public record CaptureManifest(UUID captureSetId, CaptureKind captureKind, UUID p
         if (captureSetId == null || captureKind == null || penId == null || assets == null || assets.isEmpty()) {
             throw new IllegalArgumentException("Capture manifest requires set, kind, pen and assets");
         }
-        if (captureKind == CaptureKind.VIDEO || assets.size() > 3) {
-            throw new IllegalArgumentException("Capture manifest supports only one or three images");
+        int expectedSize = captureKind == CaptureKind.LEFT_CENTER_RIGHT ? 3 : 1;
+        if (assets.size() != expectedSize) {
+            throw new IllegalArgumentException("Capture manifest must contain exactly the required views");
         }
         Set<UUID> assetIds = assets.stream().map(ManifestAsset::assetId).collect(Collectors.toSet());
         if (assetIds.size() != assets.size()) {

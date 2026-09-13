@@ -1,4 +1,5 @@
 from fastapi import FastAPI, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from .providers import get_provider
@@ -21,13 +22,10 @@ def live() -> dict[str, bool]:
 
 
 @app.get("/health/ready")
-def ready() -> dict[str, object]:
-    provider = get_provider()
-    return {
-        "ready": True,
-        "provider": provider.key,
-        "counting_available": provider.key != "unavailable",
-    }
+def ready() -> JSONResponse:
+    readiness = get_provider().readiness()
+    response_status = status.HTTP_200_OK if readiness["ready"] else status.HTTP_503_SERVICE_UNAVAILABLE
+    return JSONResponse(content=readiness, status_code=response_status)
 
 
 @app.post("/v1/jobs", response_model=JobAccepted, status_code=status.HTTP_202_ACCEPTED)

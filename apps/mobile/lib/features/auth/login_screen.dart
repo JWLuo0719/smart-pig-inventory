@@ -1,7 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
 
 import '../../core/auth/auth_controller.dart';
+
+String _loginErrorMessage(Object error) {
+  if (error is DioException) {
+    if (error.type == DioExceptionType.badCertificate) {
+      return '服务器安全证书校验失败，请联系管理员。';
+    }
+    if (error.type == DioExceptionType.connectionTimeout ||
+        error.type == DioExceptionType.sendTimeout ||
+        error.type == DioExceptionType.receiveTimeout) {
+      return '连接服务器超时，请检查网络后重试。';
+    }
+    if (error.type == DioExceptionType.connectionError) {
+      return '无法连接服务器，请检查网络及服务是否可用。';
+    }
+    final int? status = error.response?.statusCode;
+    if (status == 401) {
+      return error.requestOptions.path.endsWith('/auth/login')
+          ? '账号或密码不正确，请重新输入。'
+          : '登录状态已失效，请重新登录。';
+    }
+    if (status == 403) return '当前账号没有访问权限，请联系管理员。';
+    if (status == 429) return '登录请求过于频繁，请稍后重试。';
+    if (status != null && status >= 500) return '服务器暂时不可用，请稍后重试。';
+  }
+  return '登录未完成，请重试；若持续失败，请联系管理员。';
+}
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key, this.error});
@@ -84,8 +111,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     if (widget.error != null) ...<Widget>[
                       const SizedBox(height: 16),
-                      const Text('无法恢复登录状态。请检查网络后重新登录。',
-                          style: TextStyle(color: Colors.red)),
+                      Text(_loginErrorMessage(widget.error!),
+                          style: const TextStyle(color: Colors.red)),
                     ],
                     const SizedBox(height: 24),
                     FilledButton(

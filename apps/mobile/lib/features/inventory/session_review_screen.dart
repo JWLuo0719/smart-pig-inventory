@@ -8,6 +8,7 @@ import '../../core/auth/auth_session.dart';
 import '../../core/auth/authorized_retry.dart';
 import '../../core/network/inventory_api.dart';
 import '../../core/theme/app_theme.dart';
+import '../gallery/server_gallery_screen.dart';
 
 final inventoryRemoteApiProvider = Provider<InventoryRemoteApi>(
   (ref) => InventoryRemoteApi(baseUrl: ref.watch(apiBaseUrlProvider)),
@@ -138,13 +139,44 @@ class _SessionReviewScreenState extends ConsumerState<SessionReviewScreen> {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: <Widget>[
-        Text('业务日期 ${session.businessDate}',
+        Text('业务日期 ${session.businessDate} · 版本 v${session.version}',
             style: Theme.of(context).textTheme.titleMedium),
+        if (session.supersedesSessionId != null) ...<Widget>[
+          const SizedBox(height: 4),
+          Text('该结果为审计更正版本；原始证据未被覆盖。',
+              style: Theme.of(context).textTheme.bodySmall),
+        ],
         const SizedBox(height: 4),
         Text('栏舍 ID ${session.penId}',
             style: Theme.of(context).textTheme.bodySmall),
         const SizedBox(height: 20),
         _StatusCard(session: session),
+        ServerGalleryScreen(
+            key: ValueKey('${session.id}-${session.status}'),
+            sessionId: session.id),
+        if (session.inferenceStatus == 'failed') ...<Widget>[
+          const SizedBox(height: 16),
+          Semantics(
+            liveRegion: true,
+            child: Card(
+              color: AppColors.review.withValues(alpha: 0.1),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    const Text('自动计数失败，已安全转人工复核'),
+                    const SizedBox(height: 6),
+                    Text(session.failureCode ?? 'PROVIDER_ERROR',
+                        style: Theme.of(context).textTheme.labelMedium),
+                    const SizedBox(height: 4),
+                    Text(session.failureMessage ?? '推理服务未返回可用结果。'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
         if (session.requiresReview) ...<Widget>[
           const SizedBox(height: 16),
           Text('复核说明', style: Theme.of(context).textTheme.titleMedium),

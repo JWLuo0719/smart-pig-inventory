@@ -1,0 +1,6 @@
+# Copy to key.properties (ignored). Resolve relative storeFile paths from android/.
+# Use forward slashes on Windows. Never commit real passwords or the keystore.
+storeFile=release-signing/inventory-release.jks
+storePassword=
+keyAlias=inventory-release
+keyPassword=

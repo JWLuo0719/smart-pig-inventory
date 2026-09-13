@@ -39,6 +39,11 @@ Future<bool> _runOutboxWorker() async {
     final AuthenticatedUser? user = await contexts.readLatest();
     if (storedSession == null || user == null) return true;
 
+    final DriftOutboxRepository repository = DriftOutboxRepository(database);
+    if (!await repository.hasSynchronizableWork(now: DateTime.now().toUtc())) {
+      return true;
+    }
+
     final AuthApi authApi = AuthApi(baseUrl: _workerApiBaseUrl);
     AuthSession session = storedSession;
     if (session.accessTokenExpiresAt
@@ -53,7 +58,6 @@ Future<bool> _runOutboxWorker() async {
       }
     }
 
-    final DriftOutboxRepository repository = DriftOutboxRepository(database);
     AuthState auth = AuthState(
       session: session,
       user: user,

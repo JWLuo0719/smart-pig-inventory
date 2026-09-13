@@ -27,7 +27,11 @@ public record ManifestAsset(
         if (width <= 0 || height <= 0 || byteSize <= 0) {
             throw new IllegalArgumentException("Manifest asset dimensions and byte size must be positive");
         }
-        if (!mediaType.equals("image/jpeg") && !mediaType.equals("image/png") && !mediaType.equals("image/heic")) {
+        if (viewPosition == ViewPosition.VIDEO) {
+            if (!mediaType.equals("video/mp4") || perceptualHash != null || roi != null || byteSize > 30L * 1024 * 1024) {
+                throw new IllegalArgumentException("Video evidence requires MP4 without image hash or image ROI");
+            }
+        } else if (!mediaType.equals("image/jpeg") && !mediaType.equals("image/png") && !mediaType.equals("image/heic")) {
             throw new IllegalArgumentException("Unsupported image media type");
         }
         if (originalName.length() > 255) {

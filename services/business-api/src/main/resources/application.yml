@@ -31,6 +31,9 @@ management:
         enabled: true
 
 app:
+  monitoring:
+    service-key: ${MONITORING_SERVICE_KEY:}
+    snapshot-delay-ms: ${METRICS_SNAPSHOT_DELAY_MS:30000}
   security:
     enabled: ${SECURITY_ENABLED:true}
     cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:}
@@ -62,6 +65,10 @@ app:
     dispatcher:
       enabled: ${INFERENCE_DISPATCHER_ENABLED:false}
       fixed-delay: ${INFERENCE_DISPATCHER_FIXED_DELAY:2000}
+  reports:
+    pdf-font-path: ${REPORT_PDF_FONT_PATH:}
+    max-range-days: ${REPORT_MAX_RANGE_DAYS:366}
+    max-records: ${REPORT_MAX_RECORDS:10000}
 
 mybatis:
   configuration:

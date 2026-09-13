@@ -13,6 +13,7 @@ public enum ViewPosition {
             case "left" -> LEFT;
             case "center" -> CENTER;
             case "right" -> RIGHT;
+            case "video" -> VIDEO;
             default -> throw new IllegalArgumentException("Unsupported view position: " + value);
         };
     }
@@ -21,4 +22,3 @@ public enum ViewPosition {
         return name().toLowerCase(java.util.Locale.ROOT);
     }
 }
-
