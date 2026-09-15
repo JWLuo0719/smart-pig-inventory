@@ -15,7 +15,8 @@ void main() {
         'warnings': <String>['Manual review required'],
         'inferenceStatus': 'failed',
         'failureCode': 'PROVIDER_TIMEOUT',
-        'failureMessage': 'Counting provider timed out before returning a result',
+        'failureMessage':
+            'Counting provider timed out before returning a result',
       },
     );
 
