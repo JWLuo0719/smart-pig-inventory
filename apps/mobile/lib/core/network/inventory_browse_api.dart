@@ -76,6 +76,67 @@ class InventoryBrowseApi {
         });
     return response.data as Map<String, dynamic>;
   }
+
+  Future<RemoteTrend> trend(String token, DateTime to, {int days = 14}) async {
+    final response = await _dio.get<dynamic>('/api/v1/inventory-reports/trend',
+        options: _auth(token),
+        queryParameters: {
+          'to': to.toIso8601String().substring(0, 10),
+          'days': days,
+        });
+    return RemoteTrend.fromJson(response.data as Map<String, dynamic>);
+  }
+}
+
+/// 近 N 天存栏趋势：total 为场级合计序列，pens 为分栏序列；
+/// 缺采集的日期 confirmed/candidate 为 null（不补零，避免误导趋势）。
+class RemoteTrend {
+  RemoteTrend.fromJson(Map<String, dynamic> body)
+      : from = body['from'] as String,
+        to = body['to'] as String,
+        total = (body['total'] as List)
+            .map((e) => RemoteTrendPoint.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        pens = (body['pens'] as List)
+            .map((e) => RemotePenTrend.fromJson(e as Map<String, dynamic>))
+            .toList();
+  final String from, to;
+  final List<RemoteTrendPoint> total;
+  final List<RemotePenTrend> pens;
+
+  /// penId 为空返回全场合计；指定栏舍返回该栏序列；该栏窗口内无数据返回 null。
+  (String, List<RemoteTrendPoint>)? seriesFor(String? penId) {
+    if (penId == null) {
+      return ('全场合计', total);
+    }
+    for (final pen in pens) {
+      if (pen.penId == penId) {
+        return (pen.penLabel, pen.points);
+      }
+    }
+    return null;
+  }
+}
+
+class RemoteTrendPoint {
+  RemoteTrendPoint.fromJson(Map<String, dynamic> value)
+      : date = value['date'] as String,
+        confirmed = value['confirmed'] as int?,
+        candidate = value['candidate'] as int?;
+  final String date;
+  final int? confirmed, candidate;
+}
+
+class RemotePenTrend {
+  RemotePenTrend.fromJson(Map<String, dynamic> value)
+      : penId = value['penId'] as String,
+        penLabel = value['penLabel'] as String,
+        points = (value['points'] as List)
+            .map((e) => RemoteTrendPoint.fromJson(e as Map<String, dynamic>))
+            .toList();
+  final String penId;
+  final String penLabel;
+  final List<RemoteTrendPoint> points;
 }
 
 class LibraryMedia {

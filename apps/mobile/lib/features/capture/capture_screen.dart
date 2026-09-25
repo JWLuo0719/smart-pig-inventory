@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -21,9 +22,12 @@ import 'application/add_capture_view.dart';
 import 'application/abandon_blocked_capture_draft.dart';
 import 'application/create_single_image_draft.dart';
 import 'application/create_three_view_draft.dart';
+import 'application/update_capture_roi.dart';
 import 'data/drift_capture_draft_repository.dart';
 import 'domain/capture_draft_repository.dart';
 import 'domain/capture_target.dart';
+import 'domain/roi.dart';
+import 'roi_editor_page.dart';
 import '../outbox/application/queue_capture_draft.dart';
 import '../sync/outbox_background_sync.dart';
 
@@ -122,7 +126,13 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
         _savedEvidence
           ..clear()
           ..addAll(snapshot.media.map((media) => _LocalEvidence(
-              position: media.position, file: File(media.materializedPath))));
+                position: media.position,
+                file: File(media.materializedPath),
+                assetId: media.assetId,
+                roiJson: media.roiJson,
+                width: media.width,
+                height: media.height,
+              )));
         _isQueued = snapshot.state == 'queued';
         _canAbandonBlockedDraft =
             outbox?.state == 'blocked' && outbox?.sessionId == null;
@@ -219,8 +229,13 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
         setState(() {
           _savedDraft = saved;
           _savedPositions.add('single');
-          _savedEvidence.add(
-              _LocalEvidence(position: 'single', file: saved.materializedFile));
+          _savedEvidence.add(_LocalEvidence(
+            position: 'single',
+            file: saved.materializedFile,
+            assetId: saved.assetId,
+            width: metadata.width,
+            height: metadata.height,
+          ));
         });
       }
     } on ArgumentError catch (error) {
@@ -278,11 +293,57 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
         _threeView = false;
         _savedDraft = saved;
         _savedPositions.add('video');
-        _savedEvidence.add(
-            _LocalEvidence(position: 'video', file: saved.materializedFile));
+        _savedEvidence.add(_LocalEvidence(
+          position: 'video',
+          file: saved.materializedFile,
+          assetId: saved.assetId,
+        ));
       });
     } finally {
       await player.dispose();
+    }
+  }
+
+  /// 在已拍照片上标注"不计入本栏"的排除区（相邻栏舍、料槽、走道等）。
+  ///
+  /// 只有草稿还在 `draft` 状态时可写；进入上传队列后 `UpdateCaptureRoi` 会拒绝并提示。
+  Future<void> _openRoiEditor(_LocalEvidence item) async {
+    final String? assetId = item.assetId;
+    if (assetId == null) return;
+    final AppDatabase database = ref.read(appDatabaseProvider);
+    Roi? savedRoi;
+    final bool? saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (BuildContext context) => RoiEditorPage(
+          image: item.file,
+          aspectRatio: item.aspectRatio,
+          initialRoi: _roiFromJson(item.roiJson),
+          onSave: (Roi? roi) async {
+            await UpdateCaptureRoi(database).execute(assetId: assetId, roi: roi);
+            savedRoi = roi;
+          },
+        ),
+      ),
+    );
+    if (saved != true || !mounted) return;
+    final int index = _savedEvidence.indexOf(item);
+    if (index >= 0) {
+      setState(() {
+        _savedEvidence[index] =
+            item.copyWith(roiJson: jsonEncode(savedRoi?.toJson()));
+      });
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('已保存排除区标注')),
+    );
+  }
+
+  Roi? _roiFromJson(String? raw) {
+    if (raw == null || raw.isEmpty || raw == '{}') return null;
+    try {
+      return Roi.fromJson(jsonDecode(raw));
+    } catch (_) {
+      return null;
     }
   }
 
@@ -386,8 +447,10 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
       setState(() {
         _savedDraft = saved;
         _savedPositions.add('left');
-        _savedEvidence.add(
-            _LocalEvidence(position: 'left', file: saved.materializedFile));
+        _savedEvidence.add(_LocalEvidence(
+            position: 'left',
+            file: saved.materializedFile,
+            assetId: saved.assetId));
       });
       return;
     }
@@ -420,7 +483,13 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
           .firstOrNull;
       if (saved != null) {
         _savedEvidence.add(_LocalEvidence(
-            position: position, file: File(saved.materializedPath)));
+          position: position,
+          file: File(saved.materializedPath),
+          assetId: saved.assetId,
+          roiJson: saved.roiJson,
+          width: saved.width,
+          height: saved.height,
+        ));
       }
     });
   }
@@ -493,6 +562,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
           if (savedDraft != null)
             _SavedEvidenceList(
               evidence: _savedEvidence,
+              onAnnotate: _openRoiEditor,
               status: _isQueued
                   ? '已保存到待上传 · 尚未生成盘点数量'
                   : _threeView
@@ -589,17 +659,48 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
 }
 
 class _LocalEvidence {
-  const _LocalEvidence({required this.position, required this.file});
+  const _LocalEvidence({
+    required this.position,
+    required this.file,
+    this.assetId,
+    this.roiJson,
+    this.width,
+    this.height,
+  });
 
   final String position;
   final File file;
+  final String? assetId;
+  final String? roiJson;
+  final int? width;
+  final int? height;
+
+  /// 视频在合同上不允许携带图像 ROI，因此只有图片可以标注排除区。
+  bool get canAnnotate => assetId != null && position != 'video';
+
+  double get aspectRatio =>
+      (width != null && height != null && height! > 0) ? width! / height! : 4 / 3;
+
+  _LocalEvidence copyWith({String? roiJson}) => _LocalEvidence(
+        position: position,
+        file: file,
+        assetId: assetId,
+        roiJson: roiJson ?? this.roiJson,
+        width: width,
+        height: height,
+      );
 }
 
 class _SavedEvidenceList extends StatelessWidget {
-  const _SavedEvidenceList({required this.evidence, required this.status});
+  const _SavedEvidenceList({
+    required this.evidence,
+    required this.status,
+    required this.onAnnotate,
+  });
 
   final List<_LocalEvidence> evidence;
   final String status;
+  final Future<void> Function(_LocalEvidence item) onAnnotate;
 
   @override
   Widget build(BuildContext context) {
@@ -625,7 +726,10 @@ class _SavedEvidenceList extends StatelessWidget {
                   spacing: 10,
                   runSpacing: 10,
                   children: evidence
-                      .map((item) => _EvidenceThumbnail(item: item))
+                      .map((item) => _EvidenceThumbnail(
+                            item: item,
+                            onAnnotate: onAnnotate,
+                          ))
                       .toList(growable: false),
                 ),
               ]),
@@ -636,9 +740,10 @@ class _SavedEvidenceList extends StatelessWidget {
 }
 
 class _EvidenceThumbnail extends StatelessWidget {
-  const _EvidenceThumbnail({required this.item});
+  const _EvidenceThumbnail({required this.item, required this.onAnnotate});
 
   final _LocalEvidence item;
+  final Future<void> Function(_LocalEvidence item) onAnnotate;
 
   String get _label {
     return switch (item.position) {
@@ -681,6 +786,18 @@ class _EvidenceThumbnail extends StatelessWidget {
                         : InteractiveViewer(
                             child: Image.file(item.file, fit: BoxFit.contain)),
                   ),
+                  if (item.canAnnotate)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: () {
+                          Navigator.of(dialogContext).pop();
+                          onAnnotate(item);
+                        },
+                        icon: const Icon(Icons.crop_free),
+                        label: const Text('标注不计入本栏的区域'),
+                      ),
+                    ),
                 ]),
               ),
             ),

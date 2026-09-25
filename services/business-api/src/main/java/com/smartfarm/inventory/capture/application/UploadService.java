@@ -94,12 +94,16 @@ public class UploadService {
         if (existing.present()) {
             return new UploadOutcome<>(null, true);
         }
+        // asset_id 在 upload_blob 中全局唯一(跨 package):已被占用的标识符直接拒绝,
+        // 不再"先写后删",避免覆盖并删除已提交证据对象。
+        if (repository.findBlobByAssetId(assetId).isPresent()) {
+            throw UploadException.conflict("BLOB_IDENTIFIER_REUSED", "The asset identifier has already been used");
+        }
         if (uploadPackage.state() != UploadPackageState.AWAITING_BLOBS) {
             throw UploadException.conflict("UPLOAD_PACKAGE_NOT_ACCEPTING_BLOBS", "The package no longer accepts new blobs");
         }
 
         String stagedKey = null;
-        String evidenceKey = null;
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             try (DigestInputStream digestingContent = new DigestInputStream(content, digest)) {
@@ -110,34 +114,31 @@ public class UploadService {
                 objectStorage.deleteQuietly(stagedKey);
                 throw UploadException.invalid("BLOB_SHA256_MISMATCH", "Blob bytes do not match X-Content-SHA256");
             }
-            evidenceKey = objectStorage.promote(stagedKey, uploadPackage.organizationId(), assetId);
-            String finalEvidenceKey = evidenceKey;
+            String evidenceKey = objectStorage.promote(stagedKey, uploadPackage.organizationId(), expectedSha256);
             return requiredTransaction(() -> {
                 StoredPackage locked = visibleLockedPackage(packageId);
                 OptionalBlob replay = existingBlob(locked, assetId, expectedSha256, contentLength);
                 if (replay.present()) {
-                    objectStorage.deleteQuietly(finalEvidenceKey);
+                    // 并发重放:证据键按内容寻址,与胜者指向同一对象,绝不能删除。
                     return new UploadOutcome<>(null, true);
                 }
                 if (locked.state() != UploadPackageState.AWAITING_BLOBS) {
                     throw UploadException.conflict("UPLOAD_PACKAGE_NOT_ACCEPTING_BLOBS", "The package no longer accepts new blobs");
                 }
-                repository.insertBlob(packageId, assetId, expectedSha256, contentLength, finalEvidenceKey);
+                try {
+                    repository.insertBlob(packageId, assetId, expectedSha256, contentLength, evidenceKey);
+                } catch (DuplicateKeyException race) {
+                    // 并发下 asset_id 主键兜底:标识符已被其他 package 抢先写入。
+                    throw UploadException.conflict("BLOB_IDENTIFIER_REUSED", "The asset identifier has already been used");
+                }
                 return new UploadOutcome<>(null, false);
             });
         } catch (UploadException exception) {
-            if (evidenceKey != null) {
-                objectStorage.deleteQuietly(evidenceKey);
-            } else {
-                objectStorage.deleteQuietly(stagedKey);
-            }
+            // 只清理本次 staged 键;已 promote 的证据键是共享内容,删除会毁掉已提交证据。
+            objectStorage.deleteQuietly(stagedKey);
             throw exception;
         } catch (Exception exception) {
-            if (evidenceKey != null) {
-                objectStorage.deleteQuietly(evidenceKey);
-            } else {
-                objectStorage.deleteQuietly(stagedKey);
-            }
+            objectStorage.deleteQuietly(stagedKey);
             throw new IllegalStateException("Could not process upload blob", exception);
         }
     }
@@ -165,9 +166,7 @@ public class UploadService {
                 if (!blob.uploaded() || !blob.sha256().equals(asset.sha256()) || blob.byteSize() != asset.byteSize()) {
                     throw UploadException.invalid("MANIFEST_BLOB_MISMATCH", "Manifest metadata does not match its uploaded blob");
                 }
-                if (repository.hasExactDuplicate(uploadPackage.organizationId(), asset.sha256())) {
-                    throw UploadException.conflict("EXACT_DUPLICATE_IMAGE", "The image already exists in the active organization");
-                }
+                assertImageNotDuplicate(uploadPackage.organizationId(), asset.sha256());
             }
             repository.storeManifest(packageId, idempotencyKey, manifestJson, manifestSha256);
             return new UploadOutcome<>(null, false);
@@ -186,9 +185,7 @@ public class UploadService {
             }
             CaptureManifest manifest = readManifest(uploadPackage.manifestJson());
             for (var asset : manifest.assets()) {
-                if (repository.hasExactDuplicate(uploadPackage.organizationId(), asset.sha256())) {
-                    throw UploadException.conflict("EXACT_DUPLICATE_IMAGE", "The image already exists in the active organization");
-                }
+                assertImageNotDuplicate(uploadPackage.organizationId(), asset.sha256());
             }
             UUID sessionId = UUID.randomUUID();
             UUID jobId = UUID.randomUUID();
@@ -199,7 +196,13 @@ public class UploadService {
                 StoredBlob blob = repository.findBlob(uploadPackage.id(), asset.assetId())
                         .orElseThrow(() -> UploadException.invalid("MANIFEST_BLOB_MISSING", "A manifest blob disappeared before commit"));
                 UUID mediaId = UUID.randomUUID();
-                repository.insertMediaAsset(mediaId, uploadPackage.organizationId(), manifest.captureSetId(), asset, blob.storageKey());
+                try {
+                    repository.insertMediaAsset(mediaId, uploadPackage.organizationId(), manifest.captureSetId(), asset, blob.storageKey());
+                } catch (DuplicateKeyException race) {
+                    // uk_media_organization_sha spans soft-deleted rows; two concurrent commits
+                    // can both pass the pre-checks above and still collide on the unique index.
+                    throw UploadException.conflict("EXACT_DUPLICATE_IMAGE", "The image already exists in the active organization");
+                }
                 insertedMedia.add(new InsertedMedia(mediaId, asset.perceptualHash()));
             }
             createNearDuplicateReviews(uploadPackage.organizationId(), sessionId, manifest.captureSetId(), insertedMedia);
@@ -213,6 +216,16 @@ public class UploadService {
             repository.markCommitted(uploadPackage.id(), sessionId, idempotencyKey);
             return new UploadOutcome<>(new CommitUploadResult(uploadPackage.id(), sessionId, jobId, "submitted"), false);
         });
+    }
+
+    private void assertImageNotDuplicate(UUID organizationId, String sha256) {
+        if (repository.hasExactDuplicate(organizationId, sha256)) {
+            throw UploadException.conflict("EXACT_DUPLICATE_IMAGE", "The image already exists in the active organization");
+        }
+        if (repository.hasDeletedDuplicate(organizationId, sha256)) {
+            throw UploadException.conflict("DELETED_DUPLICATE_IMAGE",
+                    "This image was uploaded before and later deleted; the same image cannot be uploaded again");
+        }
     }
 
     private void createNearDuplicateReviews(UUID organizationId, UUID sessionId, UUID captureSetId,

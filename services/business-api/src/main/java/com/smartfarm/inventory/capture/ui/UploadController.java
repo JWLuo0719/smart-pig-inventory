@@ -9,9 +9,12 @@ import com.smartfarm.inventory.capture.domain.CaptureKind;
 import com.smartfarm.inventory.capture.domain.CaptureManifest;
 import com.smartfarm.inventory.capture.domain.ManifestAsset;
 import com.smartfarm.inventory.capture.domain.Roi;
+import com.smartfarm.inventory.capture.domain.RoiRegion;
 import com.smartfarm.inventory.capture.domain.ViewPosition;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -131,9 +134,28 @@ public class UploadController {
         }
     }
 
-    record RoiRequest(@NotNull BigDecimal x, @NotNull BigDecimal y, @NotNull BigDecimal width, @NotNull BigDecimal height) {
+    record RoiRequest(
+            @NotNull BigDecimal x,
+            @NotNull BigDecimal y,
+            @NotNull BigDecimal width,
+            @NotNull BigDecimal height,
+            @jakarta.validation.constraints.Size(max = Roi.MAX_EXCLUSIONS) List<@Valid RoiRegionRequest> exclusions,
+            @DecimalMin("0") @DecimalMax("1") BigDecimal minContainment) {
         Roi toDomain() {
-            return new Roi(x, y, width, height);
+            return new Roi(
+                    x,
+                    y,
+                    width,
+                    height,
+                    exclusions == null ? List.of() : exclusions.stream().map(RoiRegionRequest::toDomain).toList(),
+                    minContainment);
+        }
+    }
+
+    record RoiRegionRequest(
+            @NotNull BigDecimal x, @NotNull BigDecimal y, @NotNull BigDecimal width, @NotNull BigDecimal height) {
+        RoiRegion toDomain() {
+            return new RoiRegion(x, y, width, height);
         }
     }
 

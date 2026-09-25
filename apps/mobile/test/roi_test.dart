@@ -28,6 +28,87 @@ void main() {
     );
   });
 
+  test('ROI carries neighbour-pen exclusions and a containment threshold', () {
+    final Roi roi = Roi(
+      x: 0,
+      y: 0,
+      width: 1,
+      height: 1,
+      exclusions: <RoiRegion>[
+        RoiRegion(x: 0.75, y: 0, width: 0.25, height: 1),
+      ],
+      minContainment: 0.6,
+    );
+
+    expect(roi.toJson(), <String, Object?>{
+      'x': 0.0,
+      'y': 0.0,
+      'width': 1.0,
+      'height': 1.0,
+      'exclusions': <Object?>[
+        <String, Object?>{'x': 0.75, 'y': 0.0, 'width': 0.25, 'height': 1.0},
+      ],
+      'minContainment': 0.6,
+    });
+
+    final Roi? restored = Roi.fromJson(roi.toJson());
+    expect(restored, isNotNull);
+    expect(restored!.exclusions.single.width, 0.25);
+    expect(restored.minContainment, 0.6);
+  });
+
+  test('ROI omits default exclusions so historical payloads stay unchanged', () {
+    expect(
+      Roi(x: 0.1, y: 0.2, width: 0.7, height: 0.6).toJson(),
+      <String, double>{'x': 0.1, 'y': 0.2, 'width': 0.7, 'height': 0.6},
+    );
+    expect(Roi.fromJson(<String, Object?>{
+      'x': 0.1,
+      'y': 0.2,
+      'width': 0.7,
+      'height': 0.6,
+    })!.exclusions,
+      isEmpty);
+  });
+
+  test('ROI rejects invalid exclusion regions and thresholds', () {
+    expect(
+      () => RoiRegion(x: 0.9, y: 0, width: 0.2, height: 1),
+      throwsArgumentError,
+    );
+    expect(
+      () => RoiRegion(x: 0, y: 0, width: 0, height: 1),
+      throwsArgumentError,
+    );
+    expect(
+      () => Roi(
+        x: 0,
+        y: 0,
+        width: 1,
+        height: 1,
+        exclusions: List<RoiRegion>.generate(
+          9,
+          (int index) => RoiRegion(x: 0, y: 0, width: 0.1, height: 0.1),
+        ),
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => Roi(x: 0, y: 0, width: 1, height: 1, minContainment: 1.5),
+      throwsArgumentError,
+    );
+    expect(
+      () => Roi.fromJson(<String, Object?>{
+        'x': 0,
+        'y': 0,
+        'width': 1,
+        'height': 1,
+        'exclusions': 'none',
+      }),
+      throwsArgumentError,
+    );
+  });
+
   test('ROI is persisted only while the capture set is a draft', () async {
     final Directory sandbox = await Directory.systemTemp.createTemp('roi-test');
     addTearDown(() async {

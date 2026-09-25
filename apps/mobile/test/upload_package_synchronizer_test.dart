@@ -181,6 +181,38 @@ void main() {
     expect(await File(asset.materializedPath).exists(), isTrue);
   });
 
+  test('explains a duplicate-photo rejection in plain language', () async {
+    final synchronizer = UploadPackageSynchronizer(
+      api: _FakeUploadGateway(error: 409, errorCode: 'EXACT_DUPLICATE_IMAGE'),
+      repository: DriftOutboxRepository(database),
+      reconnect: () async => _auth(now),
+      clock: () => now,
+    );
+
+    expect(await synchronizer.syncNext(_auth(now), leaseOwner: 'foreground'),
+        UploadSyncOutcome.blocked);
+    final OutboxEntry outbox =
+        await database.select(database.outboxEntries).getSingle();
+    expect(outbox.state, 'blocked');
+    expect(outbox.error, contains('该照片已存在于本场证据库'));
+  });
+
+  test('tells the farmer to reshoot when the same photo was deleted before',
+      () async {
+    final synchronizer = UploadPackageSynchronizer(
+      api: _FakeUploadGateway(error: 409, errorCode: 'DELETED_DUPLICATE_IMAGE'),
+      repository: DriftOutboxRepository(database),
+      reconnect: () async => _auth(now),
+      clock: () => now,
+    );
+
+    expect(await synchronizer.syncNext(_auth(now), leaseOwner: 'foreground'),
+        UploadSyncOutcome.blocked);
+    final OutboxEntry outbox =
+        await database.select(database.outboxEntries).getSingle();
+    expect(outbox.error, contains('同一张照片不能重复上传'));
+  });
+
   test('clears the creating lease after a socket failure', () async {
     final synchronizer = UploadPackageSynchronizer(
       api: _FakeUploadGateway(socketFailure: true),
@@ -200,6 +232,52 @@ void main() {
     expect(outbox.error, '网络或服务器暂时不可用，将自动重试');
     expect(outbox.attemptCount, 1);
     expect(outbox.nextAttemptAt?.toUtc(), now.add(const Duration(seconds: 30)));
+  });
+
+  test('retries 408, 425 and 429 with backoff instead of blocking', () async {
+    final DriftOutboxRepository repository = DriftOutboxRepository(database);
+    for (final int status in <int>[408, 425, 429]) {
+      await repository.retryNow('client-package-id', now: now);
+      final synchronizer = UploadPackageSynchronizer(
+        api: _FakeUploadGateway(error: status),
+        repository: repository,
+        reconnect: () async => _auth(now),
+        clock: () => now,
+      );
+
+      expect(await synchronizer.syncNext(_auth(now), leaseOwner: 'worker'),
+          UploadSyncOutcome.retryScheduled,
+          reason: 'status $status is transient and must not block');
+      final OutboxEntry outbox =
+          await database.select(database.outboxEntries).getSingle();
+      expect(outbox.state, 'retry_wait', reason: 'status $status');
+      expect(outbox.error, '网络或服务器暂时不可用，将自动重试',
+          reason: 'status $status');
+      expect(outbox.nextAttemptAt?.toUtc().isAfter(now), isTrue,
+          reason: 'status $status');
+    }
+  });
+
+  test('blocks 400 and 403 as deterministic business rejections', () async {
+    final DriftOutboxRepository repository = DriftOutboxRepository(database);
+    for (final int status in <int>[400, 403]) {
+      await repository.retryNow('client-package-id', now: now);
+      final synchronizer = UploadPackageSynchronizer(
+        api: _FakeUploadGateway(error: status),
+        repository: repository,
+        reconnect: () async => _auth(now),
+        clock: () => now,
+      );
+
+      expect(await synchronizer.syncNext(_auth(now), leaseOwner: 'worker'),
+          UploadSyncOutcome.blocked,
+          reason: 'status $status is a deterministic rejection');
+      final OutboxEntry outbox =
+          await database.select(database.outboxEntries).getSingle();
+      expect(outbox.state, 'blocked', reason: 'status $status');
+      expect(outbox.error, '服务器拒绝此采集包，请查看诊断信息',
+          reason: 'status $status');
+    }
   });
 }
 
@@ -296,11 +374,13 @@ AuthState _auth(DateTime now, {String accessToken = 'access'}) => AuthState(
 class _FakeUploadGateway implements UploadRemoteGateway {
   _FakeUploadGateway({
     this.error,
+    this.errorCode,
     this.existingAssets = const <String>{},
     this.unauthorizedOnce = false,
     this.socketFailure = false,
   });
   final int? error;
+  final String? errorCode;
   final Set<String> existingAssets;
   final bool unauthorizedOnce;
   final bool socketFailure;
@@ -325,9 +405,12 @@ class _FakeUploadGateway implements UploadRemoteGateway {
     if (error != null) {
       throw DioException(
           requestOptions: RequestOptions(path: '/upload'),
-          response: Response<void>(
+          response: Response<Map<String, dynamic>>(
               requestOptions: RequestOptions(path: '/upload'),
-              statusCode: error));
+              statusCode: error,
+              data: errorCode == null
+                  ? null
+                  : <String, dynamic>{'code': errorCode, 'status': error}));
     }
   }
 

@@ -63,6 +63,10 @@ Future<bool> _runOutboxWorker() async {
       user: user,
       isOffline: false,
     );
+    // 会话可用(原样有效或刚刷新成功)时,把等待认证的条目放回 queued;
+    // 否则它们永远不会被 acquireNext 领走,重新登录前一直卡死。
+    // 若会话其实已失效,下一次上传会重新走回 waiting_authentication。
+    await repository.retryAuthenticationWaiting(now: DateTime.now().toUtc());
     final UploadPackageSynchronizer synchronizer = UploadPackageSynchronizer(
       api: UploadRemoteApi(baseUrl: _workerApiBaseUrl),
       repository: repository,

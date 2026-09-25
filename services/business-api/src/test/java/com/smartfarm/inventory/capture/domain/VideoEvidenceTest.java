@@ -15,8 +15,8 @@ class VideoEvidenceTest {
     @Test void acceptsOneVideoAndRequiresManualReviewRegardlessOfMultiViewFlag() {
         assertDoesNotThrow(() -> new CaptureManifest(UUID.randomUUID(), CaptureKind.fromWire("video"), UUID.randomUUID(),
                 List.of(asset(ViewPosition.fromWire("video"), "video/mp4", 100))));
-        assertTrue(CaptureSetPolicy.requiresManualReview(CaptureKind.VIDEO, true));
-        assertTrue(CaptureSetPolicy.requiresManualReview(CaptureKind.VIDEO, false));
+        assertTrue(CaptureSetPolicy.requiresManualReview(CaptureKind.VIDEO, true, false));
+        assertTrue(CaptureSetPolicy.requiresManualReview(CaptureKind.VIDEO, false, false));
     }
     @Test void rejectsMixedMediaExtraViewsAndOversizedVideo() {
         assertThrows(IllegalArgumentException.class, () -> asset(ViewPosition.SINGLE, "video/mp4", 100));

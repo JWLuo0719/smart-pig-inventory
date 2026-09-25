@@ -865,18 +865,41 @@ components:
         focalLengthMm: {type: [number, 'null'], exclusiveMinimum: 0}
         exposureTimeSeconds: {type: [number, 'null'], exclusiveMinimum: 0}
         iso: {type: [integer, 'null'], minimum: 0}
-    Roi:
-      type: [object, 'null']
+    RoiRegion:
+      type: object
       additionalProperties: false
-      description: >-
-        基于 EXIF 纠正后图像的归一化坐标。服务端必须额外验证 x + width <= 1
-        且 y + height <= 1；null 表示整张图像。
+      description: 归一化矩形区域，用于栏舍有效区或"不计入本栏"的排除区。
       required: [x, y, width, height]
       properties:
         x: {type: number, minimum: 0, maximum: 1}
         y: {type: number, minimum: 0, maximum: 1}
         width: {type: number, exclusiveMinimum: 0, maximum: 1}
         height: {type: number, exclusiveMinimum: 0, maximum: 1}
+    Roi:
+      type: [object, 'null']
+      additionalProperties: false
+      description: >-
+        基于 EXIF 纠正后图像的归一化坐标。服务端必须额外验证 x + width <= 1
+        且 y + height <= 1；null 表示整张图像。
+        exclusions 标记邻栏、料槽、走道等不计入本栏的区域：检测框中心落在任一排除区内时
+        不计入本栏数量。minContainment 大于 0 时，检测框与有效区的交叠面积占比必须达到该
+        阈值才计入，用于排除半身在邻栏的目标；缺省 0 表示沿用"只判定框中心点"的历史口径。
+      required: [x, y, width, height]
+      properties:
+        x: {type: number, minimum: 0, maximum: 1}
+        y: {type: number, minimum: 0, maximum: 1}
+        width: {type: number, exclusiveMinimum: 0, maximum: 1}
+        height: {type: number, exclusiveMinimum: 0, maximum: 1}
+        exclusions:
+          type: array
+          maxItems: 8
+          description: 不计入本栏的区域，与有效区同为归一化坐标。
+          items: {$ref: '#/components/schemas/RoiRegion'}
+        minContainment:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: 检测框需落在有效区内的最小面积占比；0 表示只判定框中心点。
     CommitResult:
       type: object
       required: [packageId, sessionId, inferenceJobId, status]

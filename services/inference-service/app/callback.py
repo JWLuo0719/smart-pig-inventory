@@ -19,6 +19,10 @@ class PermanentCallbackError(RuntimeError):
 def deliver_result(job_id: UUID, result: CountingJobResult) -> None:
     base_url = os.getenv("BUSINESS_API_BASE_URL", "http://localhost:8080").rstrip("/")
     callback_token = os.getenv("INFERENCE_CALLBACK_TOKEN", "")
+    if not callback_token:
+        # 空令牌 fail-closed：省略头发出去必然换来业务侧 401，白白制造一次永久失败；
+        # 与业务侧校验口径、README 合同保持一致，配置修复前拒绝发送。
+        raise PermanentCallbackError("INFERENCE_CALLBACK_TOKEN is empty; refusing to send the result callback")
     payload = {
         "status": result.status,
         "count": result.count,
@@ -41,9 +45,11 @@ def deliver_result(job_id: UUID, result: CountingJobResult) -> None:
         "failureCode": result.failure_code,
         "failureMessage": result.failure_message,
     }
-    headers = {"X-Idempotency-Key": str(job_id)}
-    if callback_token:
-        headers["X-Inference-Service-Key"] = callback_token
+    # 空令牌已在上方 fail-closed，此处令牌必然非空，服务密钥头必须携带。
+    headers = {
+        "X-Idempotency-Key": str(job_id),
+        "X-Inference-Service-Key": callback_token,
+    }
     try:
         response = httpx.put(
             f"{base_url}/api/v1/inference-jobs/{job_id}/result",

@@ -258,6 +258,31 @@ public class JdbcInventoryReviewRepository {
                 bytes(sessionId));
     }
 
+    /**
+     * 确认一条会话后，把同栏同业务日仍挂着的未复核会话自动归档为 superseded。
+     * 证据链不动（媒体、推理结果全部保留），只是不再占用复核入口；
+     * 返回被归档的会话 id，供逐条写审计。
+     */
+    public List<AutoSupersededRow> supersedePendingSiblings(UUID penId, LocalDate businessDate, UUID confirmedSessionId) {
+        List<AutoSupersededRow> siblings = jdbc.query("""
+                SELECT id, status FROM inventory_session
+                WHERE pen_id = ? AND business_date = ? AND id <> ?
+                  AND status NOT IN ('confirmed', 'superseded')
+                """, (resultSet, rowNumber) -> new AutoSupersededRow(readUuid(resultSet, "id"),
+                resultSet.getString("status")),
+                bytes(penId), businessDate, bytes(confirmedSessionId));
+        for (AutoSupersededRow sibling : siblings) {
+            jdbc.update("""
+                    UPDATE inventory_session SET status = 'superseded'
+                    WHERE id = ? AND status NOT IN ('confirmed', 'superseded')
+                    """, bytes(sibling.id()));
+        }
+        return siblings;
+    }
+
+    public record AutoSupersededRow(UUID id, String status) {
+    }
+
     public void lockEvidence(UUID sessionId) {
         jdbc.update("""
                 UPDATE media_asset m
@@ -435,6 +460,38 @@ public class JdbcInventoryReviewRepository {
     }
 
     public record ConfirmedCountRow(LocalDate businessDate, int confirmedCount) {
+    }
+
+    /**
+     * 组织级趋势查询：窗口内每个「栏舍 × 业务日」取一条代表会话
+     * （确认优先，其次最近更新），供存栏趋势与机器/人工对比使用。
+     */
+    public List<TrendRow> trendByOrganization(UUID organizationId, LocalDate from, LocalDate to) {
+        return jdbc.query("""
+                SELECT x.business_date, p.id AS pen_id, b.code AS building_code,
+                       p.code AS pen_code, p.name AS pen_name, x.status,
+                       x.confirmed_count, x.candidate_count
+                FROM (
+                    SELECT c.pen_id, c.business_date, c.status, c.confirmed_count, c.candidate_count,
+                           ROW_NUMBER() OVER (PARTITION BY c.pen_id, c.business_date
+                               ORDER BY (c.status = 'confirmed') DESC, c.updated_at DESC, c.created_at DESC) AS rn
+                    FROM inventory_session c
+                    WHERE c.business_date BETWEEN ? AND ? AND c.status <> 'superseded'
+                ) x
+                JOIN pen p ON p.id = x.pen_id
+                JOIN building b ON b.id = p.building_id
+                WHERE x.rn = 1 AND b.organization_id = ? AND b.enabled = TRUE AND p.enabled = TRUE
+                ORDER BY x.business_date, b.code, p.code
+                """, (resultSet, rowNumber) -> new TrendRow(
+                resultSet.getObject("business_date", LocalDate.class), readUuid(resultSet, "pen_id"),
+                resultSet.getString("building_code"), resultSet.getString("pen_code"),
+                resultSet.getString("pen_name"), resultSet.getString("status"),
+                nullableInt(resultSet, "confirmed_count"), nullableInt(resultSet, "candidate_count")),
+                from, to, bytes(organizationId));
+    }
+
+    public record TrendRow(LocalDate businessDate, UUID penId, String buildingCode, String penCode,
+            String penName, String status, Integer confirmedCount, Integer candidateCount) {
     }
 
     public record SessionRow(UUID id, UUID penId, UUID organizationId, LocalDate businessDate, String status,

@@ -9,9 +9,8 @@ import '../../core/auth/auth_session.dart';
 import '../../core/auth/authorized_retry.dart';
 import '../../core/network/inventory_api.dart';
 import '../../core/theme/app_theme.dart';
-import '../../shared/widgets/network_status_banner.dart';
-import '../../shared/widgets/pen_plate.dart';
 import '../inventory/session_review_screen.dart';
+import '../../shared/widgets/network_status_banner.dart';
 import '../local_activity/data/local_activity_repository.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -23,8 +22,8 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   List<RemoteInventoryTask>? _tasks;
+  RemoteAssistantBrief? _assistant;
   String? _error;
-  bool _loading = true;
 
   @override
   void initState() {
@@ -45,12 +44,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return _buildContent(context);
   }
 
+  Future<RemoteAssistantBrief?> _loadAssistant(AuthState auth, DateTime today) async {
+    try {
+      return await ref.read(inventoryRemoteApiProvider).assistantInsights(
+          accessToken: auth.session.accessToken, businessDate: today);
+    } catch (_) {
+      return null; // 研判不可用时静默降级，不阻塞首页
+    }
+  }
+
   Future<void> _loadTasks() async {
     final AuthState? auth = ref.read(authControllerProvider).valueOrNull;
     if (auth == null || auth.isOffline) {
       if (mounted) {
         setState(() {
-          _loading = false;
           _tasks = null;
           _error = '当前离线，首页只显示本机已经保存的作业。';
         });
@@ -58,10 +65,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return;
     }
     setState(() {
-      _loading = true;
       _error = null;
       _tasks = null;
+      _assistant = null;
     });
+    final DateTime today = DateUtils.dateOnly(DateTime.now());
+    // 智能体研判与任务并行加载；研判失败不打扰任务展示（静默降级）。
+    final Future<RemoteAssistantBrief?> assistantFuture =
+        _loadAssistant(auth, today);
     try {
       final List<RemoteInventoryTask> tasks = await retryOnceAfterUnauthorized(
         initialAuth: auth,
@@ -69,14 +80,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         request: (String accessToken) =>
             ref.read(inventoryRemoteApiProvider).tasks(
                   accessToken: accessToken,
-                  businessDate: DateUtils.dateOnly(DateTime.now()),
+                  businessDate: today,
                 ),
       );
-      if (mounted) setState(() => _tasks = tasks);
+      final RemoteAssistantBrief? assistant = await assistantFuture;
+      if (mounted) {
+        setState(() {
+          _tasks = tasks;
+          _assistant = assistant;
+        });
+      }
     } on DioException catch (error) {
       if (mounted) setState(() => _error = _safeError(error));
-    } finally {
-      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -125,22 +140,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ],
                   const SizedBox(height: 16),
                   _ContinueCard(activity: latest),
+                  if (_assistant != null && _assistant!.insights.isNotEmpty) ...<Widget>[
+                    const SizedBox(height: 22),
+                    _AssistantPanel(brief: _assistant!),
+                  ],
                   const SizedBox(height: 22),
-                  _SectionTitle(
-                    title: '今日真实任务',
-                    action: '下拉刷新',
-                  ),
-                  const SizedBox(height: 10),
-                  if (_loading)
-                    const Center(child: CircularProgressIndicator())
-                  else if (_tasks == null)
-                    const _EmptyCard(message: '任务状态未知，请联网后下拉重试。')
-                  else if (tasks.isEmpty)
-                    const _EmptyCard(message: '服务器没有返回可见任务；不会显示推测数量。')
-                  else
-                    ...tasks.take(4).map(_taskCard),
-                  const SizedBox(height: 22),
-                  const _SectionTitle(title: '今日进度', action: '真实状态'),
+                  const _SectionTitle(title: '今日进度', action: '以服务器为准'),
                   const SizedBox(height: 10),
                   _ProgressCard(
                     known: _tasks != null,
@@ -158,38 +163,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       },
     );
   }
-
-  Widget _taskCard(RemoteInventoryTask task) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: PenPlate(
-          building: '${task.buildingCode} ${task.buildingName}',
-          pen: task.penCode,
-          state: _state(task.status),
-          count: task.status == 'confirmed' ? task.confirmedCount : null,
-          detail: _detail(task.status),
-          onTap: task.sessionId == null
-              ? () => context.push('/pens')
-              : () => context.push('/inventory-sessions/${task.sessionId}'),
-        ),
-      );
-
-  PenWorkState _state(String status) => switch (status) {
-        'pending' => PenWorkState.notStarted,
-        'submitted' => PenWorkState.queued,
-        'processing' => PenWorkState.processing,
-        'review_required' => PenWorkState.review,
-        'confirmed' => PenWorkState.confirmed,
-        _ => PenWorkState.failed,
-      };
-
-  String _detail(String status) => switch (status) {
-        'pending' => '尚未采集',
-        'submitted' => '已提交，等待处理',
-        'processing' => '服务器处理中',
-        'review_required' => '需要人工复核',
-        'confirmed' => '确认结果和证据已锁定',
-        _ => '状态异常，请刷新',
-      };
 
   String _safeError(DioException error) => switch (error.response?.statusCode) {
         401 => '登录状态已失效；本机证据仍保留，请重新登录。',
@@ -210,17 +183,17 @@ class _Header extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text('$organizationCode · $organizationName',
+              Text('${_todayLabel()} · $organizationCode · $organizationName',
                   style: Theme.of(context).textTheme.bodySmall),
               const SizedBox(height: 3),
-              Text('今天先完成现场采集',
+              Text('今日盘点与复核',
                   style: Theme.of(context).textTheme.headlineSmall),
             ],
           ),
         ),
         Semantics(
           image: true,
-          label: '智慧猪场场主初版标志',
+          label: '智慧猪场场主标志',
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: Image.asset(
@@ -232,6 +205,14 @@ class _Header extends StatelessWidget {
           ),
         ),
       ]);
+
+  static String _todayLabel() {
+    final DateTime now = DateTime.now();
+    const List<String> weekdays = <String>[
+      '周一', '周二', '周三', '周四', '周五', '周六', '周日'
+    ];
+    return '${now.month}月${now.day}日 ${weekdays[now.weekday - 1]}';
+  }
 }
 
 class _ContinueCard extends StatelessWidget {
@@ -256,7 +237,7 @@ class _ContinueCard extends StatelessWidget {
           const SizedBox(height: 5),
           Text(
             value == null
-                ? '尚未保存采集草稿'
+                ? '今天还没有采集记录'
                 : '${value.buildingLabel} · ${value.penLabel}',
             style: const TextStyle(
                 color: Colors.white, fontSize: 19, fontWeight: FontWeight.w800),
@@ -264,7 +245,7 @@ class _ContinueCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             value == null
-                ? '选择栏舍后开始采集'
+                ? '选择栏舍拍照，几分钟完成一栏盘点'
                 : '${value.mediaCount} 张原始证据 · ${_activityState(value)}',
             style: const TextStyle(color: Color(0xFFD9E5EB), fontSize: 12),
           ),
@@ -345,15 +326,15 @@ class _ProgressCard extends StatelessWidget {
           _ProgressRow(
               label: '已确认任务',
               value: known ? '$completed / $total' : '—',
-              note: '仅服务器真实状态'),
+              note: '复核确认后才计入存栏'),
           const Divider(height: 22),
           _ProgressRow(
-              label: '本机待上传', value: '$pendingUploads', note: '草稿原图继续保留'),
+              label: '本机待上传', value: '$pendingUploads', note: '断网先拍，联网自动补传'),
           const Divider(height: 22),
           _ProgressRow(
               label: '等待复核',
               value: known ? '$reviewRequired' : '—',
-              note: '候选数量不进入报表'),
+              note: '确认数量后锁定证据'),
         ]),
       ),
     );
@@ -400,15 +381,72 @@ class _SafeNotice extends StatelessWidget {
       );
 }
 
-class _EmptyCard extends StatelessWidget {
-  const _EmptyCard({required this.message});
-  final String message;
+class _AssistantPanel extends StatelessWidget {
+  const _AssistantPanel({required this.brief});
+  final RemoteAssistantBrief brief;
 
   @override
   Widget build(BuildContext context) => Card(
+        clipBehavior: Clip.antiAlias,
         child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(message),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(children: <Widget>[
+                const Text('🤖', style: TextStyle(fontSize: 18)),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: Text('牧数智核 · 今日研判',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800))),
+                Text(brief.businessDate.substring(5),
+                    style: Theme.of(context).textTheme.bodySmall),
+              ]),
+              const SizedBox(height: 6),
+              Text(brief.brief,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.outline)),
+              const Divider(height: 18),
+              ...brief.insights.map((RemoteAssistantInsight insight) =>
+                  _insightTile(context, insight)),
+            ],
+          ),
         ),
       );
+
+  Widget _insightTile(BuildContext context, RemoteAssistantInsight insight) {
+    final bool tappable =
+        insight.sessionId != null || insight.type == 'PENDING_CAPTURE';
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 2),
+      leading: _severityIcon(insight.severity),
+      title: Text(insight.title,
+          maxLines: 1, overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 2),
+        child: Text(insight.detail,
+            maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5)),
+      ),
+      trailing: tappable
+          ? const Icon(Icons.chevron_right, size: 20)
+          : null,
+      onTap: !tappable
+          ? null
+          : () => insight.sessionId != null
+              ? context.push('/inventory-sessions/${insight.sessionId}')
+              : context.push('/pens'),
+    );
+  }
+
+  static Widget _severityIcon(String severity) => switch (severity) {
+        'action' => const Text('⚠️', style: TextStyle(fontSize: 18)),
+        'success' => const Text('✅', style: TextStyle(fontSize: 18)),
+        'warning' => const Text('⚠️', style: TextStyle(fontSize: 18)),
+        _ => const Text('💡', style: TextStyle(fontSize: 18)),
+      };
 }
+

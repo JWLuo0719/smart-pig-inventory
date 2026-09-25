@@ -7,6 +7,7 @@ import java.nio.ByteBuffer;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -58,16 +59,26 @@ public class JdbcInferenceRepository {
                     lease_until = DATE_ADD(CURRENT_TIMESTAMP(6), INTERVAL ? MICROSECOND), last_error = NULL
                 WHERE id = ?
                 """, leaseDuration.toMillis() * 1_000L, bytes(eventId));
-        return Optional.of(loadDispatchableJob(eventId));
+        Integer attempt = jdbc.queryForObject("SELECT attempt_count FROM domain_event_outbox WHERE id = ?",
+                Integer.class, bytes(eventId));
+        return Optional.of(loadDispatchableJob(eventId, attempt == null ? 0 : attempt));
     }
 
+    /**
+     * 标记派发完成。WHERE 带 attempt 序号做租约归属校验:
+     * 租约过期被他方回收(attempt_count 已递增)后,本次派发结果不得覆盖对方的派发状态。
+     */
     @Transactional
-    public void markPublished(UUID eventId, UUID jobId) {
-        jdbc.update("""
+    public void markPublished(UUID eventId, int attempt, UUID jobId) {
+        int published = jdbc.update("""
                 UPDATE domain_event_outbox
                 SET state = 'PUBLISHED', published_at = CURRENT_TIMESTAMP(6), lease_until = NULL, last_error = NULL
-                WHERE id = ? AND state = 'DISPATCHING'
-                """, bytes(eventId));
+                WHERE id = ? AND state = 'DISPATCHING' AND attempt_count = ?
+                """, bytes(eventId), attempt);
+        if (published == 0) {
+            // 租约已被他方回收:本次派发结果作废,任务状态也不得被推进。
+            return;
+        }
         jdbc.update("""
                 UPDATE inference_job
                 SET status = 'processing', provider_key = 'inference-api', started_at = COALESCE(started_at, CURRENT_TIMESTAMP(6))
@@ -75,13 +86,14 @@ public class JdbcInferenceRepository {
                 """, bytes(jobId));
     }
 
-    public void markRetry(UUID eventId, int delaySeconds, String error) {
+    /** 同 markPublished:WHERE 校验 attempt 序号,丢失租约的实例不能把任务改回 PENDING。 */
+    public void markRetry(UUID eventId, int attempt, int delaySeconds, String error) {
         jdbc.update("""
                 UPDATE domain_event_outbox
                 SET state = 'PENDING', lease_until = NULL, last_error = ?,
                     available_at = DATE_ADD(CURRENT_TIMESTAMP(6), INTERVAL ? SECOND)
-                WHERE id = ? AND state = 'DISPATCHING'
-                """, truncate(error, 1000), delaySeconds, bytes(eventId));
+                WHERE id = ? AND state = 'DISPATCHING' AND attempt_count = ?
+                """, truncate(error, 1000), delaySeconds, bytes(eventId), attempt);
     }
 
     public Optional<LockedJob> lockJob(UUID jobId) {
@@ -133,7 +145,54 @@ public class JdbcInferenceRepository {
                 """, candidateCount, bytes(sessionId));
     }
 
-    private DispatchableJob loadDispatchableJob(UUID eventId) {
+    /** 超时且无回调回执的滞留任务行,供回收器置失败并写审计。 */
+    public List<StaleJob> findStaleJobs(Instant createdBefore) {
+        return jdbc.query("""
+                SELECT j.id AS job_id, j.session_id, j.status, j.correlation_id, j.created_at, u.organization_id
+                FROM inference_job j
+                JOIN capture_set c ON c.id = j.capture_set_id
+                JOIN upload_package u ON u.id = c.upload_package_id
+                WHERE j.status IN ('submitted', 'processing')
+                  AND j.created_at < ?
+                  AND NOT EXISTS (SELECT 1 FROM inference_result_receipt r WHERE r.inference_job_id = j.id)
+                ORDER BY j.created_at
+                """, (resultSet, rowNumber) -> new StaleJob(
+                readUuid(resultSet, "job_id"), readUuid(resultSet, "session_id"), resultSet.getString("status"),
+                resultSet.getString("correlation_id"), resultSet.getTimestamp("created_at").toInstant(),
+                readUuid(resultSet, "organization_id")), java.sql.Timestamp.from(createdBefore));
+    }
+
+    /**
+     * 把滞留任务置为 failed(INFERENCE_TIMEOUT)并写 audit_event,
+     * 使其进入既有失败列表与管理端重试通道;已终态任务保持不动。
+     */
+    @Transactional
+    public void markTimedOut(StaleJob job) {
+        int updated = jdbc.update("""
+                UPDATE inference_job
+                SET status = 'failed', failure_code = 'INFERENCE_TIMEOUT',
+                    failure_message = 'No inference callback arrived before the stale-job timeout',
+                    finished_at = CURRENT_TIMESTAMP(6)
+                WHERE id = ? AND status IN ('submitted', 'processing')
+                """, bytes(job.jobId()));
+        if (updated == 0) {
+            return;
+        }
+        markSessionForReview(job.sessionId(), null);
+        jdbc.update("""
+                INSERT INTO audit_event
+                  (id, organization_id, actor_id, action, target_type, target_id, reason,
+                   before_json, after_json, correlation_id)
+                VALUES (?, ?, 'system:stale-job-reaper', 'inference.job_timeout', 'inference_job', ?, ?,
+                        CAST(? AS JSON), CAST(? AS JSON), ?)
+                """, bytes(UUID.randomUUID()), bytes(job.organizationId()), job.jobId().toString(), "INFERENCE_TIMEOUT",
+                json(Map.of("jobId", job.jobId().toString(), "status", job.status(),
+                        "createdAt", job.createdAt().toString())),
+                json(Map.of("jobId", job.jobId().toString(), "status", "failed", "failureCode", "INFERENCE_TIMEOUT")),
+                job.correlationId());
+    }
+
+    private DispatchableJob loadDispatchableJob(UUID eventId, int attempt) {
         List<DispatchRow> rows = jdbc.query("""
                 SELECT o.id AS event_id, j.id AS job_id, j.correlation_id, u.organization_id, c.id AS capture_set_id,
                        c.kind AS capture_kind, m.asset_id, m.view_position, m.storage_key, m.sha256, m.roi_json,
@@ -165,8 +224,8 @@ public class JdbcInferenceRepository {
         CountingRequest.ModelIdentity requestedModel = new CountingRequest.ModelIdentity(
                 first.requestedModelKey(), first.requestedModelVersion(), first.requestedModelChecksum(),
                 first.requestedAdapterVersion());
-        return new DispatchableJob(first.eventId(), new CountingRequest(first.jobId(), first.correlationId(), first.organizationId(),
-                first.captureSetId(), first.captureKind(), List.copyOf(media), requestedModel));
+        return new DispatchableJob(first.eventId(), attempt, new CountingRequest(first.jobId(), first.correlationId(),
+                first.organizationId(), first.captureSetId(), first.captureKind(), List.copyOf(media), requestedModel));
     }
 
     private Map<String, Object> map(String value) {
@@ -200,11 +259,15 @@ public class JdbcInferenceRepository {
         return value == null ? null : value.substring(0, Math.min(value.length(), maxLength));
     }
 
-    public record DispatchableJob(UUID eventId, CountingRequest request) {
+    public record DispatchableJob(UUID eventId, int attempt, CountingRequest request) {
         public UUID jobId() { return request.jobId(); }
     }
 
     public record LockedJob(UUID jobId, String status, UUID sessionId, String captureKind) { }
+
+    public record StaleJob(UUID jobId, UUID sessionId, String status, String correlationId, Instant createdAt,
+            UUID organizationId) {
+    }
 
     private record DispatchRow(
             UUID eventId, UUID jobId, String correlationId, UUID organizationId, UUID captureSetId, String captureKind,

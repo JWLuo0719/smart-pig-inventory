@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/outbox/data/drift_outbox_repository.dart';
 import '../storage/database_provider.dart';
 import 'auth_api.dart';
 import 'auth_context_repository.dart';
@@ -53,6 +54,7 @@ class AuthController extends AsyncNotifier<AuthState?> {
         rethrow;
       }
     });
+    if (state.valueOrNull != null) await _retryAuthenticationWaiting();
   }
 
   /// Re-checks a locally restored offline session after connectivity returns.
@@ -76,6 +78,7 @@ class AuthController extends AsyncNotifier<AuthState?> {
     try {
       final AuthState verified = await _verify(current.session);
       state = AsyncData<AuthState?>(verified);
+      await _retryAuthenticationWaiting();
       return verified;
     } on DioException catch (error) {
       if (_isUnauthorized(error)) {
@@ -89,6 +92,7 @@ class AuthController extends AsyncNotifier<AuthState?> {
           final AuthState refreshedState =
               AuthState(session: refreshed, user: user, isOffline: false);
           state = AsyncData<AuthState?>(refreshedState);
+          await _retryAuthenticationWaiting();
           return refreshedState;
         } on DioException catch (refreshError) {
           if (_isNetworkFailure(refreshError)) {
@@ -170,6 +174,19 @@ class AuthController extends AsyncNotifier<AuthState?> {
   Future<void> _clearLocalSession() async {
     await _sessions.clear();
     await _contexts.clear();
+  }
+
+  /// 登录或刷新成功后,把 waiting_authentication 的出站条目放回 queued,
+  /// 否则重新登录后上传队列会永远停在等待认证的死胡同里。
+  /// 放行失败不影响登录结果,下次登录、重连或启动布防会再试一次。
+  Future<void> _retryAuthenticationWaiting() async {
+    try {
+      await ref
+          .read(outboxRepositoryProvider)
+          .retryAuthenticationWaiting(now: DateTime.now().toUtc());
+    } on Exception {
+      // 条目仍留在 waiting_authentication,等待下一次成功认证再放行。
+    }
   }
 
   bool _isUnauthorized(DioException error) => error.response?.statusCode == 401;
