@@ -3,6 +3,9 @@
 param([Parameter(Mandatory)][string]$EnvironmentFile)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+# docker compose 的输出是 UTF-8；中文 Windows 默认 GBK 解码会吞掉 JSON 路径里的反斜杠。
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 $root = Split-Path -Parent $PSScriptRoot
 $resolved = (Resolve-Path -LiteralPath $EnvironmentFile).Path
 $json = & docker compose -p pig-inventory-production --env-file $resolved -f "$root/docker-compose.yml" -f "$root/docker-compose.production.yml" config --format json

@@ -6,6 +6,8 @@ services:
   redis:
     restart: unless-stopped
   minio:
+    # 摘除 base 里 9000:9000 的全网卡发布：生产内部服务一律不发布端口。
+    ports: !reset []
     restart: unless-stopped
   inference-api:
     image: ${RELEASE_INFERENCE_IMAGE:?set a verified immutable inference image}
@@ -27,6 +29,7 @@ services:
       CORS_ALLOWED_ORIGINS: ${PUBLIC_BASE_URL:?set the production HTTPS origin}
       INFERENCE_DISPATCHER_ENABLED: 'true'
       MULTIVIEW_AUTO_COUNT_ENABLED: 'false'
+      VIDEO_AUTO_COUNT_ENABLED: 'false'
   admin-web:
     image: ${RELEASE_ADMIN_IMAGE:?set a verified immutable admin image}
     build: !reset null
