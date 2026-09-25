@@ -100,18 +100,18 @@ void main() {
     for (var i = 0; i < 5; i++) {
       await tester.pump(const Duration(milliseconds: 20));
     }
-    expect(find.text('任务状态未知，请联网后下拉重试。'), findsOneWidget);
+    expect(find.text('服务器暂时不可用；本机草稿和上传队列不受影响。'), findsOneWidget);
     expect(find.text('0 / 0'), findsNothing);
-    expect(requests, 1,
-        reason:
-            'Unvisited task and gallery pages must not fetch during startup');
+    expect(requests, 2,
+        reason: 'Startup fetches tasks and assistant insights only; '
+            'unvisited task and gallery pages must not fetch');
     fail = false;
     await tester.runAsync(() => tester
         .widget<RefreshIndicator>(find.byType(RefreshIndicator))
         .onRefresh());
     await tester.pump();
     expect(find.text('0 / 0'), findsOneWidget);
-    expect(find.text('任务状态未知，请联网后下拉重试。'), findsNothing);
+    expect(find.text('服务器暂时不可用；本机草稿和上传队列不受影响。'), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
     container.dispose();
     await tester.runAsync(database.close);
@@ -142,7 +142,7 @@ void main() {
     for (var i = 0; i < 5; i++) {
       await tester.pump(const Duration(milliseconds: 20));
     }
-    expect(find.text('任务状态未知，请联网后下拉重试。'), findsOneWidget);
+    expect(find.text('当前离线，首页只显示本机已经保存的作业。'), findsOneWidget);
     expect(requests, 0);
     (container.read(authControllerProvider.notifier) as _OfflineThenOnlineAuth)
         .goOnline();
@@ -152,8 +152,8 @@ void main() {
     });
     await tester.pumpAndSettle();
     expect(find.text('0 / 0'), findsOneWidget);
-    expect(find.text('任务状态未知，请联网后下拉重试。'), findsNothing);
-    expect(requests, 1);
+    expect(find.text('服务器暂时不可用；本机草稿和上传队列不受影响。'), findsNothing);
+    expect(requests, 2);
     await tester.pumpWidget(const SizedBox.shrink());
     container.dispose();
     await tester.runAsync(database.close);
@@ -195,8 +195,8 @@ void main() {
     });
     await tester.pumpAndSettle();
     expect(find.text('0 / 0'), findsOneWidget);
-    expect(find.text('任务状态未知，请联网后下拉重试。'), findsNothing);
-    expect(requests, 1);
+    expect(find.text('服务器暂时不可用；本机草稿和上传队列不受影响。'), findsNothing);
+    expect(requests, 2);
     await tester.pumpWidget(const SizedBox.shrink());
     container.dispose();
     await tester.runAsync(database.close);

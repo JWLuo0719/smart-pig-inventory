@@ -1,0 +1,31 @@
+# 本地虚拟环境(295MB+,绝不能入库)
+.venvs/
+.venv/
+
+# 测试与运行缓存
+.pytest_cache/
+.pytest-basetemp/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 运行期数据(agent.db / 证据归档 / 轮询目录),按部署说明由运行时生成
+data/
+events.jsonl
+
+# research_runner 工作目录(job-* 沙箱),默认落在启动目录下
+job-*/
+
+# 模型权重与本地工具链，绝不入库（AGENTS 规范：模型权重不进 Git）
+model_artifacts/
+.tools/
+*.pt
+*.pth
+*.onnx
+*.engine
+
+# 参赛材料（排版/插图工作稿）不进代码仓库
+参赛材料/
+
+# Git Bash 重定向误产生的垃圾文件
+nul

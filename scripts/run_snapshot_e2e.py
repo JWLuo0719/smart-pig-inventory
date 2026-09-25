@@ -31,6 +31,7 @@ VALUES = {
     "APP_E2E_FIXTURE_PASSWORD": "synthetic-recovery-only", "INFERENCE_CALLBACK_TOKEN": "synthetic-recovery-callback",
     "INFERENCE_DISPATCHER_ENABLED": "false", "COUNTING_PROVIDER": "unavailable",
     "MODEL_RESEARCH_ENABLED": "false", "MODEL_APPROVED": "false", "MULTIVIEW_AUTO_COUNT_ENABLED": "false",
+    "VIDEO_AUTO_COUNT_ENABLED": "false",
     "MODEL_KEY": "pending-license-review", "MODEL_VERSION": "unverified", "MODEL_CHECKSUM": "unverified",
     "MODEL_ADAPTER_VERSION": "http-v1", "YOLO_HTTP_ENDPOINT": "", "YOLO_HTTP_READY_ENDPOINT": "",
 }

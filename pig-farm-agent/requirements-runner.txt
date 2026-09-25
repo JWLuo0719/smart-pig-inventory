@@ -1,0 +1,11 @@
+# 科研推理桥接服务（research_runner）依赖
+# 安装：pip install -r requirements-runner.txt
+fastapi
+uvicorn[standard]
+pydantic>=2
+httpx
+onnxruntime>=1.16
+numpy
+pillow
+opencv-python-headless
+minio>=7.2

@@ -1,5 +1,17 @@
 # 新对话交接
 
+## 2026-09-18 邻栏排除、三图跨图去重与视频抽帧计数（全部默认关闭，未上线）
+
+按现场需求第 7、8 条与视频计数诉求完成三项能力的 Provider 化改造。合同、推理服务与 Spring 领域层均已跑通自动化测试，但**没有任何开关被打开**，模型发布清单与既有门禁一字未改：
+
+- 合同：`contracts/openapi.yaml` 新增 `RoiRegion`，`Roi` 增加 `exclusions`（≤8 个归一化矩形）与 `minContainment`（0..1）；`contracts/inference-job.schema.json` 同步。四字段历史载荷继续可用，线上行为不变。结果契约 `Detection` 新增可选 `track_id`/`frame_index`，仅用于产品侧轨迹聚合，不进入业务回调，服务端线缆不变。
+- 推理服务：`app/geometry.py` 按"框中心点 → 排除区 → 最小包含比例"判定栏舍归属；`app/multiview.py` 只在配置了相邻视图重叠比例时，合并重叠带内纵向位置与高度一致的重复检测；`app/video.py` 把逐帧轨迹聚合成去重数量（同一 `track_id` 只算一头）。未配置标定、三视图不齐、内层 Provider 未获批准、缺轨迹标识或完全没有检测时，一律失败关闭为 `review_required` 且数量为空。
+- Spring：`Roi`/`RoiRegion` 领域校验与上传控制层绑定；`roi_json` 既有透传链路自动把排除区送到推理服务，`JdbcInferenceRepository` 无需修改。视频降级改为受 `VIDEO_AUTO_COUNT_ENABLED` 控制，降级判定收敛到 `CaptureSetPolicy.requiresManualReview(kind, validatedMultiView, validatedVideo)`；未知采集类型一律要求人工复核。
+- 手机端：`Roi` 领域模型支持 `exclusions`（≤8）与 `minContainment`，缺省值不写入 JSON，历史载荷逐字不变；新增 `RoiEditorPage`——在已拍照片上拖出矩形即可标注排除区、可逐个删除、可调最小包含比例，入口在"已保存证据"缩略图的大图弹窗里（视频不提供该入口，合同禁止视频携带图像 ROI）。保存走既有 `UpdateCaptureRoi`，草稿进入上传队列后会拒绝修改并给出提示。
+- 证据：推理服务 `python -m pytest` 88 项通过（本轮新增 50 项）；Spring `mvn -Dtest=RoiTest,CaptureManifestTest,VideoEvidenceTest,CaptureSetPolicyTest,UnavailableCountingProviderTest,InferenceResultServiceTest test` 28 项通过（新增 `InferenceResultServiceTest` 8 项，Mockito 覆盖降级门禁，无需 Docker）；Flutter `flutter analyze` 无问题、`flutter test` 51 项通过（新增排除区序列化 3 项与标注界面 7 项）。
+- 未验证：Docker/Compose E2E 与 Testcontainers 集成测试（本机无 Docker）、Android APK 构建与真机操作（本机无 Android SDK、无设备），因此标注界面只过了 widget 测试与静态检查，**真机手势与照片比例对齐仍需人工验收**；现场相邻视图重叠比例标定、外部 Runner 的 `track_id` 输出同样待办。
+- 开关状态：`MODEL_APPROVED=false`、`MULTIVIEW_AUTO_COUNT_ENABLED=false`、`MULTIVIEW_DEDUP_ENABLED=false`、`VIDEO_COUNTING_ENABLED=false`、`VIDEO_AUTO_COUNT_ENABLED=false`；三图与视频继续统一进入人工确认。
+
 ## 2026-09-13 非视频功能人工验收完成
 
 用户反馈前四项非视频功能测试成功，视频相关测试后置。结合 v18 的自动读回，上传包自动恢复、服务端提交、人工复核入口及非视频页面功能可继续保留为候选包验收证据；视频采集/上传/播放和视频自动计数仍未验收，不得据此标记通过。模型准确度研究继续后置，`MODEL_APPROVED=false`。

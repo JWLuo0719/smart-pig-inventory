@@ -439,9 +439,9 @@ class InferenceResultServiceIntegrationTest {
         }
 
         @Override
-        public String promote(String stagedKey, UUID organizationId, UUID assetId) {
+        public String promote(String stagedKey, UUID organizationId, String sha256) {
             byte[] bytes = objects.remove(stagedKey);
-            String key = "evidence/" + organizationId + "/" + assetId;
+            String key = "evidence/" + organizationId + "/" + sha256;
             objects.put(key, bytes);
             return key;
         }

@@ -42,8 +42,9 @@ public class MinioStagedObjectStorage implements StagedObjectStorage {
     }
 
     @Override
-    public String promote(String stagedKey, UUID organizationId, UUID assetId) {
-        String key = "evidence/" + organizationId + "/" + assetId;
+    public String promote(String stagedKey, UUID organizationId, String sha256) {
+        // 证据键按内容寻址:同内容写入同一对象天然幂等,客户端可控 id 无法覆盖已提交证据。
+        String key = "evidence/" + organizationId + "/" + sha256;
         try {
             client.copyObject(CopyObjectArgs.builder()
                     .bucket(bucket)

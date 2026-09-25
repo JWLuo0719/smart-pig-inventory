@@ -9,6 +9,8 @@ import '../../core/auth/authorized_retry.dart';
 import '../../core/network/inventory_api.dart';
 import '../../core/theme/app_theme.dart';
 import '../gallery/server_gallery_screen.dart';
+import 'annotated_evidence.dart';
+import 'density_heatmap.dart';
 
 final inventoryRemoteApiProvider = Provider<InventoryRemoteApi>(
   (ref) => InventoryRemoteApi(baseUrl: ref.watch(apiBaseUrlProvider)),
@@ -151,6 +153,14 @@ class _SessionReviewScreenState extends ConsumerState<SessionReviewScreen> {
             style: Theme.of(context).textTheme.bodySmall),
         const SizedBox(height: 20),
         _StatusCard(session: session),
+        if (session.detections.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 16),
+          AnnotatedEvidenceSection(
+              sessionId: session.evidenceSessionId ?? session.id,
+              detections: session.detections),
+          const SizedBox(height: 12),
+          DensityHeatmapCard(detections: session.detections),
+        ],
         ServerGalleryScreen(
             key: ValueKey('${session.id}-${session.status}'),
             sessionId: session.id),
@@ -189,6 +199,19 @@ class _SessionReviewScreenState extends ConsumerState<SessionReviewScreen> {
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Text('• $warning'),
                 )),
+        ],
+        if (session.detections.isNotEmpty &&
+            session.requiresReview) ...<Widget>[
+          const SizedBox(height: 16),
+          _AiSuggestionCard(
+            detections: session.detections,
+            onApply: editable
+                ? () => setState(() {
+                      _countController.text =
+                          session.detections.length.toString();
+                    })
+                : null,
+          ),
         ],
         if (editable) ...<Widget>[
           const SizedBox(height: 22),
@@ -279,6 +302,53 @@ class _StatusCard extends StatelessWidget {
                     style: Theme.of(context).textTheme.bodySmall),
               ],
             ]),
+      ),
+    );
+  }
+}
+
+class _AiSuggestionCard extends StatelessWidget {
+  const _AiSuggestionCard({required this.detections, this.onApply});
+  final List<RemoteDetection> detections;
+  final VoidCallback? onApply;
+
+  @override
+  Widget build(BuildContext context) {
+    final int uncertain = detections
+        .where((RemoteDetection d) => d.confidence < kUncertainConfidence)
+        .length;
+    final int confident = detections.length - uncertain;
+    return Card(
+      color: AppColors.barnBlue.withValues(alpha: 0.06),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(children: <Widget>[
+              const Text('🤖', style: TextStyle(fontSize: 17)),
+              const SizedBox(width: 8),
+              Text('AI 建议数量：${detections.length} 头',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w800)),
+            ]),
+            const SizedBox(height: 6),
+            Text(
+                '高置信 $confident 头 · 待核验 $uncertain 头（对应证据图中橙色框）。'
+                '请对照标注核验后再确认；如与实际不符，直接修改数量即可。',
+                style: Theme.of(context).textTheme.bodySmall),
+            if (onApply != null) ...<Widget>[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: onApply,
+                icon: const Icon(Icons.edit, size: 18),
+                label: Text('带入建议数量 ${detections.length}'),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

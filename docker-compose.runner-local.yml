@@ -1,4 +1,5 @@
 services:
   minio:
-    ports:
+    # !override 整段替换 base 的 9000:9000 全网卡发布，只保留回环 9100 供宿主机 Runner 取图。
+    ports: !override
       - "127.0.0.1:9100:9000"

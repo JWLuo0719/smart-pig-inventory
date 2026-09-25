@@ -44,6 +44,8 @@ class DriftOutboxRepository {
 
   /// Avoid refreshing credentials from a background worker that has no work.
   /// This matters when the foreground isolate is restoring a rotated session.
+  /// waiting_authentication 也算待办:重新登录或刷新出新会话后即可同步,
+  /// 计入这里才能重新布防 worker,否则队列会永远停在等待登录的死胡同。
   Future<bool> hasSynchronizableWork({required DateTime now}) async {
     final OutboxEntry? entry = await (_database.select(_database.outboxEntries)
           ..where((OutboxEntries row) =>
@@ -54,6 +56,7 @@ class DriftOutboxRepository {
                 'uploading_blobs',
                 'putting_manifest',
                 'committing',
+                'waiting_authentication',
               ]) &
               (row.nextAttemptAt.isNull() |
                   row.nextAttemptAt.isSmallerOrEqualValue(now)) &

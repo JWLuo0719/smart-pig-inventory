@@ -177,6 +177,20 @@ class AppDatabase extends _$AppDatabase {
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (Migrator migrator) => migrator.createAll(),
         onUpgrade: (Migrator migrator, int from, int to) async {
+          // drift 的 migrator 不查重:凡前面分支 createTable 已按当前表定义
+          // 建出的列,后续 addColumn 必须先查存在性,否则 duplicate column
+          // 异常会把升级钉死在启动循环里。
+          Future<void> addColumnIfMissing(
+              TableInfo table, GeneratedColumn column) async {
+            final List<QueryRow> columns = await customSelect(
+              'PRAGMA table_info(${table.actualTableName})',
+            ).get();
+            final bool exists = columns
+                .any((QueryRow row) => row.read<String>('name') == column.name);
+            if (exists) return;
+            await migrator.addColumn(table, column);
+          }
+
           if (from < 2) {
             await migrator.createTable(cachedOrganizations);
             await migrator.createTable(cachedBuildings);
@@ -187,32 +201,55 @@ class AppDatabase extends _$AppDatabase {
           if (from < 3) {
             await migrator.createTable(syncCursors);
             await migrator.createTable(captureSets);
-            await migrator.addColumn(
+            await addColumnIfMissing(
                 localMediaAssets, localMediaAssets.capturedAt);
-            await migrator.addColumn(localMediaAssets, localMediaAssets.width);
-            await migrator.addColumn(localMediaAssets, localMediaAssets.height);
-            await migrator.addColumn(
+            await addColumnIfMissing(localMediaAssets, localMediaAssets.width);
+            await addColumnIfMissing(localMediaAssets, localMediaAssets.height);
+            await addColumnIfMissing(
                 outboxEntries, outboxEntries.serverPackageId);
-            await migrator.addColumn(outboxEntries, outboxEntries.sessionId);
-            await migrator.addColumn(
+            await addColumnIfMissing(outboxEntries, outboxEntries.sessionId);
+            await addColumnIfMissing(
                 outboxEntries, outboxEntries.inferenceJobId);
-            await migrator.addColumn(outboxEntries, outboxEntries.attemptCount);
-            await migrator.addColumn(
+            await addColumnIfMissing(outboxEntries, outboxEntries.attemptCount);
+            await addColumnIfMissing(
                 outboxEntries, outboxEntries.nextAttemptAt);
-            await migrator.addColumn(outboxEntries, outboxEntries.leaseOwner);
-            await migrator.addColumn(
+            await addColumnIfMissing(outboxEntries, outboxEntries.leaseOwner);
+            await addColumnIfMissing(
                 outboxEntries, outboxEntries.leaseExpiresAt);
             await migrator.createTable(uploadAssetEntries);
           }
           if (from < 4) {
+            // 历史重复数据会让 CREATE UNIQUE INDEX 抛异常钉死升级:
+            // 按 (draft_id, view_position) 只保留 created_at 最新的一条
+            // (并列时保留 rowid 较大者),其余删除后再建唯一索引。
             await customStatement(
-              'CREATE UNIQUE INDEX uk_local_media_draft_position '
+              'DELETE FROM local_media_assets WHERE EXISTS ('
+              'SELECT 1 FROM local_media_assets AS newer '
+              'WHERE newer.draft_id = local_media_assets.draft_id '
+              'AND newer.view_position = local_media_assets.view_position '
+              'AND (newer.created_at > local_media_assets.created_at '
+              'OR (newer.created_at = local_media_assets.created_at '
+              'AND newer.rowid > local_media_assets.rowid)))',
+            );
+            await customStatement(
+              'CREATE UNIQUE INDEX IF NOT EXISTS uk_local_media_draft_position '
               'ON local_media_assets (draft_id, view_position)',
             );
           }
           if (from < 5) {
+            // 同上:按 draft_id 只保留 created_at 最新的一条出站记录,
+            // 其余删除后再建唯一索引,避免脏数据把升级钉死。
             await customStatement(
-              'CREATE UNIQUE INDEX uk_outbox_draft ON outbox_entries (draft_id)',
+              'DELETE FROM outbox_entries WHERE EXISTS ('
+              'SELECT 1 FROM outbox_entries AS newer '
+              'WHERE newer.draft_id = outbox_entries.draft_id '
+              'AND (newer.created_at > outbox_entries.created_at '
+              'OR (newer.created_at = outbox_entries.created_at '
+              'AND newer.rowid > outbox_entries.rowid)))',
+            );
+            await customStatement(
+              'CREATE UNIQUE INDEX IF NOT EXISTS uk_outbox_draft '
+              'ON outbox_entries (draft_id)',
             );
           }
           if (from < 6) {

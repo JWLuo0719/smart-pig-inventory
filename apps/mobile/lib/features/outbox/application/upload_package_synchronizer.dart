@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
@@ -173,11 +174,12 @@ class UploadPackageSynchronizer {
           now: _clock());
       return;
     }
-    if (status != null && status >= 400 && status < 500) {
+    if (_isDeterministicRejection(status)) {
       await _repository.block(work.entry.packageId,
-          now: _clock(), safeError: '服务器拒绝此采集包，请查看诊断信息');
+          now: _clock(), safeError: _rejectionMessage(error));
       return;
     }
+    // 408/425/429 等超时、限流状态不是业务拒绝,按退避重试而不是永久封存。
     final int attempt = work.entry.attemptCount + 1;
     await _repository.retryLater(
       work.entry.packageId,
@@ -187,12 +189,37 @@ class UploadPackageSynchronizer {
     );
   }
 
+  /// 仅确定性业务拒绝永久封存(400/403/409/422);408/425/429 与其余状态
+  /// 都是可恢复的,统一走 retryLater 退避。
+  bool _isDeterministicRejection(int? status) =>
+      status == 400 || status == 403 || status == 409 || status == 422;
+
+  /// 4xx 拒绝不会再重试，把农场员能自己处理的错误码翻成可行动的提示；
+  /// 其余保持通用文案。problem+json 在 Dio 里可能以 Map 或原始字符串到达。
+  String _rejectionMessage(DioException error) {
+    Object? data = error.response?.data;
+    if (data is String) {
+      try {
+        data = jsonDecode(data);
+      } catch (_) {
+        data = null;
+      }
+    }
+    final String? code = data is Map ? data['code'] as String? : null;
+    return switch (code) {
+      'EXACT_DUPLICATE_IMAGE' =>
+        '该照片已存在于本场证据库，同一张照片不会重复计数；请在复核页查看已有记录，或换一张照片拍摄。',
+      'DELETED_DUPLICATE_IMAGE' => '这张照片之前上传过、后来被删除；同一张照片不能重复上传，请重新拍摄一张新照片。',
+      _ => '服务器拒绝此采集包，请查看诊断信息',
+    };
+  }
+
   UploadSyncOutcome _outcomeFor(DioException error) {
-    if (error.response?.statusCode == 401) {
+    final int? status = error.response?.statusCode;
+    if (status == 401) {
       return UploadSyncOutcome.waitingForAuthentication;
     }
-    if (error.response?.statusCode case final int status
-        when status >= 400 && status < 500) {
+    if (_isDeterministicRejection(status)) {
       return UploadSyncOutcome.blocked;
     }
     return UploadSyncOutcome.retryScheduled;

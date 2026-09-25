@@ -89,6 +89,13 @@ public class JdbcUploadRepository {
         return results.stream().findFirst();
     }
 
+    /** asset_id 是 upload_blob 的全局主键:跨 package 查询用于在写入前拦截标识符复用。 */
+    public Optional<StoredBlob> findBlobByAssetId(UUID assetId) {
+        List<StoredBlob> results = jdbc.query("SELECT * FROM upload_blob WHERE asset_id = ?",
+                blobRowMapper, bytes(assetId));
+        return results.stream().findFirst();
+    }
+
     public void insertBlob(UUID packageId, UUID assetId, String sha256, long byteSize, String storageKey) {
         jdbc.update("""
                 INSERT INTO upload_blob (asset_id, package_id, sha256, byte_size, content_type, storage_key, uploaded_at)
@@ -99,6 +106,13 @@ public class JdbcUploadRepository {
     public boolean hasExactDuplicate(UUID organizationId, String sha256) {
         Integer count = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM media_asset WHERE organization_id = ? AND sha256 = ? AND deleted_at IS NULL",
+                Integer.class, bytes(organizationId), sha256);
+        return count != null && count > 0;
+    }
+
+    public boolean hasDeletedDuplicate(UUID organizationId, String sha256) {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM media_asset WHERE organization_id = ? AND sha256 = ? AND deleted_at IS NOT NULL",
                 Integer.class, bytes(organizationId), sha256);
         return count != null && count > 0;
     }

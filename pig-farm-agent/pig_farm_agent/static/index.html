@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>猪场智能运营看板</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #ffffff; --line: #e3e6ea; --ink: #1c2430; --sub: #6b7686;
+    --blue: #2563eb; --blue-soft: #eaf0fe; --green: #16803c; --green-soft: #e6f5ec;
+    --orange: #b45309; --orange-soft: #fdf1e3; --red: #c02626; --red-soft: #fdeaea;
+    --gray-soft: #eef0f3; --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.6 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+         background: var(--bg); color: var(--ink); }
+  header { display: flex; align-items: center; gap: 16px; padding: 12px 20px;
+           background: var(--card); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+  header h1 { font-size: 17px; margin: 0; }
+  header h1 .pig { margin-right: 6px; }
+  .health { display: flex; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--sub); }
+  .chip { padding: 1px 9px; border-radius: 999px; background: var(--gray-soft); }
+  .chip.ok { background: var(--green-soft); color: var(--green); }
+  .chip.warn { background: var(--orange-soft); color: var(--orange); }
+  nav { margin-left: auto; display: flex; gap: 4px; }
+  nav button { border: 0; background: transparent; padding: 7px 14px; border-radius: 8px;
+               cursor: pointer; font-size: 14px; color: var(--sub); }
+  nav button.active { background: var(--blue-soft); color: var(--blue); font-weight: 600; }
+  main { max-width: 1180px; margin: 18px auto; padding: 0 16px; }
+  .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  select, input[type=date], input[type=text], input[type=file] { padding: 6px 10px;
+    border: 1px solid var(--line); border-radius: 8px; background: var(--card); font-size: 13px; color: var(--ink); }
+  .muted { color: var(--sub); font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; background: var(--card);
+          border-radius: var(--radius); overflow: hidden; box-shadow: 0 1px 3px rgba(16,24,40,.06); }
+  th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--line); font-size: 13px; }
+  th { background: #fafbfc; color: var(--sub); font-weight: 600; white-space: nowrap; }
+  tr.event-row { cursor: pointer; }
+  tr.event-row:hover { background: #f7f9fd; }
+  .badge { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .risk-high { background: var(--red-soft); color: var(--red); }
+  .risk-medium { background: var(--orange-soft); color: var(--orange); }
+  .risk-none, .risk-low { background: var(--green-soft); color: var(--green); }
+  .st-open { background: var(--blue-soft); color: var(--blue); }
+  .st-acknowledged { background: var(--orange-soft); color: var(--orange); }
+  .st-resolved { background: var(--green-soft); color: var(--green); }
+  .st-dismissed { background: var(--gray-soft); color: var(--sub); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 14px; }
+  .card { background: var(--card); border-radius: var(--radius); padding: 14px 16px;
+          box-shadow: 0 1px 3px rgba(16,24,40,.06); }
+  .card .num { font-size: 26px; font-weight: 700; }
+  .card .lbl { color: var(--sub); font-size: 12px; }
+  .drawer-mask { position: fixed; inset: 0; background: rgba(15,23,42,.35); z-index: 9; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 94vw);
+            background: var(--card); z-index: 10; padding: 18px 20px; overflow-y: auto;
+            box-shadow: -8px 0 24px rgba(15,23,42,.12); }
+  .drawer h2 { font-size: 15px; margin: 0 0 4px; word-break: break-all; }
+  .drawer h3 { font-size: 13px; color: var(--sub); margin: 16px 0 6px; }
+  .kv { display: grid; grid-template-columns: 130px 1fr; gap: 4px 10px; font-size: 13px; }
+  .kv .k { color: var(--sub); }
+  .actions-note { width: 100%; margin: 8px 0; }
+  .btn { border: 0; border-radius: 8px; padding: 8px 16px; font-size: 13px; cursor: pointer; }
+  .btn.primary { background: var(--blue); color: #fff; }
+  .btn.ghost { background: var(--gray-soft); color: var(--ink); }
+  .btn.green { background: var(--green); color: #fff; }
+  .btn.red { background: var(--red); color: #fff; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .evidence img { max-width: 100%; border-radius: 8px; border: 1px solid var(--line); }
+  .timeline { list-style: none; padding: 0; margin: 0; font-size: 12.5px; }
+  .timeline li { padding: 5px 0 5px 14px; border-left: 2px solid var(--line); position: relative; }
+  .timeline li::before { content: ""; position: absolute; left: -5px; top: 11px; width: 8px; height: 8px;
+                         border-radius: 50%; background: var(--blue); }
+  .panel { background: var(--card); border-radius: var(--radius); padding: 18px 20px;
+           box-shadow: 0 1px 3px rgba(16,24,40,.06); margin-bottom: 14px; }
+  .panel h2 { margin: 0 0 10px; font-size: 15px; }
+  .alert-item { display: flex; gap: 10px; align-items: baseline; padding: 7px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+  .result-box { margin-top: 12px; padding: 12px; border-radius: 8px; background: var(--green-soft);
+                color: var(--green); font-size: 13px; display: none; }
+  .result-box.err { background: var(--red-soft); color: var(--red); }
+  .token-bar { background: var(--orange-soft); color: var(--orange); font-size: 12.5px;
+               padding: 8px 12px; border-radius: 8px; margin-bottom: 12px; display: none; }
+  .token-bar input { margin-left: 6px; }
+  .gate { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--sub); }
+  .gate b { color: var(--ink); }
+  .legend { margin-top: 4px; }
+  a { color: var(--blue); }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="pig">🐷</span>猪场智能运营看板</h1>
+  <div class="health" id="health">加载中…</div>
+  <nav>
+    <button data-view="events" class="active">事件流</button>
+    <button data-view="daily">日报</button>
+    <button data-view="upload">上传分析</button>
+    <button id="token-toggle" title="写操作令牌设置">🔑</button>
+  </nav>
+</header>
+
+<main>
+  <!-- 写保护令牌（仅在服务启用 PIG_AGENT_API_TOKEN 时需要） -->
+  <div class="token-bar" id="token-bar">
+    该服务已启用写保护：确认/关闭/上传需要在
+    <input type="password" id="token-input" placeholder="X-Api-Token" size="28">
+    <button class="btn primary" id="token-save">保存</button>
+    <button class="btn ghost" id="token-clear">清除</button>
+    <span class="muted">（保存在本机浏览器 localStorage，仅随写请求发送）</span>
+  </div>
+
+  <!-- 事件流 -->
+  <section id="view-events">
+    <div class="cards" id="e-cards"></div>
+    <div class="toolbar">
+      <select id="f-barn"><option value="">全部栏舍</option></select>
+      <select id="f-status">
+        <option value="">全部状态</option>
+        <option value="open">待处理 open</option>
+        <option value="acknowledged">已确认 acknowledged</option>
+        <option value="resolved">已解决 resolved</option>
+        <option value="dismissed">已驳回 dismissed</option>
+      </select>
+      <input type="date" id="f-date">
+      <button class="btn primary" id="refresh">刷新</button>
+      <span class="muted" id="event-count"></span>
+    </div>
+    <table>
+      <thead><tr>
+        <th>风险</th><th>状态</th><th>栏舍</th><th>计数</th><th>密度</th><th>代码</th>
+        <th>拍摄时间</th><th>合并观测</th>
+      </tr></thead>
+      <tbody id="event-rows"><tr><td colspan="8" class="muted">加载中…</td></tr></tbody>
+    </table>
+  </section>
+
+  <!-- 日报 -->
+  <section id="view-daily" style="display:none">
+    <div class="toolbar">
+      <input type="date" id="r-date">
+      <button class="btn primary" id="r-refresh">生成日报</button>
+      <a id="r-csv" href="#">导出 CSV</a>
+    </div>
+    <div class="cards" id="r-cards"></div>
+    <div class="panel"><h2>栏舍概览</h2><div id="r-barns"></div></div>
+    <div class="panel"><h2>未关闭告警</h2><div id="r-alerts"></div></div>
+    <div class="panel">
+      <h2>模型升级门槛（回放基线）</h2>
+      <div class="gate" id="r-gate">加载中…</div>
+    </div>
+  </section>
+
+  <!-- 上传分析 -->
+  <section id="view-upload" style="display:none">
+    <div class="panel">
+      <h2>上传栏舍图片进行分析</h2>
+      <div class="toolbar">
+        <select id="u-barn"></select>
+        <input type="file" id="u-file" accept=".jpg,.jpeg,.png,.webp">
+        <button class="btn primary" id="u-submit">开始分析</button>
+      </div>
+      <div class="muted">分析走真实检测链路（当前服务模型模式见右上角），同一文件重复提交会幂等复用结果。</div>
+      <div class="result-box" id="u-result"></div>
+    </div>
+  </section>
+</main>
+
+<!-- 事件详情抽屉 -->
+<div class="drawer-mask" id="drawer-mask" style="display:none"></div>
+<div class="drawer" id="drawer" style="display:none">
+  <h2 id="d-title"></h2>
+  <div class="muted" id="d-sub"></div>
+  <h3>观测状态</h3><div class="kv" id="d-state"></div>
+  <h3>风险判定</h3><div class="kv" id="d-risk"></div>
+  <h3>建议动作</h3><div id="d-actions"></div>
+  <h3>证据</h3><div class="evidence" id="d-evidence"></div>
+  <h3>状态轨迹</h3><ul class="timeline" id="d-history"></ul>
+  <h3>人工处置</h3>
+  <input type="text" class="actions-note" id="d-note" placeholder="处置备注（可留空）">
+  <div class="btn-row">
+    <button class="btn primary" id="d-ack">确认（ack）</button>
+    <button class="btn green" id="d-resolve">解决（resolve）</button>
+    <button class="btn red" id="d-dismiss">驳回（dismiss）</button>
+    <button class="btn ghost" id="d-close">关闭</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g,
+  (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmtTime = (iso) => iso ? iso.replace("T", " ").slice(0, 19) : "-";
+const TOKEN_KEY = "pig-agent-token";
+let currentEvent = null;
+let timer = null;
+
+function getToken() { try { return localStorage.getItem(TOKEN_KEY) || ""; } catch (e) { return ""; } }
+function setToken(value) {
+  try { value ? localStorage.setItem(TOKEN_KEY, value) : localStorage.removeItem(TOKEN_KEY); } catch (e) {}
+  $("token-bar").style.display = "none";
+}
+function showTokenBar(message) {
+  $("token-bar").style.display = "block";
+  if (message) $("token-bar").firstChild.textContent = message + "：确认/关闭/上传需要在";
+}
+
+async function api(path, options) {
+  const opts = Object.assign({}, options);
+  const headers = Object.assign({}, opts.headers || {});
+  const token = getToken();
+  if (token && (opts.method || "GET").toUpperCase() !== "GET") headers["X-Api-Token"] = token;
+  opts.headers = headers;
+  const res = await fetch(path, opts);
+  const body = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    showTokenBar(body.message || "写操作被拒绝");
+    throw new Error(body.error_code ? `${body.error_code}: ${body.message || ""}` : "HTTP 401");
+  }
+  if (!res.ok) throw new Error(body.error_code ? `${body.error_code}: ${body.message || ""}` : `HTTP ${res.status}`);
+  return body;
+}
+
+/* ---------- 健康与栏舍 ---------- */
+async function loadHealth() {
+  try {
+    const h = await api("/health");
+    const m = h.model || {}, s = h.storage || {};
+    const chips = [
+      `<span class="chip ${h.status === "ok" ? "ok" : "warn"}">${h.status === "ok" ? "服务正常" : "服务降级"}</span>`,
+      `<span class="chip">${esc(m.mode)} · ${esc(m.name)} ${esc(m.version)}</span>`,
+      s.ok ? `<span class="chip">事件 ${s.events} / 未关闭 ${s.open_events}</span>` : "",
+    ];
+    $("health").innerHTML = chips.join("");
+    const barns = (h.config && h.config.barns) || [];
+    for (const sel of [$("f-barn"), $("u-barn")]) {
+      const keep = sel.value;
+      sel.innerHTML = (sel.id === "u-barn" ? "" : `<option value="">全部栏舍</option>`) +
+        barns.map((b) => `<option value="${esc(b)}">${esc(b)}</option>`).join("");
+      if (keep) sel.value = keep;
+    }
+    if (h.config && h.config.writes_protected && !getToken()) {
+      showTokenBar("该服务已启用写保护");
+    }
+  } catch (e) { $("health").innerHTML = `<span class="chip warn">健康检查失败</span>`; }
+}
+
+/* ---------- 事件流 ---------- */
+function renderEventCards(events, barnScoped) {
+  const open = events.filter((e) => e.status === "open" || e.status === "acknowledged");
+  const high = open.filter((e) => (e.risk || {}).level === "high");
+  const medium = open.filter((e) => (e.risk || {}).level === "medium");
+  const latest = events.reduce((acc, e) => (!acc || e.created_at > acc ? e.created_at : acc), "");
+  const cards = [
+    ["当前筛选事件", events.length, "最多显示最近 100 条"],
+    ["未关闭告警", open.length, barnScoped ? "当前栏舍筛选内" : "全部栏舍"],
+    ["高风险未关闭", high.length, high.length ? "建议 30 分钟内复核" : "暂无"],
+    ["中风险未关闭", medium.length, "本班次安排巡检"],
+    ["最近事件", latest ? fmtTime(latest) : "-", "自动刷新 10 秒"],
+  ];
+  $("e-cards").innerHTML = cards.map(([label, value, note]) =>
+    `<div class="card"><div class="num">${esc(value)}</div><div class="lbl">${esc(label)}</div>
+     <div class="muted">${esc(note)}</div></div>`).join("");
+}
+
+async function loadEvents() {
+  const q = new URLSearchParams();
+  if ($("f-barn").value) q.set("barn_id", $("f-barn").value);
+  if ($("f-status").value) q.set("status", $("f-status").value);
+  if ($("f-date").value) q.set("date", $("f-date").value);
+  q.set("limit", "100");
+  let data;
+  try { data = await api(`/events?${q}`); } catch (e) {
+    $("event-rows").innerHTML = `<tr><td colspan="8" class="muted">${esc(e.message)}</td></tr>`; return;
+  }
+  $("event-count").textContent = `共 ${data.total} 条`;
+  renderEventCards(data.events, Boolean($("f-barn").value));
+  if (!data.events.length) {
+    $("event-rows").innerHTML = `<tr><td colspan="8" class="muted">暂无事件</td></tr>`; return;
+  }
+  $("event-rows").innerHTML = data.events.map((e) => {
+    const st = e.state || {}, rk = e.risk || {};
+    return `<tr class="event-row" onclick="showEvent('${esc(e.event_id)}')">
+      <td><span class="badge risk-${esc(rk.level || "none")}">${esc(rk.level || "none")}</span></td>
+      <td><span class="badge st-${esc(e.status)}">${esc(e.status)}</span></td>
+      <td>${esc(e.barn_id)}</td>
+      <td>${st.pig_count ?? "-"}</td>
+      <td>${st.density != null ? (st.density * 100).toFixed(1) + "%" : "-"}</td>
+      <td>${esc(rk.code || "-")}</td>
+      <td class="muted">${fmtTime(e.captured_at)}</td>
+      <td class="muted">${e.merged_observation_count || 0}</td>
+    </tr>`;
+  }).join("");
+}
+
+async function showEvent(id) {
+  let e;
+  try { e = await api(`/events/${encodeURIComponent(id)}`); } catch (err) { alert(err.message); return; }
+  currentEvent = e;
+  const st = e.state || {}, q = st.quality || {}, rk = e.risk || {}, tr = st.trend;
+  $("d-title").textContent = `${e.event_id}`;
+  $("d-sub").innerHTML = `${esc(e.farm_id)} · ${esc(e.barn_id)} · 拍摄 ${fmtTime(e.captured_at)} · 创建 ${fmtTime(e.created_at)}`;
+  const kvState = [
+    ["猪只计数", st.pig_count ?? "-"],
+    ["密度", st.density != null ? (st.density * 100).toFixed(1) + "%" : "-"],
+    ["输入质量", `${esc(q.status || "-")}${q.coverage != null ? "（覆盖 " + (q.coverage * 100).toFixed(0) + "%）" : ""}`],
+    ["与上次变化", tr ? `${tr.count_delta >= 0 ? "+" : ""}${tr.count_delta} 头` : "首次观测"],
+  ];
+  $("d-state").innerHTML = kvState.map(([k, v]) => `<div class="k">${k}</div><div>${esc(v)}</div>`).join("");
+  const th = rk.thresholds || {};
+  const kvRisk = [
+    ["风险等级 / 代码", `${esc(rk.level)} / ${esc(rk.code || "-")}`],
+    ["置信度", rk.confidence != null ? rk.confidence : "-"],
+    ["判定阈值", Object.entries(th).map(([k, v]) => `${esc(k)}=${esc(v)}`).join("，") || "-"],
+    ["说明", esc(rk.note || "-")],
+    ["模型", `${esc((e.model || {}).name || "-")} ${esc((e.model || {}).version || "")}（${esc((e.model || {}).postprocess || "-")}）`],
+  ];
+  $("d-risk").innerHTML = kvRisk.map(([k, v]) => `<div class="k">${k}</div><div>${esc(v)}</div>`).join("");
+  $("d-actions").innerHTML = (e.suggested_actions || []).map((a) => `• ${esc(a)}`).join("<br>") || "-";
+  const ev = e.evidence || {};
+  const img = ev.annotated || ev.image;
+  $("d-evidence").innerHTML =
+    (img ? `<img src="/files/${esc(img)}" alt="证据图">
+            <div class="muted"><a href="/files/${esc(img)}" target="_blank">查看大图</a> ·
+            <a href="/files/${esc(ev.metrics)}" target="_blank">指标 JSON</a></div>` : "（本次观测无图片证据）");
+  const hist = e.status_history || [];
+  $("d-history").innerHTML = hist.map((h) =>
+    `<li>${fmtTime(h.at)} · ${esc(h.from || "∅")} → <b>${esc(h.to)}</b> · ${esc(h.operator || "-")}${h.note ? " · " + esc(h.note) : ""}</li>`
+  ).join("") || "<li>（无）</li>";
+  const done = e.status === "resolved" || e.status === "dismissed";
+  $("d-ack").disabled = done || e.status === "acknowledged";
+  $("d-resolve").disabled = done;
+  $("d-dismiss").disabled = done;
+  $("d-note").value = "";
+  $("drawer-mask").style.display = "block";
+  $("drawer").style.display = "block";
+}
+
+function closeDrawer() { $("drawer-mask").style.display = "none"; $("drawer").style.display = "none"; }
+
+async function transition(action) {
+  if (!currentEvent) return;
+  const note = $("d-note").value.trim();
+  try {
+    await api(`/events/${currentEvent.event_id}/${action}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ operator: "web-看板", note: note || null }),
+    });
+    closeDrawer(); await Promise.all([loadEvents(), loadHealth()]);
+  } catch (e) { alert(e.message); }
+}
+
+/* ---------- 日报 ---------- */
+async function loadDaily() {
+  const date = $("r-date").value || new Date().toISOString().slice(0, 10);
+  $("r-date").value = date;
+  $("r-csv").href = `/report/daily.csv?date=${date}`;
+  let d;
+  try { d = await api(`/report/daily?date=${date}`); } catch (e) { alert(e.message); return; }
+  const s = d.summary || {}, lv = s.by_level || {};
+  const cards = [
+    ["事件总数", s.events], ["高风险", lv.high || 0], ["中风险", (lv.medium || 0)],
+    ["未关闭告警", (d.open_alerts || []).length], ["上报栏舍", s.barns_reporting || 0],
+  ];
+  $("r-cards").innerHTML = cards.map(([l, n]) => `<div class="card"><div class="num">${n}</div><div class="lbl">${l}</div></div>`).join("");
+  $("r-barns").innerHTML = `<table><thead><tr><th>栏舍</th><th>事件</th><th>告警</th><th>未关闭</th></tr></thead><tbody>` +
+    (d.barns || []).map((b) => `<tr><td>${esc(b.barn_id)}</td><td>${b.events}</td><td>${b.alerts}</td><td>${b.open_alerts}</td></tr>`).join("") +
+    `</tbody></table>` || "当日无数据";
+  $("r-alerts").innerHTML = (d.open_alerts || []).length
+    ? (d.open_alerts).map((a) => `<div class="alert-item">
+        <span class="badge risk-${esc(a.risk_level)}">${esc(a.risk_level)}</span>
+        <b>${esc(a.barn_id)}</b> ${esc(a.risk_code)} · ${fmtTime(a.created_at)} ·
+        合并观测 ${a.merged_observation_count} 次 <span class="muted">${esc(a.event_id)}</span></div>`).join("")
+    : `<div class="muted">没有未关闭告警 🎉</div>`;
+}
+
+/* ---------- 模型升级门槛（回放基线） ---------- */
+async function loadGate() {
+  const box = $("r-gate");
+  let g;
+  try { g = await api("/model/replay"); } catch (e) {
+    box.innerHTML = `<span class="muted">${esc(e.message)}</span>`; return;
+  }
+  if (!g.available) {
+    box.innerHTML = `<span class="muted">尚未生成回放基线：运行
+      <code>python -m pig_farm_agent.replay --update-baseline</code></span>`; return;
+  }
+  const codes = Object.entries(g.risk_codes || {})
+    .map(([k, v]) => `${esc(k)}×${v}`).join("，") || "-";
+  const quality = Object.entries(g.quality_statuses || {})
+    .map(([k, v]) => `${esc(k)}×${v}`).join("，") || "-";
+  const range = g.count_range ? `${g.count_range[0]}~${g.count_range[1]} 头/图` : "-";
+  box.innerHTML = `
+    <div>模型：<b>${esc(g.model_name)} @ ${esc(g.model_version)}</b>
+      <span class="muted">（${esc(g.model_mode)} / ${esc(g.mode)} 模式）</span></div>
+    <div>夹具：<b>${esc(g.image_count)}</b> 张 · 计数区间 ${esc(range)}</div>
+    <div>风险覆盖：${codes}</div>
+    <div>质量覆盖：${quality}</div>
+    <div>基线生成：${fmtTime(g.generated_at)}
+      <span class="muted">（升级模型后跑 <code>python -m pig_farm_agent.replay</code>，
+      差异即门槛失败）</span></div>
+    <div class="muted">基线文件：${esc(g.baseline_path)}</div>`;
+}
+
+/* ---------- 上传 ---------- */
+async function upload() {
+  const file = $("u-file").files[0];
+  const box = $("u-result");
+  box.style.display = "none"; box.classList.remove("err");
+  if (!file) { box.style.display = "block"; box.classList.add("err"); box.textContent = "请先选择图片"; return; }
+  $("u-submit").disabled = true;
+  try {
+    const fd = new FormData();
+    fd.append("farm_id", "web");
+    fd.append("barn_id", $("u-barn").value || "A01");
+    fd.append("client_request_id", "web-" + Date.now());
+    fd.append("image", file);
+    const r = await api("/v1/mobile/analyze", { method: "POST", body: fd });
+    const e = r.event, st = e.state || {}, rk = e.risk || {};
+    box.style.display = "block";
+    box.innerHTML = `分析完成：${esc(e.barn_id)} 检出 <b>${st.pig_count}</b> 头 · 密度 ${st.density != null ? (st.density * 100).toFixed(1) + "%" : "-"} ·
+      风险 <b>${esc(rk.level)}</b>${rk.code ? " / " + esc(rk.code) : ""} · 事件 ${esc(e.event_id)}${r.merged ? "（合并进已有事件）" : ""}`;
+    loadEvents();
+  } catch (e2) {
+    box.style.display = "block"; box.classList.add("err"); box.textContent = e2.message;
+  } finally { $("u-submit").disabled = false; }
+}
+
+/* ---------- 视图切换与自动刷新 ---------- */
+function switchView(name) {
+  for (const b of document.querySelectorAll("nav button[data-view]")) b.classList.toggle("active", b.dataset.view === name);
+  for (const s of ["events", "daily", "upload"]) $(`view-${s}`).style.display = s === name ? "" : "none";
+  if (name === "daily") { loadDaily(); loadGate(); }
+}
+document.querySelectorAll("nav button[data-view]").forEach((b) => b.addEventListener("click", () => switchView(b.dataset.view)));
+$("refresh").addEventListener("click", () => { loadEvents(); loadHealth(); });
+$("r-refresh").addEventListener("click", loadDaily);
+$("u-submit").addEventListener("click", upload);
+$("d-close").addEventListener("click", closeDrawer);
+$("drawer-mask").addEventListener("click", closeDrawer);
+$("d-ack").addEventListener("click", () => transition("ack"));
+$("d-resolve").addEventListener("click", () => transition("resolve"));
+$("d-dismiss").addEventListener("click", () => transition("dismiss"));
+$("f-barn").addEventListener("change", loadEvents);
+$("f-status").addEventListener("change", loadEvents);
+$("f-date").addEventListener("change", loadEvents);
+$("token-toggle").addEventListener("click", () => {
+  const bar = $("token-bar");
+  bar.style.display = bar.style.display === "block" ? "none" : "block";
+  $("token-input").value = getToken();
+});
+$("token-save").addEventListener("click", () => {
+  setToken($("token-input").value.trim());
+  loadHealth(); loadEvents();
+});
+$("token-clear").addEventListener("click", () => { setToken(""); $("token-input").value = ""; });
+
+async function tick() { if ($("view-events").style.display !== "none") { await loadEvents(); } loadHealth(); }
+loadHealth(); loadEvents();
+timer = setInterval(tick, 10000);
+</script>
+</body>
+</html>

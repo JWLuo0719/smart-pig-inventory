@@ -51,7 +51,7 @@ try {
         APP_BOOTSTRAP_ADMIN_USERNAME=''; APP_BOOTSTRAP_ADMIN_PASSWORD=''; APP_BOOTSTRAP_ADMIN_DISPLAY_NAME=''; APP_BOOTSTRAP_ORGANIZATION_CODE=''; APP_BOOTSTRAP_ORGANIZATION_NAME=''; APP_E2E_FIXTURES_ENABLED='false'; APP_E2E_FIXTURE_PASSWORD=''
         MONITORING_SERVICE_KEY='synthetic-metrics-key'; METRICS_SNAPSHOT_DELAY_MS='1000'
         INFERENCE_CALLBACK_TOKEN='synthetic-metrics-callback'; INFERENCE_DISPATCHER_ENABLED='false'; COUNTING_PROVIDER='unavailable'; MODEL_RESEARCH_ENABLED='false'; MODEL_APPROVED='false'
-        MODEL_KEY='pending-license-review'; MODEL_VERSION='unverified'; MODEL_CHECKSUM='unverified'; MODEL_ADAPTER_VERSION='http-v1'; MULTIVIEW_AUTO_COUNT_ENABLED='false'; YOLO_HTTP_ENDPOINT=''; YOLO_HTTP_READY_ENDPOINT=''
+        MODEL_KEY='pending-license-review'; MODEL_VERSION='unverified'; MODEL_CHECKSUM='unverified'; MODEL_ADAPTER_VERSION='http-v1'; MULTIVIEW_AUTO_COUNT_ENABLED='false'; VIDEO_AUTO_COUNT_ENABLED='false'; YOLO_HTTP_ENDPOINT=''; YOLO_HTTP_READY_ENDPOINT=''
     }
     foreach ($name in $values.Keys) {
         $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')

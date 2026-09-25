@@ -36,6 +36,10 @@ class Detection(BaseModel):
     bbox: tuple[float, float, float, float]
     confidence: float = Field(ge=0, le=1)
     class_id: int
+    # 视频抽帧链路使用：track_id 是同一头猪在连续帧中的稳定标识，缺失时视频计数失败关闭；
+    # frame_index 只用于证据与观测次数统计。图片链路保持缺省 None。
+    track_id: str | None = Field(default=None, min_length=1, max_length=64)
+    frame_index: int | None = Field(default=None, ge=0)
 
 
 class CountingJobResult(BaseModel):

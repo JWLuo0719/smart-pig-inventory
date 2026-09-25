@@ -1,0 +1,16 @@
+[project]
+name = "pig-farm-agent"
+version = "1.0.0"
+description = "Agent product wrapper for DCR-SoftNMS-YOLOv13 pig farm operations"
+requires-python = ">=3.10"
+
+[project.optional-dependencies]
+# 真实推理模式（推荐：ONNX 制品 + onnxruntime，无需 torch）
+real = ["onnxruntime>=1.17", "numpy>=1.26", "pillow>=10"]
+# 从科研 .pt 权重导出 ONNX 时使用（需配合科研源码仓分叉的 PYTHONPATH）
+export = ["ultralytics", "onnx", "onnxslim", "onnxscript", "torch", "numpy", "pillow"]
+# 开发与测试
+dev = ["pytest>=7", "numpy", "pillow"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

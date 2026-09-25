@@ -1,0 +1,61 @@
+{
+  "farm": {
+    "name": "示范猪场（端到端联调）",
+    "barns": {
+      "A01": {"capacity": 45},
+      "A02": {"capacity": 45}
+    },
+    "density_alert": 0.82
+  },
+  "model": {
+    "name": "DCR-SoftNMS-YOLOv13",
+    "version": "v1",
+    "artifacts": "model_artifacts/dcr-softnms-yolov13-v1",
+    "mode": "mock"
+  },
+  "agent": {
+    "require_human_confirmation": true,
+    "auto_resolve": {"confirm_observations": 2},
+    "api_token": "e2e-token",
+    "upload": {
+      "max_bytes": 10485760,
+      "allowed_extensions": [".jpg", ".jpeg", ".png", ".webp"]
+    },
+    "polling": {
+      "enabled": true,
+      "interval_seconds": 2,
+      "watch_dir": null,
+      "device_id": "cam-A01-03"
+    },
+    "risk_rules": [
+      {
+        "code": "DENSITY_HIGH",
+        "level": "high",
+        "metric": "density",
+        "enabled": true,
+        "threshold": 0.82,
+        "confirm_observations": 2,
+        "cooldown_minutes": 60,
+        "actions": ["15分钟内现场复核该栏舍", "检查通风与饮水设备", "必要时分群降低密度"]
+      },
+      {
+        "code": "DENSITY_WATCH",
+        "level": "medium",
+        "metric": "density",
+        "enabled": true,
+        "threshold": 0.68,
+        "confirm_observations": 2,
+        "cooldown_minutes": 30,
+        "actions": ["安排本班次巡检", "观察采食和饮水情况"]
+      },
+      {
+        "code": "DATA_QUALITY_LOW",
+        "level": "medium",
+        "metric": "quality",
+        "enabled": true,
+        "min_coverage": 0.8,
+        "actions": ["重新拍摄或更换摄像头快照", "检查镜头污损、光照与遮挡"]
+      }
+    ]
+  }
+}

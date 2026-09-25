@@ -1,3 +1,4 @@
+import json
 from uuid import uuid4
 
 import httpx
@@ -126,6 +127,7 @@ def test_callback_treats_retryable_http_status_as_transient(monkeypatch, status_
         def __init__(self) -> None:
             self.status_code = status_code
 
+    monkeypatch.setenv("INFERENCE_CALLBACK_TOKEN", "test-callback-token")
     monkeypatch.setattr("app.callback.httpx.put", lambda *args, **kwargs: Response())
 
     with pytest.raises(TransientCallbackError, match=str(status_code)):
@@ -137,6 +139,7 @@ def test_callback_treats_network_error_as_transient(monkeypatch) -> None:
         request = httpx.Request("PUT", "http://business-api/result")
         raise httpx.ReadTimeout("callback timed out", request=request)
 
+    monkeypatch.setenv("INFERENCE_CALLBACK_TOKEN", "test-callback-token")
     monkeypatch.setattr("app.callback.httpx.put", raise_timeout)
 
     with pytest.raises(TransientCallbackError, match="callback timed out"):
@@ -151,6 +154,7 @@ def test_callback_treats_client_rejection_as_permanent(monkeypatch, status_code:
         def __init__(self) -> None:
             self.status_code = status_code
 
+    monkeypatch.setenv("INFERENCE_CALLBACK_TOKEN", "test-callback-token")
     monkeypatch.setattr("app.callback.httpx.put", lambda *args, **kwargs: Response())
 
     with pytest.raises(PermanentCallbackError, match=str(status_code)):
@@ -197,3 +201,73 @@ def test_provider_failure_classification_is_structured_and_sanitized() -> None:
         "PROVIDER_CONTRACT_ERROR",
         "Counting provider response failed product safety validation",
     )
+
+
+# --- 空令牌 fail-closed 与死信兜底（回调投递不再炸穿 Celery 任务） -----------------
+
+
+def test_空令牌拒发(monkeypatch) -> None:
+    """空 INFERENCE_CALLBACK_TOKEN 必须 fail-closed 拒发：省略头照发只会换来业务侧 401。"""
+
+    monkeypatch.delenv("INFERENCE_CALLBACK_TOKEN", raising=False)
+    sent: list[object] = []
+    monkeypatch.setattr("app.callback.httpx.put", lambda *args, **kwargs: sent.append(kwargs))
+
+    with pytest.raises(PermanentCallbackError, match="INFERENCE_CALLBACK_TOKEN"):
+        deliver_result(uuid4(), failed_result())
+
+    assert sent == []
+
+
+def test_permanent_error落死信且任务不抛(monkeypatch, tmp_path) -> None:
+    """永久投递失败不再炸穿任务：终态结果（含 provider failed）写入死信目录。"""
+
+    class TimeoutProvider:
+        def count(self, request):
+            raise httpx.ReadTimeout("runner timed out")
+
+    def raise_permanent(job_id, result) -> None:
+        raise PermanentCallbackError("callback returned 401: invalid service key")
+
+    monkeypatch.setenv("DEAD_LETTER_DIR", str(tmp_path))
+    monkeypatch.setattr("app.tasks.get_provider", lambda: TimeoutProvider())
+    monkeypatch.setattr("app.tasks.deliver_result", raise_permanent)
+
+    payload = counting_payload()
+    output = run_counting_job.run(payload)
+
+    assert output["status"] == "failed"
+    assert output["failure_code"] == "PROVIDER_TIMEOUT"
+    dead_letters = list(tmp_path.glob("*.json"))
+    assert len(dead_letters) == 1
+    record = json.loads(dead_letters[0].read_text(encoding="utf-8"))
+    assert record["job_id"] == payload["job_id"]
+    assert "callback returned 401" in record["failure_reason"]
+    assert record["result"]["status"] == "failed"
+    assert record["result"]["failure_code"] == "PROVIDER_TIMEOUT"
+    assert record["result"]["failure_message"] == "Counting provider timed out before returning a result"
+
+
+def test_异常兜底落死信(monkeypatch, tmp_path) -> None:
+    """投递路径的意外异常同样落死信并打日志，避免静默炸穿 worker。"""
+
+    def explode(job_id, result) -> None:
+        raise RuntimeError("unexpected delivery bug")
+
+    monkeypatch.setenv("DEAD_LETTER_DIR", str(tmp_path))
+    monkeypatch.delenv("COUNTING_PROVIDER", raising=False)
+    monkeypatch.delenv("MODEL_APPROVED", raising=False)
+    monkeypatch.delenv("MODEL_RESEARCH_ENABLED", raising=False)
+    monkeypatch.setattr("app.tasks.deliver_result", explode)
+
+    payload = counting_payload()
+    output = run_counting_job.run(payload)
+
+    assert output["status"] == "review_required"
+    dead_letters = list(tmp_path.glob("*.json"))
+    assert len(dead_letters) == 1
+    record = json.loads(dead_letters[0].read_text(encoding="utf-8"))
+    assert record["job_id"] == payload["job_id"]
+    assert "unexpected delivery bug" in record["failure_reason"]
+    assert record["result"]["status"] == "review_required"
+    assert record["result"]["count"] is None
