@@ -251,8 +251,7 @@ void main() {
       final OutboxEntry outbox =
           await database.select(database.outboxEntries).getSingle();
       expect(outbox.state, 'retry_wait', reason: 'status $status');
-      expect(outbox.error, '网络或服务器暂时不可用，将自动重试',
-          reason: 'status $status');
+      expect(outbox.error, '网络或服务器暂时不可用，将自动重试', reason: 'status $status');
       expect(outbox.nextAttemptAt?.toUtc().isAfter(now), isTrue,
           reason: 'status $status');
     }
@@ -275,8 +274,7 @@ void main() {
       final OutboxEntry outbox =
           await database.select(database.outboxEntries).getSingle();
       expect(outbox.state, 'blocked', reason: 'status $status');
-      expect(outbox.error, '服务器拒绝此采集包，请查看诊断信息',
-          reason: 'status $status');
+      expect(outbox.error, '服务器拒绝此采集包，请查看诊断信息', reason: 'status $status');
     }
   });
 }

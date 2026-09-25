@@ -57,18 +57,21 @@ void main() {
     expect(restored.minContainment, 0.6);
   });
 
-  test('ROI omits default exclusions so historical payloads stay unchanged', () {
+  test('ROI omits default exclusions so historical payloads stay unchanged',
+      () {
     expect(
       Roi(x: 0.1, y: 0.2, width: 0.7, height: 0.6).toJson(),
       <String, double>{'x': 0.1, 'y': 0.2, 'width': 0.7, 'height': 0.6},
     );
-    expect(Roi.fromJson(<String, Object?>{
-      'x': 0.1,
-      'y': 0.2,
-      'width': 0.7,
-      'height': 0.6,
-    })!.exclusions,
-      isEmpty);
+    expect(
+        Roi.fromJson(<String, Object?>{
+          'x': 0.1,
+          'y': 0.2,
+          'width': 0.7,
+          'height': 0.6,
+        })!
+            .exclusions,
+        isEmpty);
   });
 
   test('ROI rejects invalid exclusion regions and thresholds', () {

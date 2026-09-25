@@ -103,8 +103,7 @@ void main() {
     expect(find.text('服务器暂时不可用；本机草稿和上传队列不受影响。'), findsOneWidget);
     expect(find.text('0 / 0'), findsNothing);
     expect(requests, 2,
-        reason:
-            'Startup fetches tasks and assistant insights only; '
+        reason: 'Startup fetches tasks and assistant insights only; '
             'unvisited task and gallery pages must not fetch');
     fail = false;
     await tester.runAsync(() => tester

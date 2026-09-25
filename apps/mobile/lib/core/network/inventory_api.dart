@@ -69,8 +69,7 @@ class InventoryRemoteApi implements InventoryRemoteGateway {
       },
       options: _options(accessToken),
     );
-    return RemoteAssistantBrief.fromJson(
-        response.data as Map<String, dynamic>);
+    return RemoteAssistantBrief.fromJson(response.data as Map<String, dynamic>);
   }
 
   @override

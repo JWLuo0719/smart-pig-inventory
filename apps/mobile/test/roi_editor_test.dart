@@ -84,7 +84,8 @@ void main() {
       (WidgetTester tester) async {
     await pumpEditor(tester, onSave: (Roi? roi) async {});
 
-    await drawExclusion(tester, const Offset(0.4, 0.4), const Offset(0.405, 0.405));
+    await drawExclusion(
+        tester, const Offset(0.4, 0.4), const Offset(0.405, 0.405));
 
     expect(find.textContaining('排除区 1'), findsNothing);
     expect(find.text('还没有排除区：当前整张照片都算本栏。'), findsOneWidget);
@@ -120,7 +121,8 @@ void main() {
     expect(saved!.exclusions, hasLength(1));
   });
 
-  testWidgets('the editor refuses more exclusion regions than the contract allows',
+  testWidgets(
+      'the editor refuses more exclusion regions than the contract allows',
       (WidgetTester tester) async {
     await pumpEditor(tester, onSave: (Roi? roi) async {}, maxExclusions: 1);
 

@@ -53,7 +53,8 @@ void main() {
     }
   });
 
-  test('puts waiting authentication packages back into the queue after reconnect',
+  test(
+      'puts waiting authentication packages back into the queue after reconnect',
       () async {
     final ProviderContainer container = _openContainer(
       database: database,

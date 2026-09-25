@@ -24,13 +24,14 @@ void main() {
   });
 
   test('upgrades schema 1 to 6 without a duplicate-column crash', () async {
-    await _buildLegacyDatabase(databaseFile, 1, <String>[_outboxEntriesPreV3],
-        seed: <String>[
-          "INSERT INTO outbox_entries (package_id, draft_id, "
-              "idempotency_key, state, manifest_json, created_at, updated_at) "
-              "VALUES ('legacy-package', 'legacy-draft', 'legacy-key', "
-              "'queued', '{}', 1000, 1000)",
-        ]);
+    await _buildLegacyDatabase(databaseFile, 1, <String>[
+      _outboxEntriesPreV3
+    ], seed: <String>[
+      "INSERT INTO outbox_entries (package_id, draft_id, "
+          "idempotency_key, state, manifest_json, created_at, updated_at) "
+          "VALUES ('legacy-package', 'legacy-draft', 'legacy-key', "
+          "'queued', '{}', 1000, 1000)",
+    ]);
 
     // 首次访问触发 1 -> 6 升级:修复前 from<3 的 addColumn 会与 from<2
     // createTable 带出的 captured_at/width/height 撞车并抛 duplicate column。
