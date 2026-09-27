@@ -181,6 +181,38 @@ void main() {
     expect(await File(asset.materializedPath).exists(), isTrue);
   });
 
+  test('explains a duplicate-photo rejection in plain language', () async {
+    final synchronizer = UploadPackageSynchronizer(
+      api: _FakeUploadGateway(error: 409, errorCode: 'EXACT_DUPLICATE_IMAGE'),
+      repository: DriftOutboxRepository(database),
+      reconnect: () async => _auth(now),
+      clock: () => now,
+    );
+
+    expect(await synchronizer.syncNext(_auth(now), leaseOwner: 'foreground'),
+        UploadSyncOutcome.blocked);
+    final OutboxEntry outbox =
+        await database.select(database.outboxEntries).getSingle();
+    expect(outbox.state, 'blocked');
+    expect(outbox.error, contains('该照片已存在于本场证据库'));
+  });
+
+  test('tells the farmer to reshoot when the same photo was deleted before',
+      () async {
+    final synchronizer = UploadPackageSynchronizer(
+      api: _FakeUploadGateway(error: 409, errorCode: 'DELETED_DUPLICATE_IMAGE'),
+      repository: DriftOutboxRepository(database),
+      reconnect: () async => _auth(now),
+      clock: () => now,
+    );
+
+    expect(await synchronizer.syncNext(_auth(now), leaseOwner: 'foreground'),
+        UploadSyncOutcome.blocked);
+    final OutboxEntry outbox =
+        await database.select(database.outboxEntries).getSingle();
+    expect(outbox.error, contains('同一张照片不能重复上传'));
+  });
+
   test('clears the creating lease after a socket failure', () async {
     final synchronizer = UploadPackageSynchronizer(
       api: _FakeUploadGateway(socketFailure: true),
@@ -296,11 +328,13 @@ AuthState _auth(DateTime now, {String accessToken = 'access'}) => AuthState(
 class _FakeUploadGateway implements UploadRemoteGateway {
   _FakeUploadGateway({
     this.error,
+    this.errorCode,
     this.existingAssets = const <String>{},
     this.unauthorizedOnce = false,
     this.socketFailure = false,
   });
   final int? error;
+  final String? errorCode;
   final Set<String> existingAssets;
   final bool unauthorizedOnce;
   final bool socketFailure;
@@ -325,9 +359,12 @@ class _FakeUploadGateway implements UploadRemoteGateway {
     if (error != null) {
       throw DioException(
           requestOptions: RequestOptions(path: '/upload'),
-          response: Response<void>(
+          response: Response<Map<String, dynamic>>(
               requestOptions: RequestOptions(path: '/upload'),
-              statusCode: error));
+              statusCode: error,
+              data: errorCode == null
+                  ? null
+                  : <String, dynamic>{'code': errorCode, 'status': error}));
     }
   }
 
