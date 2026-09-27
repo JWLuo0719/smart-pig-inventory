@@ -7,7 +7,15 @@ import pytest
 
 from app.celery_app import celery_app
 from app.callback import deliver_result
-from app.providers import HttpYoloCountingProvider, ResearchHttpYoloCountingProvider, UnavailableCountingProvider, get_provider
+from app.providers import (
+    CountingProvider,
+    HttpYoloCountingProvider,
+    MultiViewDeduplicatingProvider,
+    ResearchHttpYoloCountingProvider,
+    UnavailableCountingProvider,
+    get_provider,
+)
+from app.multiview import MultiViewCalibration
 from app.schemas import CountingJobRequest, CountingJobResult, Detection, MediaReference, ModelIdentity
 
 
@@ -458,3 +466,331 @@ def test_callback_uses_job_id_as_idempotency_key_and_contract_casing(monkeypatch
     assert payload["modelKey"] == "pending-license-review"
     assert payload["latencyMs"] == 0
     assert "model_key" not in payload
+
+
+# --- 邻栏排除（需求第 7 条）与三图跨图去重（需求第 8 条） -------------------------
+
+
+def _single_view_request(roi: dict[str, object]) -> tuple[CountingJobRequest, object]:
+    asset_id = uuid4()
+    request = CountingJobRequest(
+        job_id=uuid4(),
+        correlation_id="neighbour-pen",
+        organization_id=uuid4(),
+        capture_set_id=uuid4(),
+        capture_kind="single",
+        media=[
+            MediaReference(
+                asset_id=asset_id,
+                view_position="single",
+                object_uri="s3://pig-inventory/photo.jpg",
+                sha256="9" * 64,
+                roi=roi,
+            )
+        ],
+        requested_model=ModelIdentity(
+            model_key="pig-yolov13",
+            version="v3-aligned",
+            checksum="f" * 64,
+            adapter_version="http-v1",
+        ),
+    )
+    return request, asset_id
+
+
+def _runner_response(request: CountingJobRequest, detections: list[Detection]) -> object:
+    payload = CountingJobResult(
+        status="succeeded",
+        count=len(detections),
+        detections=detections,
+        model_key=request.requested_model.model_key,
+        model_version=request.requested_model.version,
+        model_checksum=request.requested_model.checksum,
+        adapter_version=request.requested_model.adapter_version,
+        inference_source="runner",
+        latency_ms=7,
+    ).model_dump(mode="json")
+
+    class Response:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return payload
+
+    return Response()
+
+
+def test_exclusion_regions_keep_neighbour_pen_pigs_out_of_the_count(monkeypatch) -> None:
+    request, asset_id = _single_view_request(
+        {
+            "x": 0.0,
+            "y": 0.0,
+            "width": 1.0,
+            "height": 1.0,
+            "exclusions": [{"x": 0.75, "y": 0.0, "width": 0.25, "height": 1.0}],
+        }
+    )
+    detections = [
+        Detection(asset_id=asset_id, bbox=(0.30, 0.40, 0.50, 0.60), confidence=0.9, class_id=0),
+        Detection(asset_id=asset_id, bbox=(0.80, 0.40, 0.95, 0.60), confidence=0.9, class_id=0),
+    ]
+    monkeypatch.setattr(
+        "app.providers.httpx.post", lambda *args, **kwargs: _runner_response(request, detections)
+    )
+
+    result = HttpYoloCountingProvider("http://runner/v1/count").count(request)
+
+    assert result.status == "succeeded"
+    assert result.count == 1
+    assert [detection.bbox for detection in result.detections] == [(0.30, 0.40, 0.50, 0.60)]
+
+
+def test_min_containment_keeps_a_pig_that_is_half_in_the_neighbour_pen_out(monkeypatch) -> None:
+    request, asset_id = _single_view_request(
+        {"x": 0.0, "y": 0.0, "width": 0.5, "height": 1.0, "minContainment": 0.6}
+    )
+    detections = [
+        Detection(asset_id=asset_id, bbox=(0.40, 0.40, 0.70, 0.60), confidence=0.9, class_id=0),
+    ]
+    monkeypatch.setattr(
+        "app.providers.httpx.post", lambda *args, **kwargs: _runner_response(request, detections)
+    )
+
+    result = HttpYoloCountingProvider("http://runner/v1/count").count(request)
+
+    assert result.status == "succeeded"
+    assert result.count == 0
+    assert result.detections == []
+
+
+def test_malformed_roi_extension_fails_closed_instead_of_being_ignored(monkeypatch) -> None:
+    request, asset_id = _single_view_request(
+        {"x": 0.0, "y": 0.0, "width": 0.5, "height": 1.0, "exclusions": [{"x": 0.9}]}
+    )
+    monkeypatch.setattr(
+        "app.providers.httpx.post",
+        lambda *args, **kwargs: _runner_response(
+            request,
+            [Detection(asset_id=asset_id, bbox=(0.1, 0.1, 0.2, 0.2), confidence=0.9, class_id=0)],
+        ),
+    )
+
+    with pytest.raises(ValueError, match="exclusions\\[0\\]"):
+        HttpYoloCountingProvider("http://runner/v1/count").count(request)
+
+
+def _three_view_request() -> CountingJobRequest:
+    return CountingJobRequest(
+        job_id=uuid4(),
+        correlation_id="multi-view",
+        organization_id=uuid4(),
+        capture_set_id=uuid4(),
+        capture_kind="left_center_right",
+        media=[
+            MediaReference(
+                asset_id=uuid4(),
+                view_position="left",
+                object_uri="s3://pig-inventory/left.jpg",
+                sha256="1" * 64,
+            ),
+            MediaReference(
+                asset_id=uuid4(),
+                view_position="center",
+                object_uri="s3://pig-inventory/center.jpg",
+                sha256="2" * 64,
+            ),
+            MediaReference(
+                asset_id=uuid4(),
+                view_position="right",
+                object_uri="s3://pig-inventory/right.jpg",
+                sha256="3" * 64,
+            ),
+        ],
+        requested_model=ModelIdentity(
+            model_key="pig-yolov13",
+            version="v3-aligned",
+            checksum="f" * 64,
+            adapter_version="http-v1",
+        ),
+    )
+
+
+def _assets_by_view(request: CountingJobRequest) -> dict[str, object]:
+    return {media.view_position: media.asset_id for media in request.media}
+
+
+def _detection(asset_id: object, bbox: tuple[float, float, float, float]) -> Detection:
+    return Detection(asset_id=asset_id, bbox=bbox, confidence=0.9, class_id=0)
+
+
+class _StubCountingProvider(CountingProvider):
+    key = "stub"
+
+    def __init__(self, result: CountingJobResult) -> None:
+        self._result = result
+
+    def count(self, request: CountingJobRequest) -> CountingJobResult:
+        return self._result
+
+    def readiness(self) -> dict[str, object]:
+        return {"ready": True, "provider": self.key, "counting_available": True}
+
+
+def _stub_result(
+    request: CountingJobRequest,
+    detections: list[Detection],
+    *,
+    status: str = "succeeded",
+) -> CountingJobResult:
+    return CountingJobResult(
+        status=status,
+        count=len(detections) if status == "succeeded" else None,
+        detections=detections,
+        warnings=[],
+        model_key=request.requested_model.model_key,
+        model_version=request.requested_model.version,
+        model_checksum=request.requested_model.checksum,
+        adapter_version=request.requested_model.adapter_version,
+        inference_source="stub",
+        latency_ms=5,
+    )
+
+
+def test_multi_view_provider_refuses_to_aggregate_without_calibration() -> None:
+    request = _three_view_request()
+    assets = _assets_by_view(request)
+    detections = [
+        _detection(assets["left"], (0.90, 0.30, 1.00, 0.50)),
+        _detection(assets["center"], (0.00, 0.30, 0.10, 0.50)),
+    ]
+    provider = MultiViewDeduplicatingProvider(_StubCountingProvider(_stub_result(request, detections)), None)
+
+    result = provider.count(request)
+
+    assert result.status == "review_required"
+    assert result.count is None
+    assert len(result.detections) == 2
+    assert any("not aggregated" in warning for warning in result.warnings)
+    assert provider.readiness()["multi_view_reason_code"] == "MULTIVIEW_CALIBRATION_MISSING"
+
+
+def test_multi_view_provider_counts_a_pig_seen_in_two_views_once() -> None:
+    request = _three_view_request()
+    assets = _assets_by_view(request)
+    detections = [
+        _detection(assets["left"], (0.90, 0.30, 1.00, 0.50)),
+        _detection(assets["center"], (0.00, 0.30, 0.10, 0.50)),
+        _detection(assets["right"], (0.40, 0.60, 0.50, 0.80)),
+    ]
+    provider = MultiViewDeduplicatingProvider(
+        _StubCountingProvider(_stub_result(request, detections)),
+        MultiViewCalibration(overlap=0.2),
+    )
+
+    result = provider.count(request)
+
+    assert result.status == "succeeded"
+    assert result.count == 2
+    assert len(result.detections) == 2
+    assert result.inference_source == "multi-view-dedup"
+    assert any("cross-view duplicate" in warning for warning in result.warnings)
+    assert any("review candidate" in warning for warning in result.warnings)
+
+
+def test_multi_view_provider_keeps_the_count_empty_when_the_inner_provider_is_not_approved() -> None:
+    request = _three_view_request()
+    assets = _assets_by_view(request)
+    detections = [
+        _detection(assets["left"], (0.90, 0.30, 1.00, 0.50)),
+        _detection(assets["center"], (0.00, 0.30, 0.10, 0.50)),
+    ]
+    provider = MultiViewDeduplicatingProvider(
+        _StubCountingProvider(_stub_result(request, detections, status="review_required")),
+        MultiViewCalibration(overlap=0.2),
+    )
+
+    result = provider.count(request)
+
+    assert result.status == "review_required"
+    assert result.count is None
+    assert len(result.detections) == 1  # 检测框仍被合并，但不产生任何数量
+
+
+def test_multi_view_provider_requires_all_three_views() -> None:
+    request = _three_view_request()
+    incomplete = request.model_copy(update={"media": request.media[:2]})
+    provider = MultiViewDeduplicatingProvider(
+        _StubCountingProvider(_stub_result(incomplete, [])),
+        MultiViewCalibration(overlap=0.2),
+    )
+
+    result = provider.count(incomplete)
+
+    assert result.status == "review_required"
+    assert result.count is None
+    assert any("exactly one left, center and right view" in warning for warning in result.warnings)
+
+
+def test_multi_view_provider_delegates_non_three_view_requests(monkeypatch) -> None:
+    request, asset_id = _single_view_request({"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0})
+    monkeypatch.setattr(
+        "app.providers.httpx.post",
+        lambda *args, **kwargs: _runner_response(
+            request,
+            [Detection(asset_id=asset_id, bbox=(0.1, 0.1, 0.2, 0.2), confidence=0.9, class_id=0)],
+        ),
+    )
+    provider = MultiViewDeduplicatingProvider(
+        HttpYoloCountingProvider("http://runner/v1/count"), None
+    )
+
+    result = provider.count(request)
+
+    assert result.status == "succeeded"
+    assert result.count == 1
+
+
+def test_multi_view_dedup_requires_an_explicit_enablement_flag(monkeypatch) -> None:
+    monkeypatch.setenv("COUNTING_PROVIDER", "multi-view-dedup")
+    monkeypatch.setenv("MULTIVIEW_VIEW_OVERLAP", "0.2")
+    monkeypatch.delenv("MULTIVIEW_DEDUP_ENABLED", raising=False)
+    monkeypatch.delenv("MODEL_APPROVED", raising=False)
+    monkeypatch.delenv("MODEL_RESEARCH_ENABLED", raising=False)
+
+    assert isinstance(get_provider(), UnavailableCountingProvider)
+
+
+def test_multi_view_dedup_never_fabricates_a_count_without_an_approved_model(monkeypatch) -> None:
+    monkeypatch.setenv("COUNTING_PROVIDER", "multi-view-dedup")
+    monkeypatch.setenv("MULTIVIEW_DEDUP_ENABLED", "true")
+    monkeypatch.setenv("MULTIVIEW_VIEW_OVERLAP", "0.2")
+    monkeypatch.delenv("MODEL_APPROVED", raising=False)
+    monkeypatch.delenv("MODEL_RESEARCH_ENABLED", raising=False)
+
+    provider = get_provider()
+
+    assert isinstance(provider, MultiViewDeduplicatingProvider)
+    result = provider.count(_three_view_request())
+    assert result.status == "review_required"
+    assert result.count is None
+
+
+def test_multi_view_dedup_reports_missing_calibration_in_readiness(monkeypatch) -> None:
+    monkeypatch.setenv("COUNTING_PROVIDER", "multi-view-dedup")
+    monkeypatch.setenv("MULTIVIEW_DEDUP_ENABLED", "true")
+    monkeypatch.delenv("MULTIVIEW_VIEW_OVERLAP", raising=False)
+
+    readiness = get_provider().readiness()
+
+    assert readiness["multi_view_dedup"] is False
+    assert readiness["multi_view_reason_code"] == "MULTIVIEW_CALIBRATION_MISSING"
+
+
+def test_invalid_multiview_overlap_fails_closed(monkeypatch) -> None:
+    monkeypatch.setenv("COUNTING_PROVIDER", "multi-view-dedup")
+    monkeypatch.setenv("MULTIVIEW_DEDUP_ENABLED", "true")
+    monkeypatch.setenv("MULTIVIEW_VIEW_OVERLAP", "0.9")
+
+    with pytest.raises(ValueError, match="MULTIVIEW_VIEW_OVERLAP"):
+        get_provider()

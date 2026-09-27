@@ -2,6 +2,7 @@ package com.smartfarm.inventory.inference;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.smartfarm.inventory.capture.domain.CaptureSetPolicy;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -16,14 +17,17 @@ public class InferenceResultService {
     private final JdbcInferenceRepository repository;
     private final ObjectMapper objectMapper;
     private final boolean multiViewAutoCountEnabled;
+    private final boolean videoAutoCountEnabled;
 
     public InferenceResultService(
             JdbcInferenceRepository repository,
             ObjectMapper objectMapper,
-            @Value("${app.inference.multiview-auto-count-enabled:false}") boolean multiViewAutoCountEnabled) {
+            @Value("${app.inference.multiview-auto-count-enabled:false}") boolean multiViewAutoCountEnabled,
+            @Value("${app.inference.video-auto-count-enabled:false}") boolean videoAutoCountEnabled) {
         this.repository = repository;
         this.objectMapper = objectMapper.copy().configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
         this.multiViewAutoCountEnabled = multiViewAutoCountEnabled;
+        this.videoAutoCountEnabled = videoAutoCountEnabled;
     }
 
     @Transactional
@@ -76,13 +80,27 @@ public class InferenceResultService {
     }
 
     private InferenceCallbackResult normalizeForCaptureKind(String captureKind, InferenceCallbackResult result) {
-        if ("video".equals(captureKind) && !result.isFailed()) {
-            return result.requireManualReview("Video evidence requires manual review; automatic video counting is not enabled");
+        if (result.isFailed()) {
+            // 失败结果是终态证据，不因采集类型被改写。
+            return result;
         }
-        if ("left_center_right".equals(captureKind) && result.isSucceeded() && !multiViewAutoCountEnabled) {
-            return result.requireManualReview("Multi-view inference requires a validated multi-view provider before any automatic count is used");
+        if (!CaptureSetPolicy.requiresManualReview(captureKind, multiViewAutoCountEnabled, videoAutoCountEnabled)) {
+            return result;
         }
-        return result;
+        if ("left_center_right".equals(captureKind) && !result.isSucceeded()) {
+            // 三图只有在一个 Provider 声称成功时才需要按门禁降级；已复核的三图结果保持原样。
+            return result;
+        }
+        return result.requireManualReview(reviewReason(captureKind));
+    }
+
+    private static String reviewReason(String captureKind) {
+        return switch (captureKind) {
+            case "video" -> "Video evidence requires a validated video provider before any automatic count is used";
+            case "left_center_right" ->
+                "Multi-view inference requires a validated multi-view provider before any automatic count is used";
+            default -> "An unrecognized capture kind requires manual review";
+        };
     }
 
     private String fingerprint(InferenceCallbackResult result) {

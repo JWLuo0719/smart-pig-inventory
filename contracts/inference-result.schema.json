@@ -39,7 +39,18 @@
             "maxItems": 4
           },
           "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-          "class_id": {"type": "integer"}
+          "class_id": {"type": "integer"},
+          "track_id": {
+            "type": ["string", "null"],
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "同一头猪在连续帧中的稳定标识；视频计数必须由 Runner 提供，缺失即失败关闭。"
+          },
+          "frame_index": {
+            "type": ["integer", "null"],
+            "minimum": 0,
+            "description": "抽帧序号，仅作证据与观测次数统计，不参与计数口径。"
+          }
         }
       }
     },

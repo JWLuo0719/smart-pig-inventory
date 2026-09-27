@@ -58,7 +58,7 @@ Project-local rules for future agents and contributors.
 
 - Spring: `mvn test` and `mvn verify` from `services/business-api`.
 - Admin: `pnpm test`, `pnpm lint`, `pnpm typecheck`, and `pnpm build` from `apps/admin-web`.
-- Flutter: `flutter analyze`, `flutter test`, and `flutter build apk --debug` from `apps/mobile`.
+- Flutter on this Windows checkout: run `dart analyze .`, `flutter test`, and `flutter build apk --debug` from `apps/mobile`. The repository lives under a non-ASCII parent path; `dart analyze .` avoids the Flutter LSP byte-stream crash, and `apps/mobile/android/gradle.properties` keeps AGP's supported `android.overridePathCheck=true` override so the ordinary build command remains usable. CI checkouts with ASCII paths may continue to run `flutter analyze`.
 - Inference: `python -m pytest` from `services/inference-service`.
 - Infrastructure: `docker compose config --quiet` from repository root.
 - Research release tooling: validate the real local manifest with `scripts/model_release_gate.py`, run the full `pig-inventory-p1-fault` fault E2E after changing the test Runner, and run the isolated rollback rehearsal after changing model identity/readiness behavior.

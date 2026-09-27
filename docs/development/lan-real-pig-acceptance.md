@@ -17,7 +17,8 @@
 在本机“以管理员身份运行”的 PowerShell 执行一次：
 
 ```powershell
-pwsh -NoProfile -File "D:\Project\app-yolo\scripts\enable-lan-acceptance-firewall.ps1"
+# 在产品仓库根目录执行（不再写死绝对路径）：
+pwsh -NoProfile -File scripts\enable-lan-acceptance-firewall.ps1
 ```
 
 脚本只允许 Private 网络、本地子网 TCP 8443 与 UDP 5353。2026-09-11 已由管理员成功执行，并已回读为启用的入站 Allow/Private 规则（TCP 8443、UDP 5353）。网络须为可信专用网络。校园网/AP 客户端隔离、组播限制仍可能使同 Wi-Fi 无法互访；届时改用可互访的可信路由器网络，再复核手机连接，不能以本机健康检查代替手机证据。

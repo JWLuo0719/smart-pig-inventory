@@ -9,11 +9,9 @@
 运行：
 
 ```powershell
-$datasetRoot = Get-ChildItem -LiteralPath D:\Project -Directory | ForEach-Object {
-  $candidate = Join-Path $_.FullName 'agent-base\dataset'
-  if (Test-Path -LiteralPath $candidate) { $candidate }
-} | Select-Object -First 1
-python scripts/build_test_dataset_manifest.py --source $datasetRoot
+# 数据集根目录通过 --source 显式传入（不再扫描 D:\Project 单层目录，
+# 否则数据集随目录重组下沉后清单会静默为空）：
+python scripts/build_test_dataset_manifest.py --source 'D:\Project\牧数智核\research\智慧猪场厂主\agent-base\dataset'
 ```
 
 脚本只读取来源文件，生成 `test-assets/generated/yolo-source-manifest.json`。该输出被 Git 忽略，包含文件 SHA-256、YOLO 标注推导的猪只数量、配对完整性问题和候选夹具索引。

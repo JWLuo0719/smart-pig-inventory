@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Smart Pig Inventory Business API
-  version: 0.8.0
+  version: 0.9.0
   description: >-
     路线 B+ 的业务合同基线。所有写操作接受 X-Idempotency-Key，所有时间使用 ISO 8601；
     离线采集必须完成 package/blob/manifest/commit 后才创建正式推理任务。ROI 使用完成
@@ -17,6 +17,7 @@ tags:
   - {name: Upload}
   - {name: Inventory}
   - {name: Review}
+  - {name: Assistant}
   - {name: InferenceOperations}
   - {name: InternalInference}
 paths:
@@ -311,6 +312,33 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/AggregateInventoryReport'}
+  /inventory-reports/trend:
+    get:
+      tags: [Inventory]
+      summary: 查询当前组织指定截止日期的存栏趋势序列（场级合计与分栏）
+      description: >-
+        日期轴连续补齐；confirmed 为人工确认合计、candidate 为机器候选合计，缺采集的日期为
+        null（不是 0）。仅用于界面趋势展示，不替代 confirmed-only 的报表导出口径。
+      operationId: getInventoryTrend
+      parameters:
+        - name: to
+          in: query
+          required: true
+          schema: {type: string, format: date}
+        - name: days
+          in: query
+          required: false
+          description: 回看窗口天数（含 to），默认 14，允许 1..90。
+          schema: {type: integer, minimum: 1, maximum: 90, default: 14}
+      responses:
+        '200':
+          description: 连续日期轴上的场级与分栏趋势
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InventoryTrend'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '422':
+          description: days 超出 1..90 边界
   /inventory-reports/exports/{format}:
     get:
       tags: [Inventory]
@@ -343,6 +371,28 @@ paths:
               schema: {type: string, format: binary}
         '422':
           description: 日期顺序、范围或记录数超过安全边界
+  /assistant/insights:
+    get:
+      tags: [Assistant]
+      summary: 查询指定业务日期的证据驱动研判与行动建议（只读）
+      description: >-
+        结论由规则从数据库事实（会话状态、候选/确认数量、历史对比、推理失败码）生成，
+        不调用外部大模型；洞察只组织证据与建议，不产生业务值，也不改变任何会话状态。
+      operationId: getAssistantInsights
+      parameters:
+        - name: businessDate
+          in: query
+          required: false
+          description: 缺省为服务器当前日期。
+          schema: {type: string, format: date}
+      responses:
+        '200':
+          description: 当日一句话概览与有序洞察列表
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AssistantBrief'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
   /review/near-duplicates:
     get:
       tags: [Review]
@@ -865,18 +915,41 @@ components:
         focalLengthMm: {type: [number, 'null'], exclusiveMinimum: 0}
         exposureTimeSeconds: {type: [number, 'null'], exclusiveMinimum: 0}
         iso: {type: [integer, 'null'], minimum: 0}
-    Roi:
-      type: [object, 'null']
+    RoiRegion:
+      type: object
       additionalProperties: false
-      description: >-
-        基于 EXIF 纠正后图像的归一化坐标。服务端必须额外验证 x + width <= 1
-        且 y + height <= 1；null 表示整张图像。
+      description: 归一化矩形区域，用于栏舍有效区或"不计入本栏"的排除区。
       required: [x, y, width, height]
       properties:
         x: {type: number, minimum: 0, maximum: 1}
         y: {type: number, minimum: 0, maximum: 1}
         width: {type: number, exclusiveMinimum: 0, maximum: 1}
         height: {type: number, exclusiveMinimum: 0, maximum: 1}
+    Roi:
+      type: [object, 'null']
+      additionalProperties: false
+      description: >-
+        基于 EXIF 纠正后图像的归一化坐标。服务端必须额外验证 x + width <= 1
+        且 y + height <= 1；null 表示整张图像。
+        exclusions 标记邻栏、料槽、走道等不计入本栏的区域：检测框中心落在任一排除区内时
+        不计入本栏数量。minContainment 大于 0 时，检测框与有效区的交叠面积占比必须达到该
+        阈值才计入，用于排除半身在邻栏的目标；缺省 0 表示沿用"只判定框中心点"的历史口径。
+      required: [x, y, width, height]
+      properties:
+        x: {type: number, minimum: 0, maximum: 1}
+        y: {type: number, minimum: 0, maximum: 1}
+        width: {type: number, exclusiveMinimum: 0, maximum: 1}
+        height: {type: number, exclusiveMinimum: 0, maximum: 1}
+        exclusions:
+          type: array
+          maxItems: 8
+          description: 不计入本栏的区域，与有效区同为归一化坐标。
+          items: {$ref: '#/components/schemas/RoiRegion'}
+        minContainment:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: 检测框需落在有效区内的最小面积占比；0 表示只判定框中心点。
     CommitResult:
       type: object
       required: [packageId, sessionId, inferenceJobId, status]
@@ -965,6 +1038,63 @@ components:
         includedDates:
           type: array
           items: {type: string, format: date}
+    InventoryTrend:
+      type: object
+      required: [from, to, total, pens]
+      properties:
+        from: {type: string, format: date}
+        to: {type: string, format: date}
+        total:
+          type: array
+          description: 场级合计序列，按日期升序连续补齐。
+          items: {$ref: '#/components/schemas/TrendPoint'}
+        pens:
+          type: array
+          items: {$ref: '#/components/schemas/PenTrend'}
+    TrendPoint:
+      type: object
+      required: [date, confirmed, candidate]
+      properties:
+        date: {type: string, format: date}
+        confirmed:
+          type: [integer, 'null']
+          minimum: 0
+          description: 人工确认合计；该日期没有已确认会话时为 null（不是 0）。
+        candidate:
+          type: [integer, 'null']
+          minimum: 0
+          description: 机器候选合计；该日期没有候选时为 null（不是 0）。仅供界面趋势展示。
+    PenTrend:
+      type: object
+      required: [penId, penLabel, points]
+      properties:
+        penId: {type: string, format: uuid}
+        penLabel: {type: string, description: 栋舍/栏舍组合标签。}
+        points:
+          type: array
+          items: {$ref: '#/components/schemas/TrendPoint'}
+    AssistantBrief:
+      type: object
+      required: [businessDate, brief, insights]
+      properties:
+        businessDate: {type: string, format: date}
+        brief: {type: string, description: 一句话当日概览。}
+        insights:
+          type: array
+          items: {$ref: '#/components/schemas/AssistantInsight'}
+    AssistantInsight:
+      type: object
+      required: [type, severity, title, detail]
+      properties:
+        type:
+          type: string
+          enum: [REVIEW_REQUIRED, REVIEW_HINT, PENDING_CAPTURE, CAPTURE_GAP, RISK_CANDIDATE, BASELINE_SHIFT, DAY_SUMMARY, EMPTY_MASTER_DATA]
+        severity: {type: string, enum: [action, info, success]}
+        title: {type: string}
+        detail: {type: string, description: 依据与建议（含数据出处）。}
+        sessionId: {type: [string, 'null'], format: uuid, description: 关联会话，可跳转复核。}
+        penLabel: {type: [string, 'null']}
+        action: {type: [string, 'null'], description: 行动按钮文案。}
     InventorySession:
       type: object
       required: [id, penId, businessDate, status, version, evidenceSessionId, detections, warnings]

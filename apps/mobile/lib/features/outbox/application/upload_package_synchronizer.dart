@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
@@ -175,7 +176,7 @@ class UploadPackageSynchronizer {
     }
     if (status != null && status >= 400 && status < 500) {
       await _repository.block(work.entry.packageId,
-          now: _clock(), safeError: '服务器拒绝此采集包，请查看诊断信息');
+          now: _clock(), safeError: _rejectionMessage(error));
       return;
     }
     final int attempt = work.entry.attemptCount + 1;
@@ -185,6 +186,26 @@ class UploadPackageSynchronizer {
       nextAttemptAt: _clock().add(_retryDelay(attempt)),
       safeError: '网络或服务器暂时不可用，将自动重试',
     );
+  }
+
+  /// 4xx 拒绝不会再重试，把农场员能自己处理的错误码翻成可行动的提示；
+  /// 其余保持通用文案。problem+json 在 Dio 里可能以 Map 或原始字符串到达。
+  String _rejectionMessage(DioException error) {
+    Object? data = error.response?.data;
+    if (data is String) {
+      try {
+        data = jsonDecode(data);
+      } catch (_) {
+        data = null;
+      }
+    }
+    final String? code = data is Map ? data['code'] as String? : null;
+    return switch (code) {
+      'EXACT_DUPLICATE_IMAGE' =>
+        '该照片已存在于本场证据库，同一张照片不会重复计数；请在复核页查看已有记录，或换一张照片拍摄。',
+      'DELETED_DUPLICATE_IMAGE' => '这张照片之前上传过、后来被删除；同一张照片不能重复上传，请重新拍摄一张新照片。',
+      _ => '服务器拒绝此采集包，请查看诊断信息',
+    };
   }
 
   UploadSyncOutcome _outcomeFor(DioException error) {

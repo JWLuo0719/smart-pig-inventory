@@ -1,5 +1,34 @@
 # 新对话交接
 
+## 2026-09-27 v19 回流：09-18 现场能力与智能研判已入主仓
+
+部署包（09-19 快照，领先主仓的唯一副本）中的 63 个文件已回流：42 个覆盖 + 21 个新增，移动版本 `0.1.0+18` → `0.1.0+19`。范围：ROI 排除区（RoiRegion/exclusions/minContainment）、三图跨图去重、视频抽帧计数（三者全部默认关闭、失败关闭为 review_required）、智能体研判（`/api/v1/assistant/insights`，规则驱动只读）、存栏趋势（`/api/v1/inventory-reports/trend`）、首页改版为进度卡 + 研判面板（经确认采用包内新版，原任务卡列表 UI 由进度统计呈现）、密度热力图与证据标注页。
+
+- 合同先行：`contracts/openapi.yaml` 版本 `0.8.0` → `0.9.0`，补上包内后端已有但合同缺失的两个端点与 `AssistantBrief`/`InventoryTrend` 等 5 个 schema；`inference-job/result.schema.json` 同步包内变更（ROI、track_id/frame_index）。
+- 未回流：`.env`（本地密钥与开发配置，包内是部署演示配置）与 `.gitignore`（主仓 09-27 防线领先，见 `50d98dc`）。新配置键已写入 `.env.example`；本地如需显式覆盖可按 example 追加，缺省默认值全为关闭。
+- 证据（2026-09-27 本轮）：Spring `mvn verify` 103 项 0 失败 0 跳过（Testcontainers 实际启动）；推理 `python -m pytest` 88 项；Flutter 在当前中文路径下以 `dart analyze .` 通过、`flutter test` 59 项 1 跳过，并以 AGP 路径覆盖构建 Debug APK；该覆盖现已固定到 `android/gradle.properties`，后续可直接运行 `flutter build apk --debug`；管理端 `pnpm test` 24 项及 lint/typecheck/build 通过；`docker compose config --quiet` 通过；openapi YAML 解析与 `$ref` 完整性检查通过。
+- 开关状态不变：`MODEL_APPROVED=false`、`MULTIVIEW_*`/`VIDEO_*` 全部 false、`COUNTING_PROVIDER=unavailable`（研究链路由既有 .env 决定）。回流不等于验收：ROI 标注真机手势、三图标定、视频链路与研判面板仍待人工确认。
+- 目录重组（`tmp/reorg/decisions-20260927.md` 九项决策）已完成：产品仓位于 `D:\Project\牧数智核\product\app-yolo`，部署包、Runner、研究目录和归档已分别迁入 `delivery`、`runner`、`research`、`archive`。移动后的路径引用、worktree、Runner readiness、数据清单和全模块门禁已经核对；artifacts 的本地 SHA-256 清单已生成，受保护的归档位置仍待确认，不阻塞开发。
+
+## 2026-09-27 目录重组收尾
+
+- Flutter 中文路径回归已收口：`apps/mobile/android/gradle.properties` 固定 `android.overridePathCheck=true`；本机验证使用 `dart analyze .`，Debug APK 可直接运行 `flutter build apk --debug`，无需临时 `-P` 参数。
+- Runner 启动入口 `scripts/start-lan-acceptance.ps1` 从当前仓库根动态拼接 `.env`，解析结果为 `D:\Project\牧数智核\product\app-yolo\.env`；手工直接调用外部 Runner 时仍必须显式传相同 `-ProductEnvPath`。
+- `.claude/settings.local.json` 的旧仓库路径与重命名许可已清理，并作为工作站本地授权文件被 Git 忽略。`docs/ai-conversations/` 包含原始对话和本机路径，已决定仅在本机留存并加入 Git 忽略；后续需要共享时应先形成脱敏摘要。
+- v19 回流与目录收尾已提交到 `codex/reorg-followup`，草稿 PR 为 [#2](https://github.com/JWLuo0719/smart-pig-inventory/pull/2)，目标分支 `main` 未直接推送。PR 的 CI 与人工评审须分别读回，不以本机门禁替代。
+
+## 2026-09-18 邻栏排除、三图跨图去重与视频抽帧计数（全部默认关闭，未上线）
+
+按现场需求第 7、8 条与视频计数诉求完成三项能力的 Provider 化改造。合同、推理服务与 Spring 领域层均已跑通自动化测试，但**没有任何开关被打开**，模型发布清单与既有门禁一字未改：
+
+- 合同：`contracts/openapi.yaml` 新增 `RoiRegion`，`Roi` 增加 `exclusions`（≤8 个归一化矩形）与 `minContainment`（0..1）；`contracts/inference-job.schema.json` 同步。四字段历史载荷继续可用，线上行为不变。结果契约 `Detection` 新增可选 `track_id`/`frame_index`，仅用于产品侧轨迹聚合，不进入业务回调，服务端线缆不变。
+- 推理服务：`app/geometry.py` 按"框中心点 → 排除区 → 最小包含比例"判定栏舍归属；`app/multiview.py` 只在配置了相邻视图重叠比例时，合并重叠带内纵向位置与高度一致的重复检测；`app/video.py` 把逐帧轨迹聚合成去重数量（同一 `track_id` 只算一头）。未配置标定、三视图不齐、内层 Provider 未获批准、缺轨迹标识或完全没有检测时，一律失败关闭为 `review_required` 且数量为空。
+- Spring：`Roi`/`RoiRegion` 领域校验与上传控制层绑定；`roi_json` 既有透传链路自动把排除区送到推理服务，`JdbcInferenceRepository` 无需修改。视频降级改为受 `VIDEO_AUTO_COUNT_ENABLED` 控制，降级判定收敛到 `CaptureSetPolicy.requiresManualReview(kind, validatedMultiView, validatedVideo)`；未知采集类型一律要求人工复核。
+- 手机端：`Roi` 领域模型支持 `exclusions`（≤8）与 `minContainment`，缺省值不写入 JSON，历史载荷逐字不变；新增 `RoiEditorPage`——在已拍照片上拖出矩形即可标注排除区、可逐个删除、可调最小包含比例，入口在"已保存证据"缩略图的大图弹窗里（视频不提供该入口，合同禁止视频携带图像 ROI）。保存走既有 `UpdateCaptureRoi`，草稿进入上传队列后会拒绝修改并给出提示。
+- 证据：推理服务 `python -m pytest` 88 项通过（本轮新增 50 项）；Spring `mvn -Dtest=RoiTest,CaptureManifestTest,VideoEvidenceTest,CaptureSetPolicyTest,UnavailableCountingProviderTest,InferenceResultServiceTest test` 28 项通过（新增 `InferenceResultServiceTest` 8 项，Mockito 覆盖降级门禁，无需 Docker）；Flutter `flutter analyze` 无问题、`flutter test` 51 项通过（新增排除区序列化 3 项与标注界面 7 项）。
+- 未验证：Docker/Compose E2E 与 Testcontainers 集成测试（本机无 Docker）、Android APK 构建与真机操作（本机无 Android SDK、无设备），因此标注界面只过了 widget 测试与静态检查，**真机手势与照片比例对齐仍需人工验收**；现场相邻视图重叠比例标定、外部 Runner 的 `track_id` 输出同样待办。
+- 开关状态：`MODEL_APPROVED=false`、`MULTIVIEW_AUTO_COUNT_ENABLED=false`、`MULTIVIEW_DEDUP_ENABLED=false`、`VIDEO_COUNTING_ENABLED=false`、`VIDEO_AUTO_COUNT_ENABLED=false`；三图与视频继续统一进入人工确认。
+
 ## 2026-09-13 非视频功能人工验收完成
 
 用户反馈前四项非视频功能测试成功，视频相关测试后置。结合 v18 的自动读回，上传包自动恢复、服务端提交、人工复核入口及非视频页面功能可继续保留为候选包验收证据；视频采集/上传/播放和视频自动计数仍未验收，不得据此标记通过。模型准确度研究继续后置，`MODEL_APPROVED=false`。
@@ -122,7 +151,7 @@ v17 Release APK：`artifacts/android-release/20260913-133405-617/inventory-relea
 - Docker 引擎经 `docker desktop restart` 恢复。已备份 P0 数据库到忽略的 `artifacts/p0-backup-before-release-*.sql`，保留原卷。当前 P0 已运行源码 V11，V1–V11 数据库均 success=1。
 - 业务标准镜像构建遇新 Temurin 基础层下载停滞，已终止该次构建。改为当前 Dockerfile 的 build 阶段产物 + 已有 observability 运行环境封装 `pig-inventory-release-business-api:20260910`。运行 JAR 与当前源码构建 JAR 的 SHA-256 均为 `f0edfd8af45196f45c3506673b5dc54f0ff0cf91efb97013eb92c5b44adfd994`；不是复用旧业务 JAR。管理端/推理服务已按当前构建上下文重建（命中有效缓存）。完整全新基础环境构建仍待网络恢复。
 - 当前启动命令：同一 PowerShell 设置 `$env:GATEWAY_PORT='8089'`，再 `docker compose -p pig-inventory-p0 -f docker-compose.yml -f docker-compose.runner-local.yml -f tmp/compose-release-runtime.yml up -d --no-build`。最后一个忽略 override 指定上述业务镜像；不可遗漏后误启旧 P0 业务标签。Runner overlay 保留 loopback 9100 MinIO 入口。
-- 外部实际 Runner 为 `D:\Project\pig-model-runner`，不是旧 `model-research/yolov13-runner` 骨架。通过其 `scripts/start-runner.ps1 -ProductEnvPath D:\Project\app-yolo\.env` 隐藏进程启动，日志在外部 `.run/release-20260910.*.log`。本次 Python PID 36584（重启后须重新确认），监听 9000；readiness=true，模型/阈值/IoU/尺寸与原研究清单一致。未配置开机自启或进程监管，仍须补充常驻与重启恢复。
+- 外部实际 Runner 为 `D:\Project\牧数智核\runner\pig-model-runner`，不是旧 `model-research/yolov13-runner` 骨架。通过其 `scripts/start-runner.ps1 -ProductEnvPath D:\Project\牧数智核\product\app-yolo\.env` 隐藏进程启动，日志在外部 `.run/release-20260910.*.log`。本次 Python PID 36584（重启后须重新确认），监听 9000；readiness=true，模型/阈值/IoU/尺寸与原研究清单一致。未配置开机自启或进程监管，仍须补充常驻与重启恢复。
 - 当前 `.env` 研究配置生效：`research-http-yolo`、`MODEL_RESEARCH_ENABLED=true`、`MODEL_APPROVED=false`。最新真实单图 E2E 经上传/MinIO/Worker/Runner/Callback 返回 **28** 个候选框；Commit 重放同任务，数据库 `review_required`、candidate_count=28、confirmed_count=NULL、count_value=NULL，耗时字段 3845 ms。只验证研究图链路，不代表业务精度/手机/HTTPS/人工验收通过。证据：`artifacts/release-single-image-e2e-20260910.log`、`artifacts/release-single-image-evidence-20260910.json`。
 - 已修正单图保存后的 1/3 文案及登录错误分类。最终 Flutter analyze、27 tests、Release 构建通过；九项 Gradle 门禁通过（缺签名另有首次失败验证），`git diff --check` 通过。未重跑 Spring/Admin 全套单测，未进行真机安装或人工确认，未提交/推送。
 - 下一顺序：稳定 HTTPS/签名密钥备份 → Runner 监管与真实完整确认/报表自动回归 → 新地址签名候选包 → 统一授权实猪、弱网和复核人工验收。已有 Debug 安装、草稿、旧 APK、研究证据和 P0 卷保持保留。

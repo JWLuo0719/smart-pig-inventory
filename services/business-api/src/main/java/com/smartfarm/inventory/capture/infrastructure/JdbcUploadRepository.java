@@ -103,6 +103,13 @@ public class JdbcUploadRepository {
         return count != null && count > 0;
     }
 
+    public boolean hasDeletedDuplicate(UUID organizationId, String sha256) {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM media_asset WHERE organization_id = ? AND sha256 = ? AND deleted_at IS NOT NULL",
+                Integer.class, bytes(organizationId), sha256);
+        return count != null && count > 0;
+    }
+
     public void storeManifest(UUID packageId, UUID idempotencyKey, String manifestJson, String manifestSha256) {
         jdbc.update("""
                 UPDATE upload_package

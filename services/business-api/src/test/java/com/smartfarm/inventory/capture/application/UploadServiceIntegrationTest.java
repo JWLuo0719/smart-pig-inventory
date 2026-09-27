@@ -176,6 +176,25 @@ class UploadServiceIntegrationTest {
         assertEquals("EXACT_DUPLICATE_IMAGE", exception.code());
     }
 
+    @Test
+    void blocksReUploadOfADeletedImageWithADistinctConflict() throws Exception {
+        byte[] image = "deleted-evidence".getBytes();
+        String sha256 = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(image));
+        commitSingleImage(image, sha256);
+        jdbc.update("UPDATE media_asset SET state = 'deleted', deleted_at = CURRENT_TIMESTAMP(6) WHERE sha256 = ?", sha256);
+        UploadOutcome<UploadPackageView> second = uploadService.createPackage(
+                new UploadCommand(UUID.randomUUID(), organizationId, penId, LocalDate.of(2026, 8, 23), CaptureKind.SINGLE),
+                UUID.randomUUID());
+        UUID assetId = UUID.randomUUID();
+        uploadService.putBlob(second.body().id(), assetId, UUID.randomUUID(), sha256, image.length, new ByteArrayInputStream(image));
+        CaptureManifest duplicateManifest = new CaptureManifest(UUID.randomUUID(), CaptureKind.SINGLE, penId,
+                List.of(new ManifestAsset(assetId, ViewPosition.SINGLE, Instant.now(), "reupload.jpg", 10, 10,
+                        sha256, null, image.length, "image/jpeg", Map.of(), null)));
+        UploadException exception = assertThrows(UploadException.class,
+                () -> uploadService.putManifest(second.body().id(), UUID.randomUUID(), duplicateManifest));
+        assertEquals("DELETED_DUPLICATE_IMAGE", exception.code());
+    }
+
     private void commitSingleImage(byte[] image, String sha256) {
         UploadOutcome<UploadPackageView> uploadPackage = uploadService.createPackage(
                 new UploadCommand(UUID.randomUUID(), organizationId, penId, LocalDate.of(2026, 8, 21), CaptureKind.SINGLE),

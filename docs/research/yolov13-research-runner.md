@@ -28,7 +28,7 @@ Spring Outbox -> Python inference-service -> research-http-yolo -> 外部 YOLOv1
                                                         +-> 强制人工复核
 ```
 
-- 外部目录：`D:\Project\model-research\iMoonLab-yolov13`（上游源码）和 `D:\Project\model-research\yolov13-models`（权重），均不在 Git 产品仓库中。
+- 外部目录（已弃用归档）：`D:\Project\牧数智核\archive\model-research\iMoonLab-yolov13`（上游源码）和 `D:\Project\牧数智核\archive\model-research\yolov13-models`（权重），均不在 Git 产品仓库中；该骨架为旧 8080 /v1/count 线，现役 Runner 见 `CURRENT_HANDOFF.md`，此处仅作历史记录。
 - Runner 只读 MinIO，对象存储凭据只在启动时以环境变量提供；不得写入镜像、仓库或日志。
 - Runner 使用上游 Nano 权重，COCO 类别并非猪只领域金标。因此检测框仅作为技术链路证据，不能用于自动数量或业务确认。
 - 测试完成后，可直接切换为团队自研 Runner；只要维持合同、模型身份和回调幂等规则，业务、移动端和管理端不需要改动。

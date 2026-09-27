@@ -35,6 +35,8 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}
+    ports:
+      - "9000:9000"
     volumes:
       - minio_data:/data
     healthcheck:
@@ -78,6 +80,8 @@ services:
       MODEL_VERSION: ${MODEL_VERSION:-unverified}
       MODEL_CHECKSUM: ${MODEL_CHECKSUM:-unverified}
       MODEL_ADAPTER_VERSION: ${MODEL_ADAPTER_VERSION:-http-v1}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       redis:
         condition: service_healthy
@@ -105,6 +109,8 @@ services:
       MODEL_VERSION: ${MODEL_VERSION:-unverified}
       MODEL_CHECKSUM: ${MODEL_CHECKSUM:-unverified}
       MODEL_ADAPTER_VERSION: ${MODEL_ADAPTER_VERSION:-http-v1}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       redis:
         condition: service_healthy
@@ -141,6 +147,7 @@ services:
       MODEL_CHECKSUM: ${MODEL_CHECKSUM:-unverified}
       MODEL_ADAPTER_VERSION: ${MODEL_ADAPTER_VERSION:-http-v1}
       MULTIVIEW_AUTO_COUNT_ENABLED: ${MULTIVIEW_AUTO_COUNT_ENABLED:-false}
+      VIDEO_AUTO_COUNT_ENABLED: ${VIDEO_AUTO_COUNT_ENABLED:-false}
       REPORT_PDF_FONT_PATH: ${REPORT_PDF_FONT_PATH:-/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf}
       REPORT_MAX_RANGE_DAYS: ${REPORT_MAX_RANGE_DAYS:-366}
       REPORT_MAX_RECORDS: ${REPORT_MAX_RECORDS:-10000}

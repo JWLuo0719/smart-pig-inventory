@@ -62,6 +62,7 @@ app:
     model-checksum: ${MODEL_CHECKSUM:unverified}
     adapter-version: ${MODEL_ADAPTER_VERSION:http-v1}
     multiview-auto-count-enabled: ${MULTIVIEW_AUTO_COUNT_ENABLED:false}
+    video-auto-count-enabled: ${VIDEO_AUTO_COUNT_ENABLED:false}
     dispatcher:
       enabled: ${INFERENCE_DISPATCHER_ENABLED:false}
       fixed-delay: ${INFERENCE_DISPATCHER_FIXED_DELAY:2000}

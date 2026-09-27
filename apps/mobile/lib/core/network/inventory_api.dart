@@ -7,6 +7,11 @@ abstract interface class InventoryRemoteGateway {
     required DateTime businessDate,
   });
 
+  Future<RemoteAssistantBrief> assistantInsights({
+    required String accessToken,
+    required DateTime businessDate,
+  });
+
   Future<RemoteInventorySession> session({
     required String accessToken,
     required String sessionId,
@@ -53,6 +58,21 @@ class InventoryRemoteApi implements InventoryRemoteGateway {
   }
 
   @override
+  Future<RemoteAssistantBrief> assistantInsights({
+    required String accessToken,
+    required DateTime businessDate,
+  }) async {
+    final Response<dynamic> response = await _dio.get(
+      '/api/v1/assistant/insights',
+      queryParameters: <String, String>{
+        'businessDate': businessDate.toIso8601String().substring(0, 10),
+      },
+      options: _options(accessToken),
+    );
+    return RemoteAssistantBrief.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  @override
   Future<RemoteInventorySession> session({
     required String accessToken,
     required String sessionId,
@@ -84,6 +104,56 @@ class InventoryRemoteApi implements InventoryRemoteGateway {
     return RemoteInventorySession.fromJson(
         response.data as Map<String, dynamic>);
   }
+}
+
+class RemoteAssistantBrief {
+  const RemoteAssistantBrief({
+    required this.businessDate,
+    required this.brief,
+    required this.insights,
+  });
+
+  final String businessDate;
+  final String brief;
+  final List<RemoteAssistantInsight> insights;
+
+  factory RemoteAssistantBrief.fromJson(Map<String, dynamic> body) =>
+      RemoteAssistantBrief(
+        businessDate: body['businessDate'] as String,
+        brief: body['brief'] as String,
+        insights: (body['insights'] as List<dynamic>? ?? const <dynamic>[])
+            .map((dynamic value) =>
+                RemoteAssistantInsight.fromJson(value as Map<String, dynamic>))
+            .toList(growable: false),
+      );
+}
+
+class RemoteAssistantInsight {
+  const RemoteAssistantInsight({
+    required this.type,
+    required this.severity,
+    required this.title,
+    required this.detail,
+    required this.action,
+    this.sessionId,
+  });
+
+  final String type;
+  final String severity;
+  final String title;
+  final String detail;
+  final String action;
+  final String? sessionId;
+
+  factory RemoteAssistantInsight.fromJson(Map<String, dynamic> body) =>
+      RemoteAssistantInsight(
+        type: body['type'] as String,
+        severity: body['severity'] as String,
+        title: body['title'] as String,
+        detail: body['detail'] as String,
+        action: (body['action'] as String?) ?? '查看',
+        sessionId: body['sessionId'] as String?,
+      );
 }
 
 class RemoteInventoryTask {
@@ -123,6 +193,27 @@ class RemoteInventoryTask {
       );
 }
 
+class RemoteDetection {
+  const RemoteDetection({
+    required this.assetId,
+    required this.bbox,
+    required this.confidence,
+  });
+
+  final String assetId;
+  final List<double> bbox; // 归一化 xyxy（0~1）
+  final double confidence;
+
+  factory RemoteDetection.fromJson(Map<String, dynamic> body) =>
+      RemoteDetection(
+        assetId: body['assetId'] as String,
+        bbox: (body['bbox'] as List<dynamic>)
+            .map((dynamic value) => (value as num).toDouble())
+            .toList(growable: false),
+        confidence: (body['confidence'] as num?)?.toDouble() ?? 0,
+      );
+}
+
 class RemoteInventorySession {
   const RemoteInventorySession({
     required this.id,
@@ -139,6 +230,7 @@ class RemoteInventorySession {
     required this.inferenceStatus,
     required this.failureCode,
     required this.failureMessage,
+    this.detections = const <RemoteDetection>[],
   });
 
   final String id;
@@ -155,6 +247,7 @@ class RemoteInventorySession {
   final String? inferenceStatus;
   final String? failureCode;
   final String? failureMessage;
+  final List<RemoteDetection> detections;
 
   bool get requiresReview => status == 'review_required';
   bool get confirmed => status == 'confirmed';
@@ -176,5 +269,9 @@ class RemoteInventorySession {
         inferenceStatus: body['inferenceStatus'] as String?,
         failureCode: body['failureCode'] as String?,
         failureMessage: body['failureMessage'] as String?,
+        detections: (body['detections'] as List<dynamic>? ?? const <dynamic>[])
+            .map((dynamic value) =>
+                RemoteDetection.fromJson(value as Map<String, dynamic>))
+            .toList(growable: false),
       );
 }
