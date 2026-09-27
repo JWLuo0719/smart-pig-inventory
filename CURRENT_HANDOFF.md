@@ -15,6 +15,7 @@
 - Flutter 中文路径回归已收口：`apps/mobile/android/gradle.properties` 固定 `android.overridePathCheck=true`；本机验证使用 `dart analyze .`，Debug APK 可直接运行 `flutter build apk --debug`，无需临时 `-P` 参数。
 - Runner 启动入口 `scripts/start-lan-acceptance.ps1` 从当前仓库根动态拼接 `.env`，解析结果为 `D:\Project\牧数智核\product\app-yolo\.env`；手工直接调用外部 Runner 时仍必须显式传相同 `-ProductEnvPath`。
 - `.claude/settings.local.json` 的旧仓库路径与重命名许可已清理，并作为工作站本地授权文件被 Git 忽略。`docs/ai-conversations/` 包含原始对话和本机路径，已决定仅在本机留存并加入 Git 忽略；后续需要共享时应先形成脱敏摘要。
+- v19 回流与目录收尾已提交到 `codex/reorg-followup`，草稿 PR 为 [#2](https://github.com/JWLuo0719/smart-pig-inventory/pull/2)，目标分支 `main` 未直接推送。PR 的 CI 与人工评审须分别读回，不以本机门禁替代。
 
 ## 2026-09-18 邻栏排除、三图跨图去重与视频抽帧计数（全部默认关闭，未上线）
 

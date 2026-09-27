@@ -6,7 +6,7 @@
 
 重组后的 Flutter 中文路径问题已修复：Android Gradle 项目固定 `android.overridePathCheck=true`，本机使用 `dart analyze .`。本轮复核确认静态分析无问题，且不追加临时 `-P` 参数也能构建 Debug APK。Runner 启动脚本从当前仓库根解析 `.env`，无需修改 LAN 栈；现有 LAN ready 状态未被本轮操作触碰。
 
-非阻塞事项处理：约 5 GiB artifacts 的 894 个文件已生成本地 SHA-256 清单 `artifacts/archive-inventory-20260927.json`，原件保留，待受保护归档位置可确认后再迁移；已导入的 `docs/ai-conversations/` 只在本机留存并被 Git 忽略，原始对话不进入版本库。远端两笔内容等价的提交已通过本地 rebase 整合；当前分支相对远端为 ahead 9 / behind 0，内容与重整前备份分支一致。
+非阻塞事项处理：约 5 GiB artifacts 的 894 个文件已生成本地 SHA-256 清单 `artifacts/archive-inventory-20260927.json`，原件保留，待受保护归档位置可确认后再迁移；已导入的 `docs/ai-conversations/` 只在本机留存并被 Git 忽略，原始对话不进入版本库。远端两笔内容等价的提交已通过本地 rebase 整合，v19 回流与目录收尾已推至 `codex/reorg-followup` 并开立 [草稿 PR #2](https://github.com/JWLuo0719/smart-pig-inventory/pull/2)；`main` 未直接推送。
 
 
 ## 2026-09-13 v16 真机启动与首页任务读回已验证
