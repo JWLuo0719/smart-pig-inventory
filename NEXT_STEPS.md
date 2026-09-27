@@ -1,5 +1,14 @@
 # 下一步
 
+## 2026-09-27 当前顺序
+
+1. 按 `AGENTS.md` 的发布优先级构建签名 Android Release，并验证实际单图 AI 候选计数；Release 签名、模型批准、候选数量与人工确认继续分别记录。
+2. 在授权条件具备后集中完成真实猪只与人工复核验收，保留三视图不相加、视频默认人工复核和历史版本不可变边界。
+3. 推送前整合远端 2 个与本地内容等价的提交；使用普通推送，禁止强推覆盖。
+4. artifacts 保留在原位，待受保护归档位置可确认后按清单校验迁移。原始 Claude 对话只在本机留存，已从 Git 排除，不作为功能开发阻塞项。
+
+本机 Flutter 门禁使用 `dart analyze .`、`flutter test`、`flutter build apk --debug`；AGP 的中文路径覆盖已固定到 `apps/mobile/android/gradle.properties`。Runner 由 LAN 启动脚本拉起时会从当前仓库根解析 `.env`，手工启动外部 Runner 则显式传 `-ProductEnvPath D:\Project\牧数智核\product\app-yolo\.env`。
+
 
 ## 2026-09-13 v16 真机启动与首页任务读回已验证
 

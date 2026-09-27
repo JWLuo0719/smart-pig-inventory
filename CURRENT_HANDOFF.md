@@ -6,9 +6,15 @@
 
 - 合同先行：`contracts/openapi.yaml` 版本 `0.8.0` → `0.9.0`，补上包内后端已有但合同缺失的两个端点与 `AssistantBrief`/`InventoryTrend` 等 5 个 schema；`inference-job/result.schema.json` 同步包内变更（ROI、track_id/frame_index）。
 - 未回流：`.env`（本地密钥与开发配置，包内是部署演示配置）与 `.gitignore`（主仓 09-27 防线领先，见 `50d98dc`）。新配置键已写入 `.env.example`；本地如需显式覆盖可按 example 追加，缺省默认值全为关闭。
-- 证据（2026-09-27 本轮）：Spring `mvn verify` 103 项 0 失败 0 跳过（Testcontainers 实际启动）；推理 `python -m pytest` 88 项；Flutter `flutter analyze` 无问题、`flutter test` 59 项 1 跳过、`flutter build apk --debug` 成功；管理端 `pnpm test` 24 项及 lint/typecheck/build 通过；`docker compose config --quiet` 通过；openapi YAML 解析与 `$ref` 完整性检查通过。
+- 证据（2026-09-27 本轮）：Spring `mvn verify` 103 项 0 失败 0 跳过（Testcontainers 实际启动）；推理 `python -m pytest` 88 项；Flutter 在当前中文路径下以 `dart analyze .` 通过、`flutter test` 59 项 1 跳过，并以 AGP 路径覆盖构建 Debug APK；该覆盖现已固定到 `android/gradle.properties`，后续可直接运行 `flutter build apk --debug`；管理端 `pnpm test` 24 项及 lint/typecheck/build 通过；`docker compose config --quiet` 通过；openapi YAML 解析与 `$ref` 完整性检查通过。
 - 开关状态不变：`MODEL_APPROVED=false`、`MULTIVIEW_*`/`VIDEO_*` 全部 false、`COUNTING_PROVIDER=unavailable`（研究链路由既有 .env 决定）。回流不等于验收：ROI 标注真机手势、三图标定、视频链路与研判面板仍待人工确认。
-- 目录重组（`tmp/reorg/decisions-20260927.md` 九项决策）：零移动防线已做，按"先回流、后重组"，回流即本节，重组 10 阶段待排期执行。
+- 目录重组（`tmp/reorg/decisions-20260927.md` 九项决策）已完成：产品仓位于 `D:\Project\牧数智核\product\app-yolo`，部署包、Runner、研究目录和归档已分别迁入 `delivery`、`runner`、`research`、`archive`。移动后的路径引用、worktree、Runner readiness、数据清单和全模块门禁已经核对；剩余 artifacts 瘦身等待用户指定归档盘，不阻塞开发。
+
+## 2026-09-27 目录重组收尾
+
+- Flutter 中文路径回归已收口：`apps/mobile/android/gradle.properties` 固定 `android.overridePathCheck=true`；本机验证使用 `dart analyze .`，Debug APK 可直接运行 `flutter build apk --debug`，无需临时 `-P` 参数。
+- Runner 启动入口 `scripts/start-lan-acceptance.ps1` 从当前仓库根动态拼接 `.env`，解析结果为 `D:\Project\牧数智核\product\app-yolo\.env`；手工直接调用外部 Runner 时仍必须显式传相同 `-ProductEnvPath`。
+- `.claude/settings.local.json` 的旧仓库路径与重命名许可已清理，并作为工作站本地授权文件被 Git 忽略。`docs/ai-conversations/` 包含原始对话和本机路径，已决定仅在本机留存并加入 Git 忽略；后续需要共享时应先形成脱敏摘要。
 
 ## 2026-09-18 邻栏排除、三图跨图去重与视频抽帧计数（全部默认关闭，未上线）
 

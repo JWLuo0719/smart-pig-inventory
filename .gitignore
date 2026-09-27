@@ -26,6 +26,11 @@ android/local.properties
 .idea/
 .vscode/
 
+# Claude Code grants are workstation-local and can retain obsolete absolute paths after moves.
+/.claude/settings.local.json
+# Imported conversations contain raw prompts and workstation paths; keep the local archive outside Git.
+/docs/ai-conversations/
+
 # 学长代码是本地只读参照物，包含权属与潜在敏感配置风险，不进入本仓库历史。
 /eg/
 
@@ -39,7 +44,7 @@ target/
 /tmp/
 /output/
 
-# 完整部署包含 .env 凭据与 ONNX 权重，以未跟踪状态存在于仓库根，绝不进入 Git（AGENTS 红线）。
+# 防止完整部署包被再次复制回仓库根后误提交；现役副本位于仓库外的 delivery 层。
 /牧数智核-完整部署包/
 
 # 未获准公开的上游研究输入、模型和权重绝不进入 Git 历史。

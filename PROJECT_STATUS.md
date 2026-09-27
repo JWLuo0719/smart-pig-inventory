@@ -1,5 +1,13 @@
 # 当前状态
 
+## 2026-09-27 v19 与目录重组已完成
+
+部署包中的 v19 增量已按合同、Spring、推理、移动端和配置顺序回流主仓；全模块验证结果与未启用的模型/多视图/视频开关见 `CURRENT_HANDOFF.md`。产品仓现位于 `D:\Project\牧数智核\product\app-yolo`，外部部署包、Runner、研究输入和归档已分层迁移，旧根活引用检查通过。
+
+重组后的 Flutter 中文路径问题已修复：Android Gradle 项目固定 `android.overridePathCheck=true`，本机使用 `dart analyze .`。本轮复核确认静态分析无问题，且不追加临时 `-P` 参数也能构建 Debug APK。Runner 启动脚本从当前仓库根解析 `.env`，无需修改 LAN 栈；现有 LAN ready 状态未被本轮操作触碰。
+
+非阻塞事项处理：约 5 GiB artifacts 保留在原位，待受保护归档位置可确认后再迁移；已导入的 `docs/ai-conversations/` 只在本机留存并被 Git 忽略，原始对话不进入版本库。远端两笔提交经 `git cherry` 核对与本地提交内容等价；本地分支仍需完成合并后才能普通推送。
+
 
 ## 2026-09-13 v16 真机启动与首页任务读回已验证
 

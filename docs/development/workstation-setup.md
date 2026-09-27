@@ -83,7 +83,7 @@ P1 推理边界可在独立 Compose 项目中验证未就绪、超时、Runner �
 完成以下项目才可把“开发环境已就绪”更新为已验证：
 
 1. `flutter doctor` 中 Flutter、Android toolchain 均为可用。
-2. `flutter analyze`、`flutter test`、`flutter build apk --debug` 在 `apps/mobile` 成功。
+2. 在当前含中文父目录的 Windows 工作区，从 `apps/mobile` 运行 `dart analyze .`、`flutter test`、`flutter build apk --debug`。`android/gradle.properties` 已固定 `android.overridePathCheck=true`，因此构建命令无需每次追加 `-Pandroid.overridePathCheck=true`；ASCII 路径的 CI 仍可使用 `flutter analyze`。
 3. `docker compose config --quiet` 与 `docker compose up --build` 成功，MySQL、Redis、MinIO、业务 API、推理 API 和网关健康。
 4. `.env` 不含模板密码，MinIO 桶未公开。
 
