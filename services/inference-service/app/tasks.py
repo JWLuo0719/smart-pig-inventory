@@ -3,7 +3,7 @@ from pydantic import ValidationError
 
 from .celery_app import celery_app
 from .callback import TransientCallbackError, deliver_result
-from .providers import get_provider
+from .providers import get_provider, video_counting_enabled
 from .schemas import CountingJobRequest, CountingJobResult
 
 
@@ -11,7 +11,8 @@ from .schemas import CountingJobRequest, CountingJobResult
 def run_counting_job(self, payload: dict) -> dict:
     request = CountingJobRequest.model_validate(payload)
     try:
-        if request.capture_kind == "video":
+        if request.capture_kind == "video" and not video_counting_enabled():
+            # 默认路径：视频只作为人工复核证据，不产生任何自动数量。
             model = request.requested_model
             result = CountingJobResult(
                 status="review_required", count=None,
