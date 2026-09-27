@@ -7,6 +7,7 @@ import com.smartfarm.inventory.inventory.application.InventoryReportExportServic
 import com.smartfarm.inventory.inventory.application.InventoryReviewService.AggregateInventoryReport;
 import com.smartfarm.inventory.inventory.application.InventoryReviewService.DailyInventoryRecord;
 import com.smartfarm.inventory.inventory.application.InventoryReviewService.InventorySessionView;
+import com.smartfarm.inventory.inventory.application.InventoryReviewService.InventoryTrend;
 import com.smartfarm.inventory.inventory.application.InventoryReviewService.NearDuplicateReviewView;
 import com.smartfarm.inventory.inventory.application.InventoryReviewService.InventoryTaskView;
 import jakarta.servlet.http.HttpServletRequest;
@@ -68,6 +69,13 @@ public class InventoryReviewController {
             @RequestParam LocalDate from,
             @RequestParam LocalDate to) {
         return service.aggregateReport(penId, from, to);
+    }
+
+    @GetMapping("/inventory-reports/trend")
+    InventoryTrend trendReport(
+            @RequestParam LocalDate to,
+            @RequestParam(defaultValue = "14") int days) {
+        return service.trendReport(to, days);
     }
 
     @GetMapping("/inventory-reports/exports/{format}")

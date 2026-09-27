@@ -92,6 +92,83 @@ public class InventoryReviewService {
     }
 
     @Transactional(readOnly = true)
+    public InventoryTrend trendReport(LocalDate to, int days) {
+        if (days < 1 || days > 90) {
+            throw InventoryException.invalid("The trend window must be between 1 and 90 days");
+        }
+        UUID organizationId = actor.activeOrganizationId();
+        actor.assertCanView(organizationId);
+        LocalDate from = to.minusDays(days - 1L);
+        return assembleTrend(from, to, repository.trendByOrganization(organizationId, from, to));
+    }
+
+    /**
+     * 趋势组装：把「栏舍 × 业务日」代表会话行折算成连续日期轴上的
+     * 场级合计与分栏序列；确认口径取确认数量，机器口径取候选数量，
+     * 缺采集的日期保持空值，由前端断线呈现而不是补零。
+     */
+    static InventoryTrend assembleTrend(LocalDate from, LocalDate to, List<JdbcInventoryReviewRepository.TrendRow> rows) {
+        Map<String, int[]> totals = new LinkedHashMap<>();
+        Map<UUID, Map<String, int[]>> byPen = new LinkedHashMap<>();
+        Map<UUID, String> penLabels = new LinkedHashMap<>();
+        for (JdbcInventoryReviewRepository.TrendRow row : rows) {
+            String date = row.businessDate().toString();
+            totals.computeIfAbsent(date, ignored -> new int[2]);
+            int[] day = totals.get(date);
+            if ("confirmed".equals(row.status()) && row.confirmedCount() != null) {
+                day[0] += row.confirmedCount();
+            }
+            if (row.candidateCount() != null && row.candidateCount() > 0) {
+                day[1] += row.candidateCount();
+            }
+            byPen.computeIfAbsent(row.penId(), ignored -> new LinkedHashMap<>())
+                    .put(date, new int[] {row.confirmedCount() == null ? -1 : row.confirmedCount(),
+                            row.candidateCount() == null ? -1 : row.candidateCount()});
+            penLabels.putIfAbsent(row.penId(), "%s %s".formatted(row.penCode(), row.penName()));
+        }
+        List<String> axis = new java.util.ArrayList<>();
+        for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
+            axis.add(date.toString());
+        }
+        List<TrendPoint> total = axis.stream()
+                .map(date -> {
+                    int[] day = totals.get(date);
+                    return day == null ? new TrendPoint(date, null, null)
+                            : new TrendPoint(date, day[0] > 0 ? day[0] : null, day[1] > 0 ? day[1] : null);
+                })
+                .toList();
+        List<PenTrend> pens = byPen.entrySet().stream()
+                .map(entry -> new PenTrend(entry.getKey(), penLabels.get(entry.getKey()),
+                        axis.stream()
+                                .map(date -> {
+                                    int[] values = entry.getValue().get(date);
+                                    return values == null ? new TrendPoint(date, null, null)
+                                            : new TrendPoint(date, values[0] >= 0 ? values[0] : null,
+                                                    values[1] >= 0 ? values[1] : null);
+                                })
+                                .toList()))
+                .toList();
+        return new InventoryTrend(from.toString(), to.toString(), total, pens);
+    }
+
+    /**
+     * 存栏趋势响应。
+     *
+     * @param from 起始业务日期（含）
+     * @param to 结束业务日期（含）
+     * @param total 场级合计序列（confirmed=人工确认合计，candidate=机器候选合计；缺采集为 null）
+     * @param pens 分栏序列
+     */
+    public record InventoryTrend(String from, String to, List<TrendPoint> total, List<PenTrend> pens) {
+    }
+
+    public record TrendPoint(String date, Integer confirmed, Integer candidate) {
+    }
+
+    public record PenTrend(UUID penId, String penLabel, List<TrendPoint> points) {
+    }
+
+    @Transactional(readOnly = true)
     public InventorySessionView session(UUID sessionId) {
         SessionRow session = repository.findSession(sessionId).orElseThrow(InventoryException::notFound);
         actor.assertCanView(session.organizationId());
@@ -165,6 +242,14 @@ public class InventoryReviewService {
         repository.lockEvidence(session.id());
         repository.insertAudit(session.organizationId(), actor.subjectId(), "inventory.confirmed", "inventory_session", session.id(),
                 normalizedReason, sessionSnapshot(session), confirmationSnapshot(confirmedCount), correlationId);
+        // 同栏同日只保留一条确认口径；其余未复核会话自动归档（证据保留）并逐条写审计。
+        for (JdbcInventoryReviewRepository.AutoSupersededRow sibling : repository
+                .supersedePendingSiblings(session.penId(), session.businessDate(), session.id())) {
+            repository.insertAudit(session.organizationId(), actor.subjectId(), "inventory.auto_superseded",
+                    "inventory_session", sibling.id(), "同一栏舍当天已有更新的确认会话，旧未复核会话自动归档；证据保留",
+                    Map.of("status", sibling.status()),
+                    Map.of("status", "superseded", "supersededBy", session.id().toString()), correlationId);
+        }
         return session(session.id());
     }
 
