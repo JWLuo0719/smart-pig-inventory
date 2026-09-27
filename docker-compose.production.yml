@@ -27,6 +27,7 @@ services:
       CORS_ALLOWED_ORIGINS: ${PUBLIC_BASE_URL:?set the production HTTPS origin}
       INFERENCE_DISPATCHER_ENABLED: 'true'
       MULTIVIEW_AUTO_COUNT_ENABLED: 'false'
+      VIDEO_AUTO_COUNT_ENABLED: 'false'
   admin-web:
     image: ${RELEASE_ADMIN_IMAGE:?set a verified immutable admin image}
     build: !reset null

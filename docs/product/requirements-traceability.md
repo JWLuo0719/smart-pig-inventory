@@ -1,5 +1,17 @@
 # 需求—实现—验收追踪矩阵
 
+## 2026-09-18 邻栏排除与三图跨图去重的 Provider 化改造
+
+本轮把现场需求第 7 条（隔壁栏舍的猪不能计入本栏舍）和第 8 条（左/中/右同一头猪不重复）从"未实现"推进为"默认关闭、可标定后启用的 Provider"，全程未放宽任何既有门禁：
+
+- 合同先行：`contracts/openapi.yaml` 新增 `RoiRegion`，`Roi` 增加 `exclusions`（≤8）与 `minContainment`；`contracts/inference-job.schema.json` 同步并通过 `$defs/normalizedRect` 复用矩形定义。
+- 推理服务：新增 `app/geometry.py`（区域解析与归属判定，四参数历史口径逐字保持）与 `app/multiview.py`（重叠带一对一贪心合并）；`app/providers.py` 新增 `multi-view-dedup` 包装层与按 `capture_kind` 的委派。
+- Spring：`Roi`/`RoiRegion` 领域校验、上传控制层透传；`JdbcInferenceRepository` 原有的 `roi_json → Map` 透传无需修改。
+- 证据：推理服务 `python -m pytest` 88 项通过（本轮新增 50 项）；Spring `mvn -Dtest=RoiTest,CaptureManifestTest,VideoEvidenceTest,CaptureSetPolicyTest,UnavailableCountingProviderTest,InferenceResultServiceTest test` 28 项通过（新增 `InferenceResultServiceTest` 8 项，用 Mockito 覆盖降级门禁，无需 Docker）；Flutter `flutter analyze` 无问题、`flutter test` 51 项通过（新增排除区序列化 3 项与标注界面 7 项）。
+- 视频自动计数（产品侧 + 服务端）：结果契约新增可选 `track_id`/`frame_index`，新增 `app/video.py` 轨迹聚合与 `VideoTrackCountingProvider`；`app/tasks.py` 的视频人工证据分支改为按 `VIDEO_COUNTING_ENABLED` 放行；服务端 `InferenceResultService` 的视频降级改为受 `VIDEO_AUTO_COUNT_ENABLED` 控制，降级判定收敛到 `CaptureSetPolicy.requiresManualReview(..., validatedVideoProvider)`（未知采集类型一律失败关闭）。轨迹标识不进入业务回调，服务端线缆不变。
+- 手机端：`Roi` 领域模型支持 `exclusions`（≤8）与 `minContainment`，缺省值不写入 JSON，历史载荷逐字不变；**尚无排除区绘制界面**，ROI 仍由调用方传入。
+- 仍然关闭：`MODEL_APPROVED=false`、`MULTIVIEW_AUTO_COUNT_ENABLED=false`、`MULTIVIEW_DEDUP_ENABLED=false`、`VIDEO_COUNTING_ENABLED=false`、`VIDEO_AUTO_COUNT_ENABLED=false`；模型发布清单的 `research_candidate` 约束未改动。未验证项：Docker/Compose E2E 与 Testcontainers 集成测试、Android APK 构建（本机无 Android SDK）、真机与真实猪只验收、现场重叠比例标定、外部 Runner 的 `track_id` 输出。
+
 ## 2026-09-13 非视频真机验收反馈
 
 用户反馈前四项非视频功能测试成功，视频相关测试后置。移动端视频采集/上传/播放与视频自动计数仍保持待验收，不能由本次非视频反馈替代。
@@ -26,6 +38,8 @@ v16 同签名 Release 已在 Redmi K60 通过无线 ADB 覆盖安装。mDNS/HTTP
 | 移动端五入口真实数据 | PRD 5 | Flutter home/gallery/profile/task；Drift；Inventory API | AC-01、AC-02、AC-10 | 已自动化验证；首页启动读回已真机验证（v16 认证恢复后 `/me` 与当日任务 200，UI 显示 2 个真实任务和 `0 / 2`）。图库和“我的”按激活组织读取 Drift 证据、字节数、同步时间和网络策略；离线时仅显示本机可证实状态，不硬编码猪场、数量、进度或演示活动。采集、图库、报表和主数据同步的集中真机操作仍待用户手动完成 |
 | 单图与三视图采集 | PRD 3.2 | Flutter capture；Spring capture | AC-01、AC-08 | 开发中（单图/三图本地采集、方向唯一和页面接线已测试；realme GT 7 Pro 已人工通过完整左/中/右三图强制关闭恢复，v0.1.0+3 明示三张缩略图并可查看大图；三视图不自动相加的复核实机回归待完成） |
 | ROI | PRD 3.2/3.4 | Flutter ROI domain；推理合同 | AC-01、AC-07 | 已自动化验证（边界校验、草稿持久化和服务端 Manifest 校验已测试；HTTP Provider 对归一化检测框执行有限数值/边界校验，并以框中心落入 ROI、边界包含的口径过滤后重新计数） |
+| 邻栏排除（ROI 排除区与最小包含比例） | PRD 3.2/3.4；现场需求第 7 条 | Spring `Roi`/`RoiRegion` 与 Upload 控制层；推理 `app/geometry.py`；Flutter `Roi`/`RoiRegion` 与 `RoiEditorPage`；合同 `Roi`/`RoiRegion` | AC-01、AC-07 | 开发中（2026-09-18：合同新增 `exclusions`（≤8 个归一化矩形）与 `minContainment`（0..1）；推理服务按"中心点 → 排除区 → 最小包含比例"判定，四参数历史口径逐字保持；Spring 领域校验、Jackson 线上往返与推理侧过滤均有自动化测试；手机端领域模型与 JSON 载荷已支持并保持缺省载荷不变；新增 `RoiEditorPage` 在照片上拖拽绘制排除区（7 项 widget 测试覆盖绘制、误触、删除、上限、阈值随行、既有标注回显、草稿入队后拒绝修改）。**尚未验证**：真机手势与照片比例对齐（本机无 Android SDK/设备）、Docker/Compose E2E、真实猪场标定。缺省即整图，行为与既往一致） |
+| 三图跨图同猪去重（默认关闭的 Provider） | PRD 3.4.5、AC-08；现场需求第 8 条 | 推理 `app/multiview.py` 与 `MultiViewDeduplicatingProvider` | AC-08 | 开发中（2026-09-18：新增 `COUNTING_PROVIDER=multi-view-dedup` 包装层，按现场标定的相邻视图重叠比例合并重叠带内重复检测；未配置标定、三视图不齐或内层未获批准时一律 `review_required` 且数量为空，绝不简单相加。推理侧 16 项用例覆盖合并、误合并边界、一对一匹配与失败关闭。**未启用**：`MULTIVIEW_DEDUP_ENABLED=false`、`MULTIVIEW_AUTO_COUNT_ENABLED=false`、`MODEL_APPROVED=false` 不变；现场重叠比例仍未标定） |
 | 草稿恢复与本地媒体 | PRD 3.2 | Drift v5 CaptureDrafts/CaptureSets/LocalMediaAssets；MediaMaterializer | AC-01 | 已验证（流式物化、EXIF 方向/尺寸、原子持久化、数据库重开恢复已测试；realme GT 7 Pro 已人工验证三张本地证据在强制停止后完整恢复且可查看） |
 | Outbox 与续传 | PRD 3.3 | Drift v6 OutboxEntries/UploadAssetEntries；UploadPackageSynchronizer；Upload API；Spring capture/inference dispatch | AC-02 | 开发中（完整采集组入队、逐 Blob 状态、稳定幂等键、租约、退避、三视图已确认 Blob 跳过、后台 WorkManager 批处理及 Commit 后同步标记均已自动化测试；隔离 Compose 已通过 Commit、事务 Outbox、MinIO、Celery、Callback 和 Commit 重放闭环。仍待真机执行上传中途断流后的仅剩余 Blob 续传与后台调度时序验收） |
 | 幂等上传包 | OpenAPI Upload | Spring capture application/infrastructure/UI | AC-02、AC-03 | 已验证（Testcontainers MySQL 覆盖 create、Blob、Manifest、Commit 重放及唯一任务） |
@@ -33,7 +47,7 @@ v16 同签名 Release 已在 Redmi K60 通过无线 ADB 覆盖安装。mDNS/HTTP
 | 感知哈希审核 | PRD 3.4 | Flutter capture/outbox；Spring capture/review；管理端 | AC-05 | 已自动化验证（Flutter 在后台 Isolate 中为支持且受尺寸/像素上限约束的图像生成 64 位 dHash，提交 Manifest；Spring 以汉明距离 <= 8 建立只读告警，绝不自动删除媒体；复核员可带原因解决告警并写入审计，媒体仍保留；Flutter 与 MySQL 集成测试均覆盖） |
 | 推理安全降级 | 架构 7；ADR-0003 | Spring transactional Outbox/结果回调；Python Celery callback/UnavailableProvider | AC-06 | 已验证（隔离 Compose E2E 已实际经过 Commit、Outbox、Celery、受服务密钥保护的回调；unavailable Provider 不返回模拟数量。P1 故障栈进一步验证 Runner 未就绪 503、Provider 超时结构化为 `PROVIDER_TIMEOUT`、停止 fail-closed、重启后显式就绪及恢复成功；失败会话保持 review_required 且数量为空。真实获准 Provider 仍为 P1 阻塞） |
 | 推理失败管理与重试 | PRD P1；架构 5/6 | OpenAPI；Spring inference administration/Outbox/audit；Next.js 管理端 | AC-06、AC-11 | 已验证（仅 FARM_ADMIN/SYSTEM_ADMIN 可按组织查询失败任务并带理由重试；每次重试创建保留原媒体、失败码和请求模型身份的新任务，原失败任务不可变。同键同理由顺序/并发重放只产生一个后继和一条审计，不同意图返回 409；晚到回调不能覆盖已人工确认会话。MySQL 8.4 V1–V9 集成测试及隔离 `pig-inventory-p1-retry` Compose E2E 已通过） |
-| 三视图禁止简单相加 | PRD 3.4 | CaptureSetPolicy；Spring 回调归一化；Provider | AC-08 | 开发中（三视图成功结果在未启用验证多视角 Provider 时强制转为 review_required；研究模式单图可由检测框数量形成待复核候选值，三视图检测框始终不汇总且候选值为空；MySQL 集成测试已覆盖，待真机复核回归） |
+| 三视图禁止简单相加 | PRD 3.4 | CaptureSetPolicy；Spring 回调归一化；Provider | AC-08 | 开发中（三视图成功结果在未启用验证多视角 Provider 时强制转为 review_required；研究模式单图可由检测框数量形成待复核候选值，三视图检测框始终不汇总且候选值为空；MySQL 集成测试已覆盖，待真机复核回归。2026-09-18 起另有默认关闭的 `multi-view-dedup` 去重 Provider 可供标定后启用，见上一行） |
 | 人工确认和媒体锁定 | PRD 3.5 | Spring inventory/media/audit；Flutter session review | AC-09 | 已验证（隔离 Compose E2E 以 bootstrap SYSTEM_ADMIN 实际确认 unavailable 推理结果、锁定媒体、验证普通删除 409、执行带原因管理员软删除，并得到两条审计事件；见 `docs/development/p0-closure-e2e.md`） |
 | 确认后审计更正 | PRD 3.5/6；OpenAPI 0.7.0 | Flyway V10；Spring inventory/audit；Next.js 管理端；Flutter 复核展示 | AC-09、AC-10、AC-11 | 已验证（自动化：MySQL 8.4 唯一当前版本、RBAC、幂等、审计与报表通过；2026-09-08 隔离 Edge 页面将 v1 17 更正为 v2 19，HTTP 读回旧 v1 superseded/17、相同锁定图片、只含 v2 的日报、同意图重放和变更意图 409；OPERATOR/跨组织更正 404。新增并通过晚到重试回调不得重新打开 superseded 原证据会话的测试。人工验收未替代，见 `docs/development/admin-runtime-e2e.md`） |
 | 综合平均 | PRD 3.5/6 | InventoryAggregationPolicy；Spring inventory reports；Flutter tasks | AC-10 | 已验证（已新增按业务日期派生的栏舍任务、仅已确认日盘点报表和按栏舍/日期范围的原始均值/展示值 API；单元测试覆盖均值口径，隔离 Compose 以真实确认数量验证任务、日报和综合报表） |
@@ -46,7 +60,8 @@ v16 同签名 Release 已在 Redmi K60 通过无线 ADB 覆盖安装。mDNS/HTTP
 | 主流/低端 Android 覆盖 | NFR | realme GT 7 Pro / REDMI Note 14 5G 候选 | AC 设备测试 | 主流机已确定；低端机待取得 |
 | 金蝶同步 | PRD 3.1 | ErpOrganizationProvider | P1 专项 | 阻塞（缺正式文档） |
 | 真实 YOLOv13 | PRD P1 | 产品仓库外 ResearchHttpYolo Runner；正式为 Python http-yolo Provider | 推理金标回归 | 开发中（团队权重已完成 checksum、严格模型身份/readiness、ROI 二次过滤、MinIO/Worker/Callback/会话候选 E2E、结构化失败展示、Docker 故障注入、验证集选阈值后测试集一次性全量回归、研究发布清单、不可覆盖漂移基线和隔离版本回滚；当前研究阈值 0.60，测试 MAE 1.049、WAPE 3.75%、±2 内 93.44%。损坏候选 checksum 会 503 fail-closed 并可回滚到锚点。单图真实链路产生 25 个待复核候选，三视图仍禁止汇总。研究集分布不足以准入；正式自动计数仍阻塞于许可、授权业务金标、权重准入和负责人审批；见 `docs/research/team-yolov13-candidate-evaluation.md` 和 `docs/research/p1-model-release-rollback-benchmark.md`） |
-| 视频/端侧/Agent | PRD P2 | 隔离 PoC | P2 专项 | 边界外 |
+| 视频抽帧自动计数（默认关闭的 Provider） | PRD P2；现场需求第 2、3 条 | 推理 `app/video.py` 与 `VideoTrackCountingProvider`；Spring `InferenceResultService` 视频门禁；结果契约 `Detection.track_id` | AC-08 | 开发中（2026-09-18：结果契约新增可选 `track_id`/`frame_index`；产品侧只做轨迹聚合——同一 `track_id` 出现在多少帧都只算一头，缺少轨迹标识或完全没有检测时一律 `review_required` 且数量为空。服务端视频降级已受 `VIDEO_AUTO_COUNT_ENABLED` 控制并有 Mockito 单测。抽帧与跨帧跟踪仍在产品仓库之外的 Runner，轨迹标识不进入业务回调。**未启用**：`VIDEO_COUNTING_ENABLED=false`、`VIDEO_AUTO_COUNT_ENABLED=false`；Compose E2E 未跑） |
+| 视频/端侧/Agent | PRD P2 | 隔离 PoC | P2 专项 | 边界外（视频采集/上传/播放/人工复核已交付，见上表"视频证据人工流程"；产品侧自动计数聚合内核已就绪但默认关闭） |
 
 每个合并请求必须更新受影响行；只有自动化或可复现实机证据通过后才能标记为“已验证”。
 
