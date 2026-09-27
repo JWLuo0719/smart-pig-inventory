@@ -451,4 +451,3 @@ class _AssistantPanel extends StatelessWidget {
         _ => const Text('💡', style: TextStyle(fontSize: 18)),
       };
 }
-

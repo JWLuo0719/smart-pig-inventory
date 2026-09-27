@@ -8,7 +8,7 @@
 - 未回流：`.env`（本地密钥与开发配置，包内是部署演示配置）与 `.gitignore`（主仓 09-27 防线领先，见 `50d98dc`）。新配置键已写入 `.env.example`；本地如需显式覆盖可按 example 追加，缺省默认值全为关闭。
 - 证据（2026-09-27 本轮）：Spring `mvn verify` 103 项 0 失败 0 跳过（Testcontainers 实际启动）；推理 `python -m pytest` 88 项；Flutter 在当前中文路径下以 `dart analyze .` 通过、`flutter test` 59 项 1 跳过，并以 AGP 路径覆盖构建 Debug APK；该覆盖现已固定到 `android/gradle.properties`，后续可直接运行 `flutter build apk --debug`；管理端 `pnpm test` 24 项及 lint/typecheck/build 通过；`docker compose config --quiet` 通过；openapi YAML 解析与 `$ref` 完整性检查通过。
 - 开关状态不变：`MODEL_APPROVED=false`、`MULTIVIEW_*`/`VIDEO_*` 全部 false、`COUNTING_PROVIDER=unavailable`（研究链路由既有 .env 决定）。回流不等于验收：ROI 标注真机手势、三图标定、视频链路与研判面板仍待人工确认。
-- 目录重组（`tmp/reorg/decisions-20260927.md` 九项决策）已完成：产品仓位于 `D:\Project\牧数智核\product\app-yolo`，部署包、Runner、研究目录和归档已分别迁入 `delivery`、`runner`、`research`、`archive`。移动后的路径引用、worktree、Runner readiness、数据清单和全模块门禁已经核对；剩余 artifacts 瘦身等待用户指定归档盘，不阻塞开发。
+- 目录重组（`tmp/reorg/decisions-20260927.md` 九项决策）已完成：产品仓位于 `D:\Project\牧数智核\product\app-yolo`，部署包、Runner、研究目录和归档已分别迁入 `delivery`、`runner`、`research`、`archive`。移动后的路径引用、worktree、Runner readiness、数据清单和全模块门禁已经核对；artifacts 的本地 SHA-256 清单已生成，受保护的归档位置仍待确认，不阻塞开发。
 
 ## 2026-09-27 目录重组收尾
 
