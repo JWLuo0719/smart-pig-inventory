@@ -319,7 +319,8 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
           aspectRatio: item.aspectRatio,
           initialRoi: _roiFromJson(item.roiJson),
           onSave: (Roi? roi) async {
-            await UpdateCaptureRoi(database).execute(assetId: assetId, roi: roi);
+            await UpdateCaptureRoi(database)
+                .execute(assetId: assetId, roi: roi);
             savedRoi = roi;
           },
         ),
@@ -678,8 +679,9 @@ class _LocalEvidence {
   /// 视频在合同上不允许携带图像 ROI，因此只有图片可以标注排除区。
   bool get canAnnotate => assetId != null && position != 'video';
 
-  double get aspectRatio =>
-      (width != null && height != null && height! > 0) ? width! / height! : 4 / 3;
+  double get aspectRatio => (width != null && height != null && height! > 0)
+      ? width! / height!
+      : 4 / 3;
 
   _LocalEvidence copyWith({String? roiJson}) => _LocalEvidence(
         position: position,

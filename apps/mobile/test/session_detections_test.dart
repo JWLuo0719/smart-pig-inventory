@@ -30,8 +30,7 @@ void main() {
 
     expect(session.detections.length, 3);
     final int uncertain = session.detections
-        .where((RemoteDetection d) =>
-            d.confidence < kUncertainConfidence)
+        .where((RemoteDetection d) => d.confidence < kUncertainConfidence)
         .length;
     // 0.92 与 0.5（边界值不算低置信）为高置信；0.31 为待核验
     expect(uncertain, 1);

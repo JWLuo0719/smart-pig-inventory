@@ -203,8 +203,7 @@ class UploadPackageSynchronizer {
     return switch (code) {
       'EXACT_DUPLICATE_IMAGE' =>
         '该照片已存在于本场证据库，同一张照片不会重复计数；请在复核页查看已有记录，或换一张照片拍摄。',
-      'DELETED_DUPLICATE_IMAGE' =>
-        '这张照片之前上传过、后来被删除；同一张照片不能重复上传，请重新拍摄一张新照片。',
+      'DELETED_DUPLICATE_IMAGE' => '这张照片之前上传过、后来被删除；同一张照片不能重复上传，请重新拍摄一张新照片。',
       _ => '服务器拒绝此采集包，请查看诊断信息',
     };
   }

@@ -44,7 +44,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return _buildContent(context);
   }
 
-  Future<RemoteAssistantBrief?> _loadAssistant(AuthState auth, DateTime today) async {
+  Future<RemoteAssistantBrief?> _loadAssistant(
+      AuthState auth, DateTime today) async {
     try {
       return await ref.read(inventoryRemoteApiProvider).assistantInsights(
           accessToken: auth.session.accessToken, businessDate: today);
@@ -92,9 +93,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
     } on DioException catch (error) {
       if (mounted) setState(() => _error = _safeError(error));
-    } finally {
-
-    }
+    } finally {}
   }
 
   Widget _buildContent(BuildContext context) {
@@ -142,7 +141,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ],
                   const SizedBox(height: 16),
                   _ContinueCard(activity: latest),
-                  if (_assistant != null && _assistant!.insights.isNotEmpty) ...<Widget>[
+                  if (_assistant != null &&
+                      _assistant!.insights.isNotEmpty) ...<Widget>[
                     const SizedBox(height: 22),
                     _AssistantPanel(brief: _assistant!),
                   ],
@@ -188,8 +188,7 @@ class _Header extends StatelessWidget {
               Text('${_todayLabel()} · $organizationCode · $organizationName',
                   style: Theme.of(context).textTheme.bodySmall),
               const SizedBox(height: 3),
-              Text('今日盘点与复核',
-                  style: Theme.of(context).textTheme.headlineSmall),
+              Text('今日盘点与复核', style: Theme.of(context).textTheme.headlineSmall),
             ],
           ),
         ),
@@ -211,7 +210,13 @@ class _Header extends StatelessWidget {
   static String _todayLabel() {
     final DateTime now = DateTime.now();
     const List<String> weekdays = <String>[
-      '周一', '周二', '周三', '周四', '周五', '周六', '周日'
+      '周一',
+      '周二',
+      '周三',
+      '周四',
+      '周五',
+      '周六',
+      '周日'
     ];
     return '${now.month}月${now.day}日 ${weekdays[now.weekday - 1]}';
   }
@@ -409,8 +414,10 @@ class _AssistantPanel extends StatelessWidget {
               ]),
               const SizedBox(height: 6),
               Text(brief.brief,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.outline)),
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: Theme.of(context).colorScheme.outline)),
               const Divider(height: 18),
               ...brief.insights.map((RemoteAssistantInsight insight) =>
                   _insightTile(context, insight)),
@@ -426,16 +433,17 @@ class _AssistantPanel extends StatelessWidget {
       contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 2),
       leading: _severityIcon(insight.severity),
       title: Text(insight.title,
-          maxLines: 1, overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
       subtitle: Padding(
         padding: const EdgeInsets.only(top: 2),
         child: Text(insight.detail,
-            maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5)),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 12.5)),
       ),
-      trailing: tappable
-          ? const Icon(Icons.chevron_right, size: 20)
-          : null,
+      trailing: tappable ? const Icon(Icons.chevron_right, size: 20) : null,
       onTap: !tappable
           ? null
           : () => insight.sessionId != null

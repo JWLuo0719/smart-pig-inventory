@@ -19,7 +19,9 @@ void main() {
 
   test('ignores malformed boxes and keeps an empty grid otherwise', () {
     expect(densityGrid(const []), everyElement(everyElement(0)));
-    final grid = densityGrid([RemoteDetection(assetId: 'a', bbox: [0.5], confidence: 1)]);
+    final grid = densityGrid([
+      RemoteDetection(assetId: 'a', bbox: [0.5], confidence: 1)
+    ]);
     expect(grid.expand((row) => row).reduce((a, b) => a + b), 0);
   });
 }

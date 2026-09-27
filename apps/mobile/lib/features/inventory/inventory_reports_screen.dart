@@ -187,16 +187,19 @@ class _TrendCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (String label, List<RemoteTrendPoint> points) = trend.seriesFor(penId) ?? ('', trend.total);
+    final (String label, List<RemoteTrendPoint> points) =
+        trend.seriesFor(penId) ?? ('', trend.total);
     final List<RemoteTrendPoint> comparable = points
         .where((point) => point.confirmed != null || point.candidate != null)
         .toList();
     return Card(
         child: Padding(
             padding: const EdgeInsets.all(16),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('存栏趋势 · $label（近 14 天）',
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 15)),
               const SizedBox(height: 4),
               Row(children: const [
                 _Legend(color: AppColors.barnBlue, label: '人工确认（计入存栏）'),
@@ -207,28 +210,28 @@ class _TrendCard extends StatelessWidget {
               SizedBox(
                   height: 150,
                   width: double.infinity,
-                  child: CustomPaint(
-                      painter: _TrendPainter(points: points))),
-              Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(trend.from, style: const TextStyle(fontSize: 11, color: Colors.black45)),
-                    Text(trend.to, style: const TextStyle(fontSize: 11, color: Colors.black45)),
-                  ]),
+                  child: CustomPaint(painter: _TrendPainter(points: points))),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                Text(trend.from,
+                    style:
+                        const TextStyle(fontSize: 11, color: Colors.black45)),
+                Text(trend.to,
+                    style:
+                        const TextStyle(fontSize: 11, color: Colors.black45)),
+              ]),
               const SizedBox(height: 10),
               if (comparable.isEmpty)
-                Text(penId == null
-                    ? '窗口内暂无已确认记录；完成盘点复核后这里会出现趋势线。'
-                    : '该栏舍近 14 天暂无已确认或候选记录。',
-                    style: const TextStyle(fontSize: 12.5, color: Colors.black54)),
+                Text(
+                    penId == null
+                        ? '窗口内暂无已确认记录；完成盘点复核后这里会出现趋势线。'
+                        : '该栏舍近 14 天暂无已确认或候选记录。',
+                    style:
+                        const TextStyle(fontSize: 12.5, color: Colors.black54)),
               if (comparable.isNotEmpty) ...[
                 const Text('机器提议 vs 人工确认（最近 7 个有数据日）',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                ...comparable
-                    .toList()
-                    .reversed
-                    .take(7)
-                    .map(_comparisonRow),
+                    style:
+                        TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                ...comparable.toList().reversed.take(7).map(_comparisonRow),
               ],
             ])));
   }
@@ -247,7 +250,8 @@ class _TrendCard extends StatelessWidget {
           SizedBox(
               width: 88,
               child: Text(point.date.substring(5),
-                  style: const TextStyle(fontSize: 12.5, color: Colors.black54))),
+                  style:
+                      const TextStyle(fontSize: 12.5, color: Colors.black54))),
           Expanded(
               child: Text('机器 ${candidate ?? '—'}',
                   style: const TextStyle(fontSize: 12.5))),
@@ -274,10 +278,11 @@ class _Legend extends StatelessWidget {
         Container(
             width: 14,
             height: 3,
-            decoration:
-                BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
+            decoration: BoxDecoration(
+                color: color, borderRadius: BorderRadius.circular(2))),
         const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 11.5, color: Colors.black54)),
+        Text(label,
+            style: const TextStyle(fontSize: 11.5, color: Colors.black54)),
       ]);
 }
 
@@ -294,7 +299,9 @@ class _TrendPainter extends CustomPainter {
     if (values.isEmpty) return;
     final double maxValue = values.reduce(math.max) * 1.15;
     Offset position(int index, int value) => Offset(
-        points.length < 2 ? size.width / 2 : index / (points.length - 1) * size.width,
+        points.length < 2
+            ? size.width / 2
+            : index / (points.length - 1) * size.width,
         size.height - value / maxValue * size.height * 0.92 - 4);
     void drawSeries(int? Function(RemoteTrendPoint) pick, Color color,
         double strokeWidth, bool dots) {
@@ -314,7 +321,8 @@ class _TrendPainter extends CustomPainter {
         }
         final Offset current = position(i, value);
         if (previousValue != null && points.length >= 2) {
-          canvas.drawLine(position(previousIndex!, previousValue), current, line);
+          canvas.drawLine(
+              position(previousIndex!, previousValue), current, line);
         }
         if (dots) {
           canvas.drawCircle(current, strokeWidth + 1, Paint()..color = color);

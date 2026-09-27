@@ -200,7 +200,8 @@ class _SessionReviewScreenState extends ConsumerState<SessionReviewScreen> {
                   child: Text('• $warning'),
                 )),
         ],
-        if (session.detections.isNotEmpty && session.requiresReview) ...<Widget>[
+        if (session.detections.isNotEmpty &&
+            session.requiresReview) ...<Widget>[
           const SizedBox(height: 16),
           _AiSuggestionCard(
             detections: session.detections,
@@ -313,8 +314,9 @@ class _AiSuggestionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final int uncertain =
-        detections.where((RemoteDetection d) => d.confidence < kUncertainConfidence).length;
+    final int uncertain = detections
+        .where((RemoteDetection d) => d.confidence < kUncertainConfidence)
+        .length;
     final int confident = detections.length - uncertain;
     return Card(
       color: AppColors.barnBlue.withValues(alpha: 0.06),

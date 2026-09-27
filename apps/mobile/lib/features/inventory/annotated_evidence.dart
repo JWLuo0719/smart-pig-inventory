@@ -79,8 +79,7 @@ class _AnnotatedEvidenceSectionState
 
   @override
   Widget build(BuildContext context) {
-    final int uncertain =
-        widget.detections.where(_isUncertain).length;
+    final int uncertain = widget.detections.where(_isUncertain).length;
     final int total = widget.detections.length;
     final int confident = total - uncertain;
     return Card(
@@ -103,8 +102,7 @@ class _AnnotatedEvidenceSectionState
             ]),
             const SizedBox(height: 8),
             Wrap(spacing: 14, children: <Widget>[
-              _LegendSwatch(
-                  color: AppColors.herdTeal, label: '高置信 $confident'),
+              _LegendSwatch(color: AppColors.herdTeal, label: '高置信 $confident'),
               _LegendSwatch(
                   color: const Color(0xFFFF6D00), label: '待核验 $uncertain'),
             ]),
@@ -195,8 +193,7 @@ class _AnnotatedImageState extends ConsumerState<_AnnotatedImage> {
           initialAuth: auth,
           reconnect: () =>
               ref.read(authControllerProvider.notifier).reconnect(),
-          request: (String token) =>
-              _api.content(token, widget.media.assetId));
+          request: (String token) => _api.content(token, widget.media.assetId));
       if (!mounted) return;
       // 先解码拿原始宽高（归一化坐标映射的基准），再触发一次重建
       final ui.Image image = await decodeImageFromList(bytes);
@@ -247,8 +244,7 @@ class _AnnotatedImageState extends ConsumerState<_AnnotatedImage> {
               }),
             ),
             const SizedBox(height: 4),
-            Text(
-                '${widget.media.position} · ${widget.detections.length} 处检测',
+            Text('${widget.media.position} · ${widget.detections.length} 处检测',
                 style: Theme.of(context).textTheme.bodySmall),
           ]),
     );

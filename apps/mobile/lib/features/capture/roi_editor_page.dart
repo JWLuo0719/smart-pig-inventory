@@ -152,7 +152,8 @@ class _RoiEditorPageState extends State<RoiEditorPage> {
                 child: AspectRatio(
                   aspectRatio: widget.aspectRatio,
                   child: LayoutBuilder(
-                    builder: (BuildContext context, BoxConstraints constraints) {
+                    builder:
+                        (BuildContext context, BoxConstraints constraints) {
                       final Size size = constraints.biggest;
                       return GestureDetector(
                         key: const Key('roi-canvas'),
@@ -171,7 +172,8 @@ class _RoiEditorPageState extends State<RoiEditorPage> {
                               errorBuilder: (_, __, ___) => const ColoredBox(
                                 color: Color(0xFFE8EDF1),
                                 child: Center(
-                                    child: Icon(Icons.image_not_supported_outlined)),
+                                    child: Icon(
+                                        Icons.image_not_supported_outlined)),
                               ),
                             ),
                             CustomPaint(
@@ -179,7 +181,8 @@ class _RoiEditorPageState extends State<RoiEditorPage> {
                                 exclusions: _exclusions,
                                 pending: _dragOrigin == null
                                     ? null
-                                    : _regionBetween(_dragOrigin!, _dragCurrent!),
+                                    : _regionBetween(
+                                        _dragOrigin!, _dragCurrent!),
                               ),
                             ),
                           ],
@@ -240,7 +243,8 @@ class _RoiEditorPageState extends State<RoiEditorPage> {
                   const SizedBox(height: 12),
                   Text(
                     _error!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error),
                   ),
                 ],
               ],

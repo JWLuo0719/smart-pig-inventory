@@ -10,7 +10,8 @@ class RoiRegion {
     required this.height,
   }) {
     if (!isValid) {
-      throw ArgumentError('ROI region must be finite, positive, and inside the image');
+      throw ArgumentError(
+          'ROI region must be finite, positive, and inside the image');
     }
   }
 
@@ -63,9 +64,7 @@ class Roi {
       throw ArgumentError(
           'ROI must not declare more than $maxExclusions exclusion regions');
     }
-    if (!minContainment.isFinite ||
-        minContainment < 0 ||
-        minContainment > 1) {
+    if (!minContainment.isFinite || minContainment < 0 || minContainment > 1) {
       throw ArgumentError('ROI minimum containment must be within 0..1');
     }
   }
@@ -127,8 +126,8 @@ class Roi {
   static double _minContainment(Object? source) {
     if (source == null) return 0;
     if (source is! num) {
-      throw ArgumentError.value(source, 'minContainment',
-          'ROI minimum containment must be numeric');
+      throw ArgumentError.value(
+          source, 'minContainment', 'ROI minimum containment must be numeric');
     }
     return source.toDouble();
   }
