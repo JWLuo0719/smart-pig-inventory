@@ -1,5 +1,6 @@
 package com.smartfarm.inventory.inventory.ui;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.smartfarm.inventory.common.CorrelationIdFilter;
 import com.smartfarm.inventory.inventory.application.InventoryReviewService;
 import com.smartfarm.inventory.inventory.application.InventoryReportExportService;
@@ -15,6 +16,7 @@ import java.time.Instant;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.nio.charset.StandardCharsets;
@@ -184,10 +186,14 @@ public class InventoryReviewController {
         return value == null ? "unknown" : value.toString();
     }
 
-    record ConfirmInventoryRequest(@Min(0) int confirmedCount, @Size(min = 8, max = 500) String reason) {
+    record ConfirmInventoryRequest(
+            @JsonDeserialize(using = StrictInventoryCountDeserializer.class) @NotNull @Min(0) Integer confirmedCount,
+            @Size(min = 8, max = 500) String reason) {
     }
 
-    record CorrectInventoryRequest(@Min(0) int correctedCount, @Size(min = 8, max = 500) String reason) {
+    record CorrectInventoryRequest(
+            @JsonDeserialize(using = StrictInventoryCountDeserializer.class) @NotNull @Min(0) Integer correctedCount,
+            @Size(min = 8, max = 500) String reason) {
     }
 
     record OverrideDeleteRequest(@Size(min = 8, max = 500) String reason) {
