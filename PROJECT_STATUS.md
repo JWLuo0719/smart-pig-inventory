@@ -1,5 +1,9 @@
 # 当前状态
 
+## 2026-10-20 参赛实现批次
+
+参赛主线与扩展契约已落地，尚未完成M4/M5。Spring test/verify均106通过、0跳过；Flutter71通过、1真实LAN环境跳过，analyze/Debug通过；Admin26项及lint/typecheck/build通过。v20同签名Release BuildOnly与119个移动源码哈希已核验。Admin隔离栈在独立串行后端镜像构建期间再次收到Docker RPC EOF，未到浏览器验收；真机、授权实猪、模型与联网部署读回仍待验。实现/证据映射见 [开发追踪](docs/product/competition-development-plan.md)，实际日志见 [验证记录](docs/development/competition-verification-20261020.md)。旧状态保留作历史证据。
+
 ## 2026-09-27 v19 与目录重组已完成
 
 部署包中的 v19 增量已按合同、Spring、推理、移动端和配置顺序回流主仓；全模块验证结果与未启用的模型/多视图/视频开关见 `CURRENT_HANDOFF.md`。产品仓现位于 `D:\Project\牧数智核\product\app-yolo`，外部部署包、Runner、研究输入和归档已分层迁移，旧根活引用检查通过。

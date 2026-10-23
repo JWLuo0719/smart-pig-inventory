@@ -140,14 +140,17 @@ void main() {
     final UpdateCaptureRoi update = UpdateCaptureRoi(database);
     final Roi roi = Roi(x: 0.1, y: 0.1, width: 0.8, height: 0.8);
 
-    await update.execute(assetId: draft.assetId, roi: roi);
+    await update.execute(
+        organizationId: 'organization-1', assetId: draft.assetId, roi: roi);
     final LocalMediaAsset asset =
         await database.select(database.localMediaAssets).getSingle();
     expect(jsonDecode(asset.roiJson), roi.toJson());
 
-    await QueueCaptureDraft(database).execute(draft.draftId);
+    await QueueCaptureDraft(database)
+        .execute(draft.draftId, organizationId: 'organization-1');
     await expectLater(
-      update.execute(assetId: draft.assetId, roi: null),
+      update.execute(
+          organizationId: 'organization-1', assetId: draft.assetId, roi: null),
       throwsA(isA<StateError>()),
     );
   });

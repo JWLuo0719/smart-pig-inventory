@@ -1,5 +1,4 @@
 import 'dart:typed_data';
-import 'dart:ui' as ui;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -12,14 +11,10 @@ import '../../core/theme/app_theme.dart';
 import '../../core/network/inventory_browse_api.dart'
     show InventoryBrowseApi, LibraryMedia;
 
-/// 不确定目标的判定阈值：低于该置信度的检测框以鲜艳橙色高亮，供人工重点核验。
+/// Historical compatibility constant; model scores are never labelled accuracy.
 const double kUncertainConfidence = 0.5;
 
-/// 证据标注视图：在原始照片上叠加 AI 检测框。
-///
-/// 高置信目标用沉稳的青绿描边；模型不确定的目标（置信度低于阈值）用
-/// 鲜艳橙色粗描边，引导复核员优先核验——机器把"看不准的"明确交给
-/// 人，而不是默默给一个数字。
+/// Original evidence and numbered model detections share one image transform.
 class AnnotatedEvidenceSection extends ConsumerStatefulWidget {
   const AnnotatedEvidenceSection({
     super.key,
@@ -47,12 +42,27 @@ class _AnnotatedEvidenceSectionState
   @override
   void initState() {
     super.initState();
+    _indexDetections();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant AnnotatedEvidenceSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _indexDetections();
+    if (oldWidget.sessionId != widget.sessionId) {
+      _media = null;
+      _load();
+    }
+  }
+
+  void _indexDetections() {
+    _byAsset.clear();
     for (final RemoteDetection detection in widget.detections) {
       _byAsset
           .putIfAbsent(detection.assetId, () => <RemoteDetection>[])
           .add(detection);
     }
-    _load();
   }
 
   Future<void> _load() async {
@@ -63,6 +73,8 @@ class _AnnotatedEvidenceSectionState
       }
       return;
     }
+    setState(() => _error = null);
+    final sessionId = widget.sessionId;
     try {
       final rows = await retryOnceAfterUnauthorized(
           initialAuth: auth,
@@ -70,7 +82,14 @@ class _AnnotatedEvidenceSectionState
               ref.read(authControllerProvider.notifier).reconnect(),
           request: (String token) =>
               _api.sessionMedia(token, widget.sessionId));
-      if (!mounted) return;
+      final current = ref.read(authControllerProvider).valueOrNull;
+      if (!mounted ||
+          sessionId != widget.sessionId ||
+          current?.user.subjectId != auth.user.subjectId ||
+          current?.user.activeOrganizationId !=
+              auth.user.activeOrganizationId) {
+        return;
+      }
       setState(() => _media = rows);
     } on DioException {
       if (mounted) setState(() => _error = '证据图片暂时无法加载。');
@@ -79,9 +98,17 @@ class _AnnotatedEvidenceSectionState
 
   @override
   Widget build(BuildContext context) {
-    final int uncertain = widget.detections.where(_isUncertain).length;
+    ref.listen(authControllerProvider, (previous, next) {
+      if (previous?.valueOrNull?.user.activeOrganizationId !=
+              next.valueOrNull?.user.activeOrganizationId ||
+          previous?.valueOrNull?.user.subjectId !=
+              next.valueOrNull?.user.subjectId) {
+        _media = null;
+        _error = '账号已变化，请重新打开证据';
+      }
+    });
     final int total = widget.detections.length;
-    final int confident = total - uncertain;
+
     return Card(
       clipBehavior: Clip.antiAlias,
       child: Padding(
@@ -101,24 +128,13 @@ class _AnnotatedEvidenceSectionState
               ),
             ]),
             const SizedBox(height: 8),
-            Wrap(spacing: 14, children: <Widget>[
-              _LegendSwatch(color: AppColors.herdTeal, label: '高置信 $confident'),
-              _LegendSwatch(
-                  color: const Color(0xFFFF6D00), label: '待核验 $uncertain'),
-            ]),
-            if (uncertain > 0) ...<Widget>[
-              const SizedBox(height: 6),
-              Text(
-                '橙色框是模型不确定的目标（置信度低于 50%），请重点核验后再确认数量。',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
+            const Text('编号用于逐目标核验；模型分数不是准确率，所有候选均需人工复核。'),
             const SizedBox(height: 8),
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 6),
                 child:
-                    Text(_error!, style: Theme.of(context).textTheme.bodySmall),
+                    TextButton(onPressed: _load, child: Text('$_error 点击重试')),
               )
             else if (_media == null)
               const Padding(
@@ -137,29 +153,7 @@ class _AnnotatedEvidenceSectionState
     );
   }
 
-  static bool _isUncertain(RemoteDetection detection) =>
-      detection.confidence < kUncertainConfidence;
-
   static bool _isVideo(LibraryMedia media) => media.contentType == 'video/mp4';
-}
-
-class _LegendSwatch extends StatelessWidget {
-  const _LegendSwatch({required this.color, required this.label});
-  final Color color;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) =>
-      Row(mainAxisSize: MainAxisSize.min, children: <Widget>[
-        Container(
-            width: 12,
-            height: 12,
-            decoration: BoxDecoration(
-                border: Border.all(color: color, width: 3),
-                borderRadius: BorderRadius.circular(3))),
-        const SizedBox(width: 6),
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
-      ]);
 }
 
 class _AnnotatedImage extends ConsumerStatefulWidget {
@@ -188,6 +182,7 @@ class _AnnotatedImageState extends ConsumerState<_AnnotatedImage> {
   Future<void> _load() async {
     final auth = ref.read(authControllerProvider).valueOrNull;
     if (auth == null) return;
+    setState(() => _error = null);
     try {
       final Uint8List bytes = await retryOnceAfterUnauthorized(
           initialAuth: auth,
@@ -196,14 +191,19 @@ class _AnnotatedImageState extends ConsumerState<_AnnotatedImage> {
           request: (String token) => _api.content(token, widget.media.assetId));
       if (!mounted) return;
       // 先解码拿原始宽高（归一化坐标映射的基准），再触发一次重建
-      final ui.Image image = await decodeImageFromList(bytes);
-      if (mounted) {
+      final image = await decodeImageFromList(bytes);
+      final current = ref.read(authControllerProvider).valueOrNull;
+      if (mounted &&
+          current?.user.subjectId == auth.user.subjectId &&
+          current?.user.activeOrganizationId ==
+              auth.user.activeOrganizationId) {
         setState(() {
           _bytes = bytes;
           _aspect = image.width / image.height;
         });
       }
-    } on DioException {
+      image.dispose();
+    } catch (_) {
       if (mounted) setState(() => _error = '该张证据加载失败。');
     }
   }
@@ -213,7 +213,7 @@ class _AnnotatedImageState extends ConsumerState<_AnnotatedImage> {
     if (_error != null) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Text(_error!, style: Theme.of(context).textTheme.bodySmall),
+        child: TextButton(onPressed: _load, child: Text('$_error 点击重试')),
       );
     }
     final Uint8List? bytes = _bytes;
@@ -230,55 +230,158 @@ class _AnnotatedImageState extends ConsumerState<_AnnotatedImage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             AspectRatio(
-              aspectRatio: 4 / 3,
-              child: LayoutBuilder(
-                  builder: (BuildContext context, BoxConstraints constraints) {
-                final Rect fitted = _containRect(aspect, constraints);
-                return Stack(children: <Widget>[
-                  Positioned.fill(
-                      child: FittedBox(
-                          fit: BoxFit.contain, child: Image.memory(bytes))),
-                  ...widget.detections.map((RemoteDetection detection) =>
-                      _detectionBox(detection, fitted)),
-                ]);
-              }),
-            ),
+                aspectRatio: 4 / 3,
+                child: AnnotatedEvidenceViewer(
+                    bytes: bytes,
+                    aspect: aspect,
+                    detections: widget.detections)),
+            TextButton.icon(
+                onPressed: () {
+                  final auth = ref.read(authControllerProvider).valueOrNull;
+                  if (auth == null) return;
+                  Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => Consumer(builder: (context, ref, _) {
+                            final current =
+                                ref.watch(authControllerProvider).valueOrNull;
+                            final permitted = current?.user.subjectId ==
+                                    auth.user.subjectId &&
+                                current?.user.activeOrganizationId ==
+                                    auth.user.activeOrganizationId;
+                            return Scaffold(
+                                appBar: AppBar(title: const Text('原图与检测标注')),
+                                body: permitted
+                                    ? AnnotatedEvidenceViewer(
+                                        bytes: bytes,
+                                        aspect: aspect,
+                                        detections: widget.detections)
+                                    : const Center(
+                                        child: Text('账号已变化，请重新打开当前组织证据')));
+                          })));
+                },
+                icon: const Icon(Icons.fullscreen),
+                label: const Text('全屏核验')),
             const SizedBox(height: 4),
-            Text('${widget.media.position} · ${widget.detections.length} 处检测',
+            Text(
+                '${evidencePositionLabel(widget.media.position)} · ${widget.detections.length} 处检测',
                 style: Theme.of(context).textTheme.bodySmall),
           ]),
     );
   }
-
-  /// FittedBox(contain) 下图片在容器内的实际区域（居中留边）。
-  static Rect _containRect(double aspect, BoxConstraints constraints) {
-    final double boxAspect = constraints.maxWidth / constraints.maxHeight;
-    if (aspect > boxAspect) {
-      final double height = constraints.maxWidth / aspect;
-      final double top = (constraints.maxHeight - height) / 2;
-      return Rect.fromLTWH(0, top, constraints.maxWidth, height);
-    }
-    final double width = constraints.maxHeight * aspect;
-    final double left = (constraints.maxWidth - width) / 2;
-    return Rect.fromLTWH(left, 0, width, constraints.maxHeight);
-  }
-
-  Widget _detectionBox(RemoteDetection detection, Rect fitted) {
-    final bool uncertain = detection.confidence < kUncertainConfidence;
-    return Positioned(
-      left: fitted.left + detection.bbox[0] * fitted.width,
-      top: fitted.top + detection.bbox[1] * fitted.height,
-      width: (detection.bbox[2] - detection.bbox[0]) * fitted.width,
-      height: (detection.bbox[3] - detection.bbox[1]) * fitted.height,
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: uncertain ? const Color(0xFFFF6D00) : AppColors.herdTeal,
-            width: uncertain ? 3 : 1.5,
-          ),
-          borderRadius: BorderRadius.circular(4),
-        ),
-      ),
-    );
-  }
 }
+
+class AnnotatedEvidenceViewer extends StatefulWidget {
+  const AnnotatedEvidenceViewer(
+      {super.key,
+      required this.bytes,
+      required this.aspect,
+      required this.detections});
+  final Uint8List bytes;
+  final double aspect;
+  final List<RemoteDetection> detections;
+  @override
+  State<AnnotatedEvidenceViewer> createState() =>
+      _AnnotatedEvidenceViewerState();
+}
+
+class _AnnotatedEvidenceViewerState extends State<AnnotatedEvidenceViewer> {
+  final _transform = TransformationController();
+  bool _annotations = true;
+  @override
+  void dispose() {
+    _transform.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(children: [
+        Wrap(spacing: 12, children: [
+          TextButton(
+              onPressed: () => setState(() => _annotations = !_annotations),
+              child: Text(_annotations ? '查看原图' : '显示标注')),
+          TextButton(
+              onPressed: () => _transform.value = Matrix4.identity(),
+              child: const Text('重置缩放')),
+          TextButton(
+              onPressed: () => showModalBottomSheet<void>(
+                  context: context,
+                  builder: (_) => SafeArea(
+                          child: ListView.builder(
+                        itemCount: widget.detections.length,
+                        itemBuilder: (_, index) => ListTile(
+                            title: Text('目标 ${index + 1}'),
+                            subtitle: Text(
+                                '模型分数 ${(widget.detections[index].confidence * 100).toStringAsFixed(1)}% · 不代表准确率')),
+                      ))),
+              child: const Text('检测编号与分数')),
+        ]),
+        Expanded(child: LayoutBuilder(builder: (context, constraints) {
+          final fitted = evidenceContainRect(
+              widget.aspect, Size(constraints.maxWidth, constraints.maxHeight));
+          return InteractiveViewer(
+              transformationController: _transform,
+              minScale: 1,
+              maxScale: 8,
+              child: Stack(children: [
+                Positioned.fromRect(
+                    rect: fitted,
+                    child: Image.memory(widget.bytes, fit: BoxFit.fill)),
+                if (_annotations)
+                  ...widget.detections.indexed.map((entry) {
+                    final d = entry.$2;
+                    if (d.bbox.length != 4) return const SizedBox.shrink();
+                    return Positioned(
+                        left: fitted.left + d.bbox[0] * fitted.width,
+                        top: fitted.top + d.bbox[1] * fitted.height,
+                        width: (d.bbox[2] - d.bbox[0]) * fitted.width,
+                        height: (d.bbox[3] - d.bbox[1]) * fitted.height,
+                        child: Semantics(
+                            label:
+                                '目标${entry.$1 + 1}，模型分数${(d.confidence * 100).toStringAsFixed(1)}%',
+                            button: true,
+                            child: GestureDetector(
+                                onTap: () => showDialog<void>(
+                                    context: context,
+                                    builder: (_) => AlertDialog(
+                                            title: Text('目标 ${entry.$1 + 1}'),
+                                            content: Text(
+                                                '模型分数 ${(d.confidence * 100).toStringAsFixed(1)}%\n分数不代表准确率，请对照原始证据核验。'),
+                                            actions: [
+                                              TextButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(context),
+                                                  child: const Text('返回核验'))
+                                            ])),
+                                child: Container(
+                                    decoration: BoxDecoration(
+                                        border: Border.all(
+                                            color: AppColors.herdTeal,
+                                            width: 2)),
+                                    alignment: Alignment.topLeft,
+                                    child: Text('${entry.$1 + 1}',
+                                        style: const TextStyle(
+                                            backgroundColor: Colors.white,
+                                            color: AppColors.ink,
+                                            fontWeight: FontWeight.bold))))));
+                  }),
+              ]));
+        })),
+      ]);
+}
+
+Rect evidenceContainRect(double aspect, Size size) {
+  if (size.width / size.height > aspect) {
+    final width = size.height * aspect;
+    return Rect.fromLTWH((size.width - width) / 2, 0, width, size.height);
+  }
+  final height = size.width / aspect;
+  return Rect.fromLTWH(0, (size.height - height) / 2, size.width, height);
+}
+
+String evidencePositionLabel(String position) => switch (position) {
+      'single' => '单图',
+      'left' => '左侧',
+      'center' => '中间',
+      'right' => '右侧',
+      'video' => '视频',
+      _ => '原始证据'
+    };

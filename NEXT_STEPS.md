@@ -1,5 +1,12 @@
 # 下一步
 
+## 2026-10-20 当前执行顺序
+
+1. Spring test/verify均106通过/0跳过，Admin26及lint/typecheck/build通过；依据 [验证记录](docs/development/competition-verification-20261020.md) 完成固定隔离运行栈语义读回及图像坐标走查。
+2. v20 Debug及同签名Release BuildOnly已构建，移动119文件源码/产物哈希匹配；BuildOnly不可当联网候选。部署/迁移/模型身份读回后再冻结。
+3. 按 [集中验收清单](docs/development/competition-acceptance-runbook.md) 完成真机、弱网、授权实猪和三次连续彩排；填写 [成绩卡](docs/product/competition-model-scorecard.md)。保留现有草稿与签名/TLS身份。
+4. 团队核准校内赛事截止并准备授权/访谈证据；在线 Agent 按独立里程碑适配，不交管理员令牌给第三方。
+
 ## 2026-09-27 当前顺序
 
 1. 按 `AGENTS.md` 的发布优先级构建签名 Android Release，并验证实际单图 AI 候选计数；Release 签名、模型批准、候选数量与人工确认继续分别记录。

@@ -19,6 +19,7 @@ const getRoutes = [
   /^inference-jobs\/failed$/,
   /^inventory-sessions\/[^/]+$/,
   /^inventory-sessions\/[^/]+\/media$/,
+  /^inventory-sessions\/[^/]+\/versions$/,
   /^media-assets\/[^/]+\/content$/,
 ];
 

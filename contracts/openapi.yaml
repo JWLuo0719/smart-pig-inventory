@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Smart Pig Inventory Business API
-  version: 0.9.0
+  version: 0.10.0
   description: >-
     路线 B+ 的业务合同基线。所有写操作接受 X-Idempotency-Key，所有时间使用 ISO 8601；
     离线采集必须完成 package/blob/manifest/commit 后才创建正式推理任务。ROI 使用完成
@@ -444,6 +444,22 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/InventorySession'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /inventory-sessions/{sessionId}/versions:
+    get:
+      tags: [Inventory]
+      summary: 查询同一不可变更正谱系，仅当前组织管理员
+      operationId: listInventorySessionVersions
+      parameters:
+        - {name: sessionId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: beforeVersion, in: query, schema: {type: integer, minimum: 1}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 50, default: 20}}
+      responses:
+        '200':
+          description: 按版本倒序分页，不包含同栏同日的其他采集组
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InventoryVersionPage'}
         '404': {$ref: '#/components/responses/NotFound'}
   /inventory-sessions/{sessionId}/media:
     get:
@@ -1044,6 +1060,8 @@ components:
       properties:
         from: {type: string, format: date}
         to: {type: string, format: date}
+        scopeBasis: {type: string, enum: [current_enabled_pens], description: 查询时当前启用栋舍与栏舍范围，不还原历史启停。}
+        scopePenCount: {type: integer, minimum: 0}
         total:
           type: array
           description: 场级合计序列，按日期升序连续补齐。
@@ -1056,6 +1074,8 @@ components:
       required: [date, confirmed, candidate]
       properties:
         date: {type: string, format: date}
+        confirmedPenCount: {type: integer, minimum: 0, description: 参与确认合计的栏舍数；缺字段表示未知。}
+        candidatePenCount: {type: integer, minimum: 0, description: 参与候选合计的栏舍数；覆盖集合不保证与确认一致。}
         confirmed:
           type: [integer, 'null']
           minimum: 0
@@ -1095,6 +1115,27 @@ components:
         sessionId: {type: [string, 'null'], format: uuid, description: 关联会话，可跳转复核。}
         penLabel: {type: [string, 'null']}
         action: {type: [string, 'null'], description: 行动按钮文案。}
+        basis: {$ref: '#/components/schemas/InsightBasis'}
+        actionTarget: {$ref: '#/components/schemas/InsightActionTarget'}
+    InsightBasis:
+      type: object
+      required: [valueSource, value, baselineMethod, baselineValue, sampleCount, from, to, sessionIds]
+      properties:
+        valueSource: {type: string, enum: [candidate, confirmed, none]}
+        value: {type: [integer, 'null'], minimum: 0}
+        baselineMethod: {type: string, enum: [none, last_confirmed, median]}
+        baselineValue: {type: [integer, 'null'], minimum: 0}
+        sampleCount: {type: integer, minimum: 0}
+        from: {type: [string, 'null'], format: date}
+        to: {type: [string, 'null'], format: date}
+        sessionIds: {type: array, items: {type: string, format: uuid}}
+    InsightActionTarget:
+      type: object
+      required: [kind, businessDate]
+      properties:
+        kind: {type: string, enum: [session, capture, report, master_data]}
+        id: {type: [string, 'null'], format: uuid}
+        businessDate: {type: string, format: date}
     InventorySession:
       type: object
       required: [id, penId, businessDate, status, version, evidenceSessionId, detections, warnings]
@@ -1109,8 +1150,8 @@ components:
           type: string
           format: uuid
           description: 原始媒体和推理证据所属会话；更正版本不会复制或改写证据。
-        count: {type: [integer, 'null'], minimum: 0}
-        rawModelCount: {type: [integer, 'null'], minimum: 0}
+        count: {type: [integer, 'null'], minimum: 0, description: 人工确认优先的会话显示值，不能作为机器候选来源。}
+        rawModelCount: {type: [integer, 'null'], minimum: 0, description: 服务端明确的机器候选，合法零保留；null 或缺失表示未知，禁止客户端从检测框数重建。}
         inferenceSource: {type: [string, 'null'], enum: [server, device, manual, null]}
         model: {$ref: '#/components/schemas/ModelIdentity'}
         detections:
@@ -1122,6 +1163,26 @@ components:
         inferenceStatus: {type: [string, 'null'], enum: [submitted, processing, succeeded, review_required, failed, null]}
         failureCode: {type: [string, 'null'], maxLength: 128}
         failureMessage: {type: [string, 'null'], maxLength: 1000}
+    InventoryVersionPage:
+      type: object
+      required: [currentSessionId, evidenceSessionId, items, nextBeforeVersion]
+      properties:
+        currentSessionId: {type: [string, 'null'], format: uuid, description: 'Current confirmed version, or null when the lineage is unconfirmed.'}
+        evidenceSessionId: {type: string, format: uuid}
+        nextBeforeVersion: {type: [integer, 'null'], minimum: 1}
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, version, status, confirmedCount, supersedesSessionId, reason, confirmedAt]
+            properties:
+              id: {type: string, format: uuid}
+              version: {type: integer, minimum: 1}
+              status: {type: string, enum: [confirmed, superseded]}
+              confirmedCount: {type: [integer, 'null'], minimum: 0}
+              supersedesSessionId: {type: [string, 'null'], format: uuid}
+              reason: {type: [string, 'null']}
+              confirmedAt: {type: [string, 'null'], format: date-time}
     ModelIdentity:
       type: [object, 'null']
       required: [modelKey, version, checksum, adapterVersion]

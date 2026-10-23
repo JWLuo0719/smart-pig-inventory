@@ -1,0 +1,2 @@
+# Development-only JSON Schema contract validation. Not a product runtime dependency.
+jsonschema==4.23.0

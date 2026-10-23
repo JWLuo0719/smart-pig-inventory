@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:dio/dio.dart';
-import 'package:drift/drift.dart';
+import 'package:drift/drift.dart' hide isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_pig_inventory/core/auth/auth_session.dart';
@@ -26,6 +26,74 @@ void main() {
   tearDown(() async {
     await database.close();
     await sandbox.delete(recursive: true);
+  });
+
+  test('another organization cannot see, claim or retry local evidence',
+      () async {
+    final repository = DriftOutboxRepository(database);
+    expect(await repository.watch(organizationId: 'other-org').first, isEmpty);
+    expect(await repository.watchCards('other-org').first, isEmpty);
+    expect(
+        await repository.hasSynchronizableWork(
+            organizationId: 'other-org', now: now),
+        isFalse);
+    expect(
+        await repository.acquireNext(
+            organizationId: 'other-org', owner: 'other-worker', now: now),
+        isNull);
+    await expectLater(
+        repository.retryNow('client-package-id',
+            organizationId: 'other-org', now: now),
+        throwsStateError);
+    await repository.retryAuthenticationWaiting(
+        organizationId: 'other-org', now: now);
+    final gateway = _FakeUploadGateway();
+    final outcome = await UploadPackageSynchronizer(
+            api: gateway, repository: repository, reconnect: () async => null)
+        .syncNext(_auth(now, organizationId: 'other-org'),
+            leaseOwner: 'other-worker');
+    expect(outcome, UploadSyncOutcome.nothingToUpload);
+    expect(gateway.createCalls, 0);
+    final entry = await database.select(database.outboxEntries).getSingle();
+    expect(entry.state, 'queued');
+    expect(entry.leaseOwner, isNull);
+    expect(entry.attemptCount, 0);
+  });
+
+  test('refresh into another organization never replays the old package',
+      () async {
+    final gateway = _FakeUploadGateway(unauthorizedOnce: true);
+    var current = _auth(now);
+    final outcome = await UploadPackageSynchronizer(
+        api: gateway,
+        repository: DriftOutboxRepository(database),
+        currentAuth: () => current,
+        reconnect: () async =>
+            current = _auth(now, organizationId: 'other-org'),
+        clock: () => now).syncNext(_auth(now), leaseOwner: 'worker');
+    expect(outcome, UploadSyncOutcome.waitingForAuthentication);
+    expect(gateway.accessTokens, ['access']);
+    expect(gateway.createCalls, 0);
+    expect((await database.select(database.outboxEntries).getSingle()).state,
+        'waiting_authentication');
+    expect(
+        (await database.select(database.outboxEntries).getSingle()).leaseOwner,
+        isNull);
+  });
+
+  test('foreground and background workers cannot claim the same package',
+      () async {
+    final repository = DriftOutboxRepository(database);
+    final claims = await Future.wait([
+      repository.acquireNext(
+          organizationId: 'org-id', owner: 'foreground', now: now),
+      repository.acquireNext(
+          organizationId: 'org-id', owner: 'background', now: now),
+    ]);
+    expect(claims.whereType<UploadWork>().length, 1);
+    final card = (await repository.watchCards('org-id').first).single;
+    expect(card.totalAssets, 1);
+    expect(card.uploadedAssets, 0);
   });
 
   test('marks evidence synced only after a persisted commit response',
@@ -140,7 +208,8 @@ void main() {
         serverPackageId: const Value('server-package-id'),
         manifestJson: Value(original)));
     final repository = DriftOutboxRepository(database);
-    await repository.retryNow('client-package-id', now: now);
+    await repository.retryNow('client-package-id',
+        organizationId: _auth(now).user.activeOrganizationId, now: now);
     final gateway = _FakeUploadGateway(existingAssets: {'asset-id'});
     final synchronizer = UploadPackageSynchronizer(
         api: gateway,
@@ -308,7 +377,9 @@ Future<void> _replaceWithThreeViewAssets(
   }
 }
 
-AuthState _auth(DateTime now, {String accessToken = 'access'}) => AuthState(
+AuthState _auth(DateTime now,
+        {String accessToken = 'access', String organizationId = 'org-id'}) =>
+    AuthState(
       session: AuthSession(
           accessToken: accessToken,
           refreshToken: 'refresh',
@@ -317,7 +388,7 @@ AuthState _auth(DateTime now, {String accessToken = 'access'}) => AuthState(
       user: AuthenticatedUser(
           subjectId: 'subject',
           displayName: 'Operator',
-          activeOrganizationId: 'org-id',
+          activeOrganizationId: organizationId,
           activeOrganizationCode: 'O',
           activeOrganizationName: 'Org',
           roles: const <String>['OPERATOR'],

@@ -99,7 +99,8 @@ public class InventoryReviewService {
         UUID organizationId = actor.activeOrganizationId();
         actor.assertCanView(organizationId);
         LocalDate from = to.minusDays(days - 1L);
-        return assembleTrend(from, to, repository.trendByOrganization(organizationId, from, to));
+        return assembleTrend(from, to, repository.trendByOrganization(organizationId, from, to),
+                repository.enabledPenCount(organizationId));
     }
 
     /**
@@ -108,18 +109,24 @@ public class InventoryReviewService {
      * 缺采集的日期保持空值，由前端断线呈现而不是补零。
      */
     static InventoryTrend assembleTrend(LocalDate from, LocalDate to, List<JdbcInventoryReviewRepository.TrendRow> rows) {
+        return assembleTrend(from, to, rows, (int) rows.stream().map(JdbcInventoryReviewRepository.TrendRow::penId).distinct().count());
+    }
+
+    static InventoryTrend assembleTrend(LocalDate from, LocalDate to, List<JdbcInventoryReviewRepository.TrendRow> rows, int scopePenCount) {
         Map<String, int[]> totals = new LinkedHashMap<>();
         Map<UUID, Map<String, int[]>> byPen = new LinkedHashMap<>();
         Map<UUID, String> penLabels = new LinkedHashMap<>();
         for (JdbcInventoryReviewRepository.TrendRow row : rows) {
             String date = row.businessDate().toString();
-            totals.computeIfAbsent(date, ignored -> new int[2]);
+            totals.computeIfAbsent(date, ignored -> new int[4]);
             int[] day = totals.get(date);
             if ("confirmed".equals(row.status()) && row.confirmedCount() != null) {
                 day[0] += row.confirmedCount();
+                day[2]++;
             }
-            if (row.candidateCount() != null && row.candidateCount() > 0) {
+            if (row.candidateCount() != null && row.candidateCount() >= 0) {
                 day[1] += row.candidateCount();
+                day[3]++;
             }
             byPen.computeIfAbsent(row.penId(), ignored -> new LinkedHashMap<>())
                     .put(date, new int[] {row.confirmedCount() == null ? -1 : row.confirmedCount(),
@@ -133,8 +140,8 @@ public class InventoryReviewService {
         List<TrendPoint> total = axis.stream()
                 .map(date -> {
                     int[] day = totals.get(date);
-                    return day == null ? new TrendPoint(date, null, null)
-                            : new TrendPoint(date, day[0] > 0 ? day[0] : null, day[1] > 0 ? day[1] : null);
+                    return day == null ? new TrendPoint(date, null, null, 0, 0)
+                            : new TrendPoint(date, day[2] > 0 ? day[0] : null, day[3] > 0 ? day[1] : null, day[2], day[3]);
                 })
                 .toList();
         List<PenTrend> pens = byPen.entrySet().stream()
@@ -148,7 +155,7 @@ public class InventoryReviewService {
                                 })
                                 .toList()))
                 .toList();
-        return new InventoryTrend(from.toString(), to.toString(), total, pens);
+        return new InventoryTrend(from.toString(), to.toString(), total, pens, "current_enabled_pens", scopePenCount);
     }
 
     /**
@@ -159,10 +166,13 @@ public class InventoryReviewService {
      * @param total 场级合计序列（confirmed=人工确认合计，candidate=机器候选合计；缺采集为 null）
      * @param pens 分栏序列
      */
-    public record InventoryTrend(String from, String to, List<TrendPoint> total, List<PenTrend> pens) {
+    public record InventoryTrend(String from, String to, List<TrendPoint> total, List<PenTrend> pens, String scopeBasis, Integer scopePenCount) {
     }
 
-    public record TrendPoint(String date, Integer confirmed, Integer candidate) {
+    public record TrendPoint(String date, Integer confirmed, Integer candidate, Integer confirmedPenCount, Integer candidatePenCount) {
+        public TrendPoint(String date, Integer confirmed, Integer candidate) {
+            this(date, confirmed, candidate, confirmed == null ? 0 : 1, candidate == null ? 0 : 1);
+        }
     }
 
     public record PenTrend(UUID penId, String penLabel, List<TrendPoint> points) {
@@ -174,6 +184,28 @@ public class InventoryReviewService {
         actor.assertCanView(session.organizationId());
         return view(session);
     }
+
+    @Transactional(readOnly = true)
+    public VersionPage versions(UUID sessionId, Integer beforeVersion, int limit) {
+        if (limit < 1 || limit > 50 || (beforeVersion != null && beforeVersion < 1)) {
+            throw InventoryException.invalid("Invalid version page");
+        }
+        SessionRow source = repository.findSession(sessionId).orElseThrow(InventoryException::notFound);
+        actor.assertCanAudit(source.organizationId());
+        UUID evidenceId = source.evidenceSessionId() == null ? source.id() : source.evidenceSessionId();
+        List<VersionView> rows = repository.versions(source.organizationId(), source.id());
+        UUID currentId = rows.stream().filter(row -> "confirmed".equals(row.status())).map(VersionView::id)
+                .findFirst().orElse(null);
+        List<VersionView> page = rows.stream().filter(row -> beforeVersion == null || row.version() < beforeVersion)
+                .limit(limit + 1L).toList();
+        boolean more = page.size() > limit;
+        List<VersionView> items = more ? page.subList(0, limit) : page;
+        return new VersionPage(currentId, evidenceId, items, more ? items.getLast().version() : null);
+    }
+
+    public record VersionPage(UUID currentSessionId, UUID evidenceSessionId, List<VersionView> items, Integer nextBeforeVersion) {}
+    public record VersionView(UUID id, int version, String status, Integer confirmedCount, UUID supersedesSessionId,
+                              String reason, String confirmedAt) {}
 
     @Transactional(readOnly = true)
     public List<MediaEvidenceView> sessionMedia(UUID sessionId) {

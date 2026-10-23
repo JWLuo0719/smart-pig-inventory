@@ -220,35 +220,4 @@ class AppDatabase extends _$AppDatabase {
           }
         },
       );
-
-  Stream<List<OutboxEntry>> watchOutbox() => select(outboxEntries).watch();
-
-  Future<void> queuePackage({
-    required String packageId,
-    required String draftId,
-    required String idempotencyKey,
-    required String manifestJson,
-  }) async {
-    final DateTime now = DateTime.now();
-    await into(outboxEntries)
-        .insertOnConflictUpdate(OutboxEntriesCompanion.insert(
-      packageId: packageId,
-      draftId: draftId,
-      idempotencyKey: idempotencyKey,
-      manifestJson: manifestJson,
-      createdAt: now,
-      updatedAt: now,
-    ));
-  }
-
-  Future<void> markState(String packageId, String state, {String? error}) {
-    return (update(outboxEntries)
-          ..where((entry) => entry.packageId.equals(packageId)))
-        .write(
-      OutboxEntriesCompanion(
-          state: Value<String>(state),
-          error: Value<String?>(error),
-          updatedAt: Value<DateTime>(DateTime.now())),
-    );
-  }
 }

@@ -15,7 +15,13 @@ Future<T> retryOnceAfterUnauthorized<T>({
   } on DioException catch (error) {
     if (error.response?.statusCode != 401) rethrow;
     final AuthState? refreshed = await reconnect();
-    if (refreshed == null || refreshed.isOffline) rethrow;
+    if (refreshed == null ||
+        refreshed.isOffline ||
+        refreshed.user.subjectId != initialAuth.user.subjectId ||
+        refreshed.user.activeOrganizationId !=
+            initialAuth.user.activeOrganizationId) {
+      rethrow;
+    }
     return request(refreshed.session.accessToken);
   }
 }

@@ -51,7 +51,7 @@ public class AssistantInsightService {
             return new AssistantBrief(businessDate,
                     "尚未建立栏舍台账，请先在管理后台维护栋舍与栏舍。",
                     List.of(new Insight("EMPTY_MASTER_DATA", "info",
-                            "还没有可盘点的栏舍", "栏舍台账为空；任务由管理后台按栏舍创建。", null, null, "去管理后台")));
+                            "还没有可盘点的栏舍", "栏舍台账为空；任务由管理后台按栏舍创建。", null, null, "去管理后台", new Basis("none", null, "none", null, 0, null, null, List.of()), new ActionTarget("master_data", null, businessDate))));
         }
 
         List<AssistantRow> reviewRows = rows.stream()
@@ -86,7 +86,7 @@ public class AssistantInsightService {
                     pendingRows.size() == 1 ? names + " 今日尚未采集"
                             : "%d 个栏舍今日尚未采集（%s%s）".formatted(labels.size(), names, extra),
                     "在收工前补齐采集，日报才会覆盖全部栏舍。",
-                    null, null, "去采集"));
+                    null, pendingRows.size() == 1 ? penLabel(pendingRows.getFirst()) : null, "去采集"));
         }
 
         insights.addAll(riskInsights(businessDate, rows, history));
@@ -106,7 +106,32 @@ public class AssistantInsightService {
                 .formatted(businessDate, reviewRows.size(), pendingRows.size(),
                         confirmedCount, rows.size(),
                         confirmedCount > 0 ? "，存栏合计 " + totalHeads + " 头" : "");
-        return new AssistantBrief(businessDate, brief, List.copyOf(insights));
+        return new AssistantBrief(businessDate, brief, insights.stream().map(insight -> {
+            AssistantRow row = rows.stream().filter(r -> insight.sessionId() != null && insight.sessionId().equals(r.sessionId())
+                    || insight.penLabel() != null && insight.penLabel().equals(penLabel(r))).findFirst().orElse(null);
+            String kind = insight.sessionId() != null ? "session" : switch (insight.type()) {
+                case "PENDING_CAPTURE", "CAPTURE_GAP" -> "capture";
+                case "EMPTY_MASTER_DATA" -> "master_data";
+                default -> "report";
+            };
+            UUID target = "session".equals(kind) ? insight.sessionId() : row == null ? null : row.penId();
+            List<PenHistoryRow> evidence = row == null ? List.of() : history.stream().filter(h -> h.penId().equals(row.penId())).toList();
+            boolean median = "RISK_CANDIDATE".equals(insight.type()) || "BASELINE_SHIFT".equals(insight.type());
+            Integer value = row == null ? null : "confirmed".equals(row.status()) ? row.confirmedCount() : row.candidateCount();
+            Basis basis = new Basis(row == null || value == null ? "none" : "confirmed".equals(row.status()) ? "confirmed" : "candidate",
+                    value, median ? "median" : row != null && row.lastConfirmedCount() != null ? "last_confirmed" : "none",
+                    median && !evidence.isEmpty() ? Integer.valueOf(median(evidence.stream().map(PenHistoryRow::confirmedCount).toList())) : row == null ? null : row.lastConfirmedCount(),
+                    median ? evidence.size() : row != null && row.lastConfirmedCount() != null ? 1 : 0,
+                    median ? businessDate.minusDays(7) : row == null ? null : row.lastConfirmedDate(),
+                    median ? businessDate.minusDays(1) : row == null ? null : row.lastConfirmedDate(),
+                    row == null || row.sessionId() == null ? List.of() : List.of(row.sessionId()));
+            if ("DAY_SUMMARY".equals(insight.type())) {
+                basis = new Basis("confirmed", totalHeads, "none", null, (int) confirmedCount, businessDate, businessDate,
+                        rows.stream().filter(r -> "confirmed".equals(r.status()) && r.sessionId() != null).map(AssistantRow::sessionId).toList());
+            }
+            return new Insight(insight.type(), insight.severity(), insight.title(), insight.detail(), insight.sessionId(),
+                    insight.penLabel(), insight.action(), basis, new ActionTarget(kind, target, businessDate));
+        }).toList());
     }
 
     /**
@@ -147,7 +172,7 @@ public class AssistantInsightService {
             insights.add(new Insight(drop ? "RISK_CANDIDATE" : "BASELINE_SHIFT", drop ? "action" : "info",
                     "%s 数量较基线%s %d%%".formatted(penLabel(row), drop ? "下降" : "上升", pct),
                     "今日 %d 头，近 7 日中位 %d 头（%d 次确认）。%s".formatted(today, baseline, penHistory.size(),
-                            drop ? "数量下降属健康风险候选信号，请现场核实转栏、出栏或异常；系统仅提示候选，不构成诊断。"
+                            drop ? "数量变化待核实；请现场核实转栏、出栏、漏检或其他异常，不构成诊断。"
                                     : "数量上升请核实是否进猪或重复计数。"),
                     row.sessionId(), penLabel(row), drop ? "去复核" : "查看"));
         }
@@ -165,9 +190,9 @@ public class AssistantInsightService {
     }
 
     private static Insight reviewInsight(AssistantRow row) {
-        Integer candidate = row.candidateCount() != null ? row.candidateCount() : row.detectionCount();
+        Integer candidate = row.candidateCount();
         String label = penLabel(row);
-        if (candidate == null || candidate == 0) {
+        if (candidate == null) {
             String cause = "failed".equals(row.inferenceStatus()) && row.failureCode() != null
                     ? "自动清点失败（%s）".formatted(row.failureCode())
                     : "未产生候选数量";
@@ -194,8 +219,8 @@ public class AssistantInsightService {
     }
 
     private static String biggestChangeDetail(AssistantRow row) {
-        Integer candidate = row.candidateCount() != null ? row.candidateCount() : row.detectionCount();
-        if (candidate != null && candidate > 0 && row.lastConfirmedCount() != null) {
+        Integer candidate = row.candidateCount();
+        if (candidate != null && candidate >= 0 && row.lastConfirmedCount() != null) {
             int delta = candidate - row.lastConfirmedCount();
             if (delta != 0) {
                 return "候选 %d 头，比上次%s%+d".formatted(candidate,
@@ -203,11 +228,11 @@ public class AssistantInsightService {
                         delta);
             }
         }
-        return "该栏候选数量变化最值得关注";
+        return "请核验本栏原始证据，候选不足时人工清点";
     }
 
     private static int reviewWeight(AssistantRow row) {
-        Integer candidate = row.candidateCount() != null ? row.candidateCount() : row.detectionCount();
+        Integer candidate = row.candidateCount();
         if (candidate == null || row.lastConfirmedCount() == null || row.lastConfirmedCount() == 0) {
             return 0;
         }
@@ -241,6 +266,12 @@ public class AssistantInsightService {
      * @param action 行动按钮文案
      */
     public record Insight(String type, String severity, String title, String detail,
-                          UUID sessionId, String penLabel, String action) {
+                          UUID sessionId, String penLabel, String action, Basis basis, ActionTarget actionTarget) {
+        public Insight(String type, String severity, String title, String detail, UUID sessionId, String penLabel, String action) {
+            this(type, severity, title, detail, sessionId, penLabel, action, null, null);
+        }
     }
+    public record Basis(String valueSource, Integer value, String baselineMethod, Integer baselineValue, int sampleCount,
+                        LocalDate from, LocalDate to, List<UUID> sessionIds) {}
+    public record ActionTarget(String kind, UUID id, LocalDate businessDate) {}
 }

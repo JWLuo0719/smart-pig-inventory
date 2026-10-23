@@ -92,7 +92,8 @@ class InventoryBrowseApi {
 /// 缺采集的日期 confirmed/candidate 为 null（不补零，避免误导趋势）。
 class RemoteTrend {
   RemoteTrend.fromJson(Map<String, dynamic> body)
-      : from = body['from'] as String,
+      : scopePenCount = body['scopePenCount'] as int?,
+        from = body['from'] as String,
         to = body['to'] as String,
         total = (body['total'] as List)
             .map((e) => RemoteTrendPoint.fromJson(e as Map<String, dynamic>))
@@ -100,6 +101,7 @@ class RemoteTrend {
         pens = (body['pens'] as List)
             .map((e) => RemotePenTrend.fromJson(e as Map<String, dynamic>))
             .toList();
+  final int? scopePenCount;
   final String from, to;
   final List<RemoteTrendPoint> total;
   final List<RemotePenTrend> pens;
@@ -122,9 +124,11 @@ class RemoteTrendPoint {
   RemoteTrendPoint.fromJson(Map<String, dynamic> value)
       : date = value['date'] as String,
         confirmed = value['confirmed'] as int?,
-        candidate = value['candidate'] as int?;
+        candidate = value['candidate'] as int?,
+        confirmedPenCount = value['confirmedPenCount'] as int?,
+        candidatePenCount = value['candidatePenCount'] as int?;
   final String date;
-  final int? confirmed, candidate;
+  final int? confirmed, candidate, confirmedPenCount, candidatePenCount;
 }
 
 class RemotePenTrend {

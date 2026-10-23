@@ -45,6 +45,17 @@ class InventoryReviewServiceTest {
     }
 
     @Test
+    void versionHistoryRequiresAuditPermissionAndDoesNotInventAConfirmedVersion() {
+        when(repository.findSession(sessionId)).thenReturn(Optional.of(session("review_required", null, null, null)));
+        when(repository.versions(organizationId, sessionId)).thenReturn(List.of());
+        var page = service.versions(sessionId, null, 20);
+        verify(actor).assertCanAudit(organizationId);
+        assertThat(page.currentSessionId()).isNull();
+        assertThat(page.items()).isEmpty();
+        assertThatThrownBy(() -> service.versions(sessionId, null, 51)).isInstanceOf(InventoryException.class);
+    }
+
+    @Test
     void manualConfirmationLocksEvidenceAndCreatesAnAuditEvent() {
         UUID idempotencyKey = UUID.randomUUID();
         SessionRow review = session("review_required", 7, null, null);

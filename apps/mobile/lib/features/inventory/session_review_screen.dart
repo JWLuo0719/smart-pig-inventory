@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
+import 'inventory_revision.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -26,22 +28,74 @@ class SessionReviewScreen extends ConsumerStatefulWidget {
       _SessionReviewScreenState();
 }
 
-class _SessionReviewScreenState extends ConsumerState<SessionReviewScreen> {
+class _SessionReviewScreenState extends ConsumerState<SessionReviewScreen>
+    with WidgetsBindingObserver
+    implements RouteAware {
   final _countController = TextEditingController();
   final _reasonController = TextEditingController();
   RemoteInventorySession? _session;
   String? _error;
   bool _loading = true;
   bool _submitting = false;
+  bool _reading = false;
+  Timer? _poll;
+  DateTime? _pollUntil;
+  DateTime? _lastRead;
+  int _generation = 0;
+  String? _intentKey;
+  String? _intent;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant SessionReviewScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.sessionId == widget.sessionId) return;
+    _generation++;
+    _poll?.cancel();
+    _pollUntil = null;
+    _session = null;
+    _lastRead = null;
+    _countController.clear();
+    _reasonController.clear();
+    unawaited(_load(restart: true));
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) inventoryRouteObserver.subscribe(this, route);
+  }
+
+  @override
+  void didPush() {}
+  @override
+  void didPop() {
+    _poll?.cancel();
+  }
+
+  @override
+  void didPushNext() {
+    _poll?.cancel();
+  }
+
+  @override
+  void didPopNext() {
     _load();
   }
 
   @override
   void dispose() {
+    _poll?.cancel();
+    inventoryRouteObserver.unsubscribe(this);
+    _generation++;
+    WidgetsBinding.instance.removeObserver(this);
     _countController.dispose();
     _reasonController.dispose();
     super.dispose();
@@ -55,52 +109,124 @@ class _SessionReviewScreenState extends ConsumerState<SessionReviewScreen> {
             <String>['REVIEWER', 'FARM_ADMIN', 'SYSTEM_ADMIN'].contains(role));
   }
 
-  Future<void> _load() async {
-    final auth = ref.read(authControllerProvider).valueOrNull;
-    if (auth == null || auth.isOffline) {
-      setState(() {
-        _loading = false;
-        _error = '离线时仅保留本机证据；连接服务器后才能读取复核结果。';
-      });
+  String _identity(AuthState auth) =>
+      '${auth.user.subjectId}/${auth.user.activeOrganizationId}';
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _poll?.cancel();
+    if (state == AppLifecycleState.resumed) _load();
+  }
+
+  void _schedulePoll() {
+    _poll?.cancel();
+    if (!mounted ||
+        _submitting ||
+        !['submitted', 'processing'].contains(_session?.status)) {
       return;
     }
-    setState(() {
-      _loading = true;
-      _error = null;
+    final now = ref.read(inventoryClockProvider)();
+    _pollUntil ??= now.add(const Duration(seconds: 60));
+    if (!now.isBefore(_pollUntil!)) return;
+    _poll = Timer(const Duration(seconds: 3), () {
+      if (mounted &&
+          ModalRoute.of(context)?.isCurrent == true &&
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+        _load();
+      }
     });
+  }
+
+  Future<void> _load({bool restart = false}) async {
+    if (_reading || _submitting) return;
+    if (restart) _pollUntil = null;
+    final auth = ref.read(authControllerProvider).valueOrNull;
+    if (auth == null || auth.isOffline) {
+      _poll?.cancel();
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = '离线时仅保留本机证据；联网后可重新读取。';
+        });
+      }
+      return;
+    }
+    final generation = ++_generation;
+    final sessionId = widget.sessionId;
+    final identity = _identity(auth);
+    _reading = true;
+    if (mounted) {
+      setState(() {
+        _loading = _session == null;
+        _error = null;
+      });
+    }
     try {
-      final RemoteInventorySession session = await _readSession(auth);
-      if (!mounted) return;
+      final session = await _readSession(auth, sessionId);
+      final current = ref.read(authControllerProvider).valueOrNull;
+      if (!mounted ||
+          generation != _generation ||
+          sessionId != widget.sessionId ||
+          current == null ||
+          identity != _identity(current)) {
+        return;
+      }
+      final previous = _session;
       setState(() {
         _session = session;
-        _countController.text = session.count?.toString() ?? '';
         _loading = false;
+        _lastRead = DateTime.now();
       });
+      if (previous != null &&
+          ['confirmed', 'superseded'].contains(session.status) &&
+          (previous.status != session.status ||
+              previous.version != session.version)) {
+        ref.read(inventoryRevisionProvider.notifier).state++;
+      }
+      _schedulePoll();
     } on DioException catch (error) {
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
+      _poll?.cancel();
       setState(() {
         _loading = false;
         _error = _safeError(error);
       });
+    } finally {
+      _reading = false;
+      if (mounted && generation != _generation) unawaited(_load(restart: true));
     }
   }
 
   Future<void> _confirm() async {
     final auth = ref.read(authControllerProvider).valueOrNull;
     final int? count = int.tryParse(_countController.text.trim());
-    if (auth == null || auth.isOffline || count == null || count < 0) {
+    if (auth == null ||
+        auth.isOffline ||
+        count == null ||
+        count < 0 ||
+        count > 2147483647) {
       _show('请输入不小于 0 的确认数量，并保持联网。');
       return;
     }
     final RemoteInventorySession? current = _session;
-    final String reason = _reasonController.text.trim();
+    final String reason =
+        _reasonController.text.trim().replaceAll(RegExp(r'\s+'), ' ');
     if ((current?.rawModelCount == null || current!.rawModelCount != count) &&
         reason.length < 8) {
       _show('人工确认或修改候选数量时，请填写至少 8 个字符的原因。');
       return;
     }
     setState(() => _submitting = true);
-    final String idempotencyKey = const Uuid().v4();
+    _generation++; // Invalidate a manual read already in flight before confirming.
+    final generation = _generation;
+    final sessionId = widget.sessionId;
+    _poll?.cancel();
+    final intent = '${_identity(auth)}/$sessionId/$count/$reason';
+    if (_intent != intent) {
+      _intent = intent;
+      _intentKey = const Uuid().v4();
+    }
+    final String idempotencyKey = _intentKey!;
     try {
       final RemoteInventorySession confirmed = await retryOnceAfterUnauthorized(
         initialAuth: auth,
@@ -108,31 +234,67 @@ class _SessionReviewScreenState extends ConsumerState<SessionReviewScreen> {
         request: (String accessToken) =>
             ref.read(inventoryRemoteApiProvider).confirm(
                   accessToken: accessToken,
-                  sessionId: widget.sessionId,
+                  sessionId: sessionId,
                   idempotencyKey: idempotencyKey,
                   confirmedCount: count,
                   reason: reason.isEmpty ? null : reason,
                 ),
       );
-      if (!mounted) return;
+      if (!mounted ||
+          generation != _generation ||
+          sessionId != widget.sessionId) {
+        return;
+      }
+      final currentAuth = ref.read(authControllerProvider).valueOrNull;
+      if (currentAuth == null || _identity(currentAuth) != _identity(auth)) {
+        return;
+      }
       setState(() => _session = confirmed);
+      ref.read(inventoryRevisionProvider.notifier).state++;
       _show('已确认数量，引用原图已锁定并写入审计记录。');
     } on DioException catch (error) {
-      if (mounted) _show(_safeError(error));
+      if (mounted && generation == _generation) _show(_safeError(error));
     } finally {
-      if (mounted) setState(() => _submitting = false);
+      if (mounted) {
+        setState(() => _submitting = false);
+        if (generation != _generation) unawaited(_load(restart: true));
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(authControllerProvider, (previous, next) {
+      final before = previous?.valueOrNull;
+      final after = next.valueOrNull;
+      if (before?.user.subjectId != after?.user.subjectId ||
+          before?.user.activeOrganizationId !=
+              after?.user.activeOrganizationId) {
+        _generation++;
+        _poll?.cancel();
+        _session = null;
+        _countController.clear();
+        _reasonController.clear();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _load(restart: true);
+        });
+      }
+    });
     return Scaffold(
-      appBar: AppBar(title: const Text('盘点复核')),
+      appBar: AppBar(title: const Text('盘点复核'), actions: [
+        IconButton(
+            tooltip: '刷新结果',
+            onPressed: _submitting ? null : () => _load(restart: true),
+            icon: const Icon(Icons.refresh))
+      ]),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? _ErrorState(message: _error!, onRetry: _load)
-              : _body(context, _session!),
+              ? _ErrorState(
+                  message: _error!, onRetry: () => _load(restart: true))
+              : _session == null
+                  ? const Center(child: Text('请重新读取当前账号的会话'))
+                  : _body(context, _session!),
     );
   }
 
@@ -141,6 +303,8 @@ class _SessionReviewScreenState extends ConsumerState<SessionReviewScreen> {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: <Widget>[
+        if (_lastRead != null) Text('最近读取：${_lastRead!.toLocal()}'),
+        if (_error != null) Text(_error!),
         Text('业务日期 ${session.businessDate} · 版本 v${session.version}',
             style: Theme.of(context).textTheme.titleMedium),
         if (session.supersedesSessionId != null) ...<Widget>[
@@ -159,7 +323,11 @@ class _SessionReviewScreenState extends ConsumerState<SessionReviewScreen> {
               sessionId: session.evidenceSessionId ?? session.id,
               detections: session.detections),
           const SizedBox(height: 12),
-          DensityHeatmapCard(detections: session.detections),
+          ...session.detections.map((d) => d.assetId).toSet().map((assetId) =>
+              DensityHeatmapCard(
+                  detections: session.detections
+                      .where((d) => d.assetId == assetId)
+                      .toList())),
         ],
         ServerGalleryScreen(
             key: ValueKey('${session.id}-${session.status}'),
@@ -192,23 +360,23 @@ class _SessionReviewScreenState extends ConsumerState<SessionReviewScreen> {
           Text('复核说明', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           if (session.warnings.isEmpty)
-            const Text(
-                '自动计数已安全停用：服务器没有返回可用候选数量。请核验原始证据后人工输入数量；确认会锁定引用原图并写入审计记录。')
+            Text(session.rawModelCount == null
+                ? '服务器尚无可用候选数量；请核验原始证据后人工清点。确认会锁定引用证据并写入审计。'
+                : '机器候选仅供核验；确认数量须由复核员对照原始证据后填写。')
           else
             ...session.warnings.map((String warning) => Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Text('• $warning'),
                 )),
         ],
-        if (session.detections.isNotEmpty &&
+        if (session.rawModelCount != null &&
             session.requiresReview) ...<Widget>[
           const SizedBox(height: 16),
           _AiSuggestionCard(
-            detections: session.detections,
+            candidateCount: session.rawModelCount!,
             onApply: editable
                 ? () => setState(() {
-                      _countController.text =
-                          session.detections.length.toString();
+                      _countController.text = session.rawModelCount.toString();
                     })
                 : null,
           ),
@@ -248,14 +416,15 @@ class _SessionReviewScreenState extends ConsumerState<SessionReviewScreen> {
     );
   }
 
-  Future<RemoteInventorySession> _readSession(AuthState auth) =>
+  Future<RemoteInventorySession> _readSession(
+          AuthState auth, String sessionId) =>
       retryOnceAfterUnauthorized(
         initialAuth: auth,
         reconnect: () => ref.read(authControllerProvider.notifier).reconnect(),
         request: (String accessToken) =>
             ref.read(inventoryRemoteApiProvider).session(
                   accessToken: accessToken,
-                  sessionId: widget.sessionId,
+                  sessionId: sessionId,
                 ),
       );
 
@@ -279,7 +448,12 @@ class _StatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool confirmed = session.confirmed;
     final Color color = confirmed ? AppColors.herdTeal : AppColors.review;
-    final String label = confirmed ? '已确认并锁定' : '等待人工复核';
+    final String label = sessionStatusLabel(session.status);
+    final value = ['confirmed', 'superseded'].contains(session.status)
+        ? session.count
+        : session.status == 'review_required'
+            ? session.rawModelCount
+            : null;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -289,10 +463,10 @@ class _StatusCard extends StatelessWidget {
               Text(label,
                   style: TextStyle(color: color, fontWeight: FontWeight.w800)),
               const SizedBox(height: 8),
-              if (session.count == null)
-                const Text('服务器未返回可用候选数量')
+              if (value == null)
+                const Text('尚无可用于确认的数量；可核验原始证据或刷新状态')
               else
-                Text('${session.count} 头',
+                Text('$value 头',
                     style: Theme.of(context).textTheme.displaySmall),
               if (confirmed &&
                   session.rawModelCount != null &&
@@ -308,16 +482,12 @@ class _StatusCard extends StatelessWidget {
 }
 
 class _AiSuggestionCard extends StatelessWidget {
-  const _AiSuggestionCard({required this.detections, this.onApply});
-  final List<RemoteDetection> detections;
+  const _AiSuggestionCard({required this.candidateCount, this.onApply});
+  final int candidateCount;
   final VoidCallback? onApply;
 
   @override
   Widget build(BuildContext context) {
-    final int uncertain = detections
-        .where((RemoteDetection d) => d.confidence < kUncertainConfidence)
-        .length;
-    final int confident = detections.length - uncertain;
     return Card(
       color: AppColors.barnBlue.withValues(alpha: 0.06),
       child: Padding(
@@ -328,15 +498,16 @@ class _AiSuggestionCard extends StatelessWidget {
             Row(children: <Widget>[
               const Text('🤖', style: TextStyle(fontSize: 17)),
               const SizedBox(width: 8),
-              Text('AI 建议数量：${detections.length} 头',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w800)),
+              Expanded(
+                  child: Text('AI 建议数量：$candidateCount 头',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w800))),
             ]),
             const SizedBox(height: 6),
             Text(
-                '高置信 $confident 头 · 待核验 $uncertain 头（对应证据图中橙色框）。'
+                '这是服务端返回的候选，模型分数不代表准确率。'
                 '请对照标注核验后再确认；如与实际不符，直接修改数量即可。',
                 style: Theme.of(context).textTheme.bodySmall),
             if (onApply != null) ...<Widget>[
@@ -344,7 +515,7 @@ class _AiSuggestionCard extends StatelessWidget {
               OutlinedButton.icon(
                 onPressed: onApply,
                 icon: const Icon(Icons.edit, size: 18),
-                label: Text('带入建议数量 ${detections.length}'),
+                label: Text('带入建议数量 $candidateCount'),
               ),
             ],
           ],
@@ -371,3 +542,13 @@ class _ErrorState extends StatelessWidget {
         ),
       );
 }
+
+String sessionStatusLabel(String status) => switch (status) {
+      'draft' => '草稿',
+      'submitted' => '已提交，等待处理',
+      'processing' => '服务器处理中',
+      'review_required' => '等待人工复核',
+      'confirmed' => '已确认并锁定',
+      'superseded' => '历史版本，已被替代',
+      _ => '状态未知，请刷新核实',
+    };

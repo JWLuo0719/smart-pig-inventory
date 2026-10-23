@@ -26,6 +26,7 @@ final authControllerProvider =
 class AuthController extends AsyncNotifier<AuthState?> {
   static const Duration _offlineSessionLimit = Duration(days: 7);
   Future<AuthState?>? _reconnectInFlight;
+  int _identityGeneration = 0;
 
   AuthSessionRepository get _sessions =>
       ref.read(authSessionRepositoryProvider);
@@ -38,21 +39,24 @@ class AuthController extends AsyncNotifier<AuthState?> {
 
   Future<void> login(
       {required String username, required String password}) async {
+    final generation = ++_identityGeneration;
     state = const AsyncLoading<AuthState?>();
-    state = await AsyncValue.guard(() async {
+    final result = await AsyncValue.guard(() async {
       final AuthSession session =
           await _api.login(username: username, password: password);
       try {
         final AuthenticatedUser user =
             await _api.currentUser(session.accessToken);
+        if (generation != _identityGeneration) return null;
         await _sessions.save(session);
         await _contexts.save(user);
         return AuthState(session: session, user: user, isOffline: false);
       } catch (_) {
-        await _sessions.clear();
+        if (generation == _identityGeneration) await _sessions.clear();
         rethrow;
       }
     });
+    if (generation == _identityGeneration) state = result;
   }
 
   /// Re-checks a locally restored offline session after connectivity returns.
@@ -72,27 +76,47 @@ class AuthController extends AsyncNotifier<AuthState?> {
 
   Future<AuthState?> _reconnectInternal() async {
     final AuthState? current = state.valueOrNull;
+    final generation = _identityGeneration;
     if (current == null) return null;
     try {
-      final AuthState verified = await _verify(current.session);
+      final user = await _api.currentUser(current.session.accessToken);
+      if (generation != _identityGeneration ||
+          user.subjectId != current.user.subjectId ||
+          user.activeOrganizationId != current.user.activeOrganizationId) {
+        return null;
+      }
+      await _contexts.save(user);
+      if (generation != _identityGeneration) return null;
+      final verified =
+          AuthState(session: current.session, user: user, isOffline: false);
       state = AsyncData<AuthState?>(verified);
       return verified;
     } on DioException catch (error) {
+      if (generation != _identityGeneration) return null;
       if (_isUnauthorized(error)) {
         try {
           final AuthSession refreshed =
               await _api.refresh(current.session.refreshToken);
           final AuthenticatedUser user =
               await _api.currentUser(refreshed.accessToken);
+          if (generation != _identityGeneration ||
+              user.subjectId != current.user.subjectId ||
+              user.activeOrganizationId != current.user.activeOrganizationId) {
+            return null;
+          }
           await _sessions.save(refreshed);
+          if (generation != _identityGeneration) return null;
           await _contexts.save(user);
+          if (generation != _identityGeneration) return null;
           final AuthState refreshedState =
               AuthState(session: refreshed, user: user, isOffline: false);
           state = AsyncData<AuthState?>(refreshedState);
           return refreshedState;
         } on DioException catch (refreshError) {
+          if (generation != _identityGeneration) return null;
           if (_isNetworkFailure(refreshError)) {
             final AuthState? offline = await _offlineFallback(current.session);
+            if (generation != _identityGeneration) return null;
             state = AsyncData<AuthState?>(offline);
             return offline;
           }
@@ -103,6 +127,7 @@ class AuthController extends AsyncNotifier<AuthState?> {
       }
       if (_isNetworkFailure(error)) {
         final AuthState? offline = await _offlineFallback(current.session);
+        if (generation != _identityGeneration) return null;
         state = AsyncData<AuthState?>(offline);
         return offline;
       }
@@ -111,7 +136,9 @@ class AuthController extends AsyncNotifier<AuthState?> {
   }
 
   Future<void> logout() async {
+    final generation = ++_identityGeneration;
     final AuthState? current = state.valueOrNull;
+    state = const AsyncData<AuthState?>(null);
     try {
       if (current != null && !current.isOffline) {
         await _api.logout(
@@ -119,9 +146,15 @@ class AuthController extends AsyncNotifier<AuthState?> {
             refreshToken: current.session.refreshToken);
       }
     } finally {
-      await _sessions.clear();
-      await _contexts.clear();
-      state = const AsyncData<AuthState?>(null);
+      if (generation == _identityGeneration) {
+        await _sessions.clear();
+        if (generation == _identityGeneration) {
+          await _contexts.clear();
+          if (generation == _identityGeneration) {
+            state = const AsyncData<AuthState?>(null);
+          }
+        }
+      }
     }
   }
 

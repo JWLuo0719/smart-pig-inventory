@@ -9,18 +9,25 @@ class AuthContextRepository {
   AuthContextRepository(this._database);
   final AppDatabase _database;
 
-  Future<void> save(AuthenticatedUser user) =>
-      _database.into(_database.authContexts).insertOnConflictUpdate(
-            AuthContextsCompanion.insert(
-              subjectId: user.subjectId,
-              displayName: user.displayName,
-              activeOrganizationId: user.activeOrganizationId,
-              activeOrganizationCode: user.activeOrganizationCode,
-              activeOrganizationName: user.activeOrganizationName,
-              rolesJson: jsonEncode(user.roles),
-              lastVerifiedAt: user.lastVerifiedAt.toUtc(),
-            ),
-          );
+  // This is the current verified login cache, not an identity history.
+  // SQLite timestamps have second precision: sorting two fast logins by time
+  // alone can otherwise recover the previous organization in a worker.
+  Future<void> save(AuthenticatedUser user) => _database.transaction(() async {
+        await (_database.delete(_database.authContexts)
+              ..where((row) => row.subjectId.equals(user.subjectId).not()))
+            .go();
+        await _database.into(_database.authContexts).insertOnConflictUpdate(
+              AuthContextsCompanion.insert(
+                subjectId: user.subjectId,
+                displayName: user.displayName,
+                activeOrganizationId: user.activeOrganizationId,
+                activeOrganizationCode: user.activeOrganizationCode,
+                activeOrganizationName: user.activeOrganizationName,
+                rolesJson: jsonEncode(user.roles),
+                lastVerifiedAt: user.lastVerifiedAt.toUtc(),
+              ),
+            );
+      });
 
   Future<AuthenticatedUser?> readLatest() async {
     final AuthContext? context = await (_database.select(_database.authContexts)

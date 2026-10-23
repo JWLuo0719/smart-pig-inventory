@@ -93,6 +93,22 @@ class InventoryCorrectionIntegrationTest {
                 "SELECT COUNT(*) FROM audit_event WHERE organization_id = ? AND action = 'inventory.corrected'",
                 Integer.class, bytes(organizationId))).isEqualTo(1);
 
+        // Another collection on the same pen/day is not a correction ancestor.
+        UUID unrelated = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO inventory_session
+                  (id, pen_id, business_date, status, candidate_count, confirmed_count, version, created_by)
+                VALUES (?, ?, ?, 'superseded', 88, 88, 99, 'synthetic')
+                """, bytes(unrelated), bytes(penId), businessDate);
+        assertThat(service.versions(sourceSessionId, null, 50).items())
+                .extracting(InventoryReviewService.VersionView::id).doesNotContain(unrelated);
+        var versions = service.versions(sourceSessionId, null, 1);
+        assertThat(versions.currentSessionId()).isEqualTo(created.id());
+        assertThat(versions.items()).singleElement().satisfies(v -> assertThat(v.id()).isEqualTo(created.id()));
+        assertThat(versions.nextBeforeVersion()).isEqualTo(2);
+        assertThat(service.versions(created.id(), 2, 20).items()).singleElement()
+                .satisfies(v -> assertThat(v.id()).isEqualTo(sourceSessionId));
+
         assertThatThrownBy(() -> service.correct(sourceSessionId, 13,
                 "另一项更正意图不得复用旧版本", idempotencyKey, "corr-3"))
                 .isInstanceOf(InventoryException.class)

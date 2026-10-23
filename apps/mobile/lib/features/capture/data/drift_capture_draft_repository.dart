@@ -4,7 +4,8 @@ import '../../../core/storage/app_database.dart';
 import '../domain/capture_draft_repository.dart';
 
 class DriftCaptureDraftRepository implements CaptureDraftRepository {
-  DriftCaptureDraftRepository(this.database);
+  DriftCaptureDraftRepository(this.database, {this.replaceDraftId});
+  final String? replaceDraftId;
 
   final AppDatabase database;
 
@@ -48,6 +49,7 @@ class DriftCaptureDraftRepository implements CaptureDraftRepository {
     required String organizationId,
     required String penId,
     required DateTime businessDate,
+    String? draftId,
   }) async {
     final DateTime normalizedBusinessDate = DateTime.utc(
       businessDate.year,
@@ -58,6 +60,9 @@ class DriftCaptureDraftRepository implements CaptureDraftRepository {
           ..where((entry) =>
               entry.organizationId.equals(organizationId) &
               entry.penId.equals(penId) &
+              (draftId == null
+                  ? const Constant(true)
+                  : entry.id.equals(draftId)) &
               entry.businessDate.equals(normalizedBusinessDate) &
               entry.state.isIn(<String>['draft', 'queued']))
           ..orderBy(<OrderingTerm Function(CaptureDrafts)>[
@@ -116,6 +121,25 @@ class DriftCaptureDraftRepository implements CaptureDraftRepository {
     required DateTime now,
   }) {
     return database.transaction(() async {
+      if (replaceDraftId != null) {
+        final old = await (database.select(database.captureDrafts)
+              ..where((r) => r.id.equals(replaceDraftId!)))
+            .getSingle();
+        final queued = await (database.select(database.outboxEntries)
+              ..where((r) => r.draftId.equals(old.id)))
+            .get();
+        if (old.organizationId != organizationId ||
+            old.penId != penId ||
+            !old.businessDate.isAtSameMomentAs(businessDate) ||
+            old.state != 'draft' ||
+            queued.isNotEmpty) {
+          throw StateError('只有当前组织尚未入队的草稿可重新采集');
+        }
+        await (database.update(database.captureDrafts)
+              ..where((r) => r.id.equals(old.id)))
+            .write(CaptureDraftsCompanion(
+                state: const Value('abandoned'), updatedAt: Value(now)));
+      }
       await database.into(database.captureDrafts).insert(
             CaptureDraftsCompanion.insert(
               id: draftId,

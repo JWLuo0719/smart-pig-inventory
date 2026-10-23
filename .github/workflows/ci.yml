@@ -102,6 +102,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r scripts/requirements-contracts.txt
+      - run: python scripts/test_assistant_tool_contracts.py
       - run: cp .env.example .env
       - run: docker compose config --quiet
       - run: docker run --rm --network none --entrypoint /bin/promtool -v "$PWD/infra/monitoring:/rules:ro" -w /rules prom/prometheus:v3.5.0 test rules business-rules.test.yml

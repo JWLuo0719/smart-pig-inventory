@@ -12,12 +12,12 @@ import '../../../core/network/upload_api.dart';
 import '../data/drift_outbox_repository.dart';
 
 final uploadRemoteApiProvider = Provider<UploadRemoteApi>(
-  (ref) => UploadRemoteApi(baseUrl: ref.watch(apiBaseUrlProvider)),
-);
+    (ref) => UploadRemoteApi(baseUrl: ref.watch(apiBaseUrlProvider)));
 final uploadPackageSynchronizerProvider = Provider<UploadPackageSynchronizer>(
   (ref) => UploadPackageSynchronizer(
     api: ref.watch(uploadRemoteApiProvider),
     repository: ref.watch(outboxRepositoryProvider),
+    currentAuth: () => ref.read(authControllerProvider).valueOrNull,
     reconnect: () => ref.read(authControllerProvider.notifier).reconnect(),
   ),
 );
@@ -27,24 +27,35 @@ class UploadPackageSynchronizer {
     required UploadRemoteGateway api,
     required DriftOutboxRepository repository,
     required Future<AuthState?> Function() reconnect,
+    AuthState? Function()? currentAuth,
+    Future<bool> Function(AuthState)? identityIsCurrent,
     DateTime Function()? clock,
     Random? random,
   })  : _api = api,
         _repository = repository,
         _reconnect = reconnect,
+        _currentAuth = currentAuth,
+        _identityIsCurrent = identityIsCurrent,
         _clock = clock ?? (() => DateTime.now().toUtc()),
         _random = random ?? Random.secure();
 
   final UploadRemoteGateway _api;
   final DriftOutboxRepository _repository;
   final Future<AuthState?> Function() _reconnect;
+  final AuthState? Function()? _currentAuth;
+  final Future<bool> Function(AuthState)? _identityIsCurrent;
   final DateTime Function() _clock;
   final Random _random;
 
   Future<UploadSyncOutcome> syncNext(AuthState auth,
       {required String leaseOwner}) async {
     if (auth.isOffline) return UploadSyncOutcome.waitingForNetwork;
+    if (!_sameIdentity(auth) ||
+        (_identityIsCurrent != null && !await _identityIsCurrent(auth))) {
+      return UploadSyncOutcome.waitingForAuthentication;
+    }
     final UploadWork? work = await _repository.acquireNext(
+      organizationId: auth.user.activeOrganizationId,
       owner: leaseOwner,
       now: _clock(),
     );
@@ -55,20 +66,36 @@ class UploadPackageSynchronizer {
     } on DioException catch (error) {
       if (error.response?.statusCode == 401) {
         final AuthState? refreshed = await _reconnect();
-        if (refreshed != null && !refreshed.isOffline) {
+        if (refreshed != null &&
+            !refreshed.isOffline &&
+            refreshed.user.subjectId == auth.user.subjectId &&
+            refreshed.user.activeOrganizationId == work.draft.organizationId) {
           try {
             // Every server write has the same stable idempotency key, so replaying
             // the package after a token refresh cannot create duplicate evidence.
             await _sync(work, refreshed);
             return UploadSyncOutcome.synced;
+          } on _IdentityChanged {
+            await _repository.waitingForAuthentication(work.entry.packageId,
+                now: _clock(), organizationId: work.draft.organizationId);
+            return UploadSyncOutcome.waitingForAuthentication;
           } on DioException catch (retryError) {
             await _handleDioFailure(work, retryError);
             return _outcomeFor(retryError);
           }
         }
       }
+      if (!_sameIdentity(auth)) {
+        await _repository.waitingForAuthentication(work.entry.packageId,
+            now: _clock(), organizationId: work.draft.organizationId);
+        return UploadSyncOutcome.waitingForAuthentication;
+      }
       await _handleDioFailure(work, error);
       return _outcomeFor(error);
+    } on _IdentityChanged {
+      await _repository.waitingForAuthentication(work.entry.packageId,
+          now: _clock(), organizationId: work.draft.organizationId);
+      return UploadSyncOutcome.waitingForAuthentication;
     } on SocketException {
       await _handleTransientFailure(work);
       return UploadSyncOutcome.retryScheduled;
@@ -80,18 +107,40 @@ class UploadPackageSynchronizer {
       return UploadSyncOutcome.retryScheduled;
     } on FileSystemException {
       await _repository.block(work.entry.packageId,
-          now: _clock(), safeError: '本机原图不可读取，不能上传');
+          organizationId: work.draft.organizationId,
+          now: _clock(),
+          safeError: '本机原图不可读取，不能上传');
       return UploadSyncOutcome.blocked;
     } on FormatException {
       await _repository.block(work.entry.packageId,
-          now: _clock(), safeError: '本机清单损坏，不能上传');
+          organizationId: work.draft.organizationId,
+          now: _clock(),
+          safeError: '本机清单损坏，不能上传');
       return UploadSyncOutcome.blocked;
+    }
+  }
+
+  bool _sameIdentity(AuthState original) {
+    if (_currentAuth == null) return true;
+    final current = _currentAuth();
+    return current != null &&
+        !current.isOffline &&
+        current.user.subjectId == original.user.subjectId &&
+        current.user.activeOrganizationId == original.user.activeOrganizationId;
+  }
+
+  Future<void> _assertIdentity(AuthState auth, UploadWork work) async {
+    if (auth.user.activeOrganizationId != work.draft.organizationId ||
+        !_sameIdentity(auth) ||
+        (_identityIsCurrent != null && !await _identityIsCurrent(auth))) {
+      throw _IdentityChanged();
     }
   }
 
   Future<void> _handleTransientFailure(UploadWork work) =>
       _repository.retryLater(
         work.entry.packageId,
+        organizationId: work.draft.organizationId,
         now: _clock(),
         nextAttemptAt: _clock().add(_retryDelay(work.entry.attemptCount + 1)),
         safeError: '网络或服务器暂时不可用，将自动重试',
@@ -101,6 +150,7 @@ class UploadPackageSynchronizer {
     final String serverPackageId;
     Set<String> existingAssets;
     if (work.entry.serverPackageId == null) {
+      await _assertIdentity(auth, work);
       final RemoteUploadPackage remote = await _api.createPackage(
         accessToken: auth.session.accessToken,
         idempotencyKey: work.entry.idempotencyKey,
@@ -113,16 +163,17 @@ class UploadPackageSynchronizer {
       serverPackageId = remote.id;
       existingAssets = remote.existingAssets;
       await _repository.saveServerPackage(work.entry.packageId, serverPackageId,
-          now: _clock());
+          now: _clock(), organizationId: work.draft.organizationId);
     } else {
       serverPackageId = work.entry.serverPackageId!;
+      await _assertIdentity(auth, work);
       final RemoteUploadPackage remote = await _api.package(
         accessToken: auth.session.accessToken,
         serverPackageId: serverPackageId,
       );
       existingAssets = remote.existingAssets;
       await _repository.markPhase(work.entry.packageId, 'uploading_blobs',
-          now: _clock());
+          now: _clock(), organizationId: work.draft.organizationId);
     }
 
     for (final asset in work.assets) {
@@ -131,6 +182,7 @@ class UploadPackageSynchronizer {
             'Local evidence is missing', asset.materializedPath);
       }
       if (!existingAssets.contains(asset.id)) {
+        await _assertIdentity(auth, work);
         await _api.putBlob(
           accessToken: auth.session.accessToken,
           idempotencyKey: work.entry.idempotencyKey,
@@ -141,11 +193,12 @@ class UploadPackageSynchronizer {
         );
       }
       await _repository.markAssetUploaded(work.entry.packageId, asset.id,
-          now: _clock());
+          now: _clock(), organizationId: work.draft.organizationId);
     }
 
     await _repository.markPhase(work.entry.packageId, 'putting_manifest',
-        now: _clock());
+        now: _clock(), organizationId: work.draft.organizationId);
+    await _assertIdentity(auth, work);
     await _api.putManifest(
       accessToken: auth.session.accessToken,
       idempotencyKey: work.entry.idempotencyKey,
@@ -153,7 +206,8 @@ class UploadPackageSynchronizer {
       manifest: work.manifest,
     );
     await _repository.markPhase(work.entry.packageId, 'committing',
-        now: _clock());
+        now: _clock(), organizationId: work.draft.organizationId);
+    await _assertIdentity(auth, work);
     final RemoteCommitResult result = await _api.commit(
       accessToken: auth.session.accessToken,
       idempotencyKey: work.entry.idempotencyKey,
@@ -163,6 +217,7 @@ class UploadPackageSynchronizer {
       work.entry.packageId,
       sessionId: result.sessionId,
       inferenceJobId: result.inferenceJobId,
+      organizationId: work.draft.organizationId,
       now: _clock(),
     );
   }
@@ -171,17 +226,20 @@ class UploadPackageSynchronizer {
     final int? status = error.response?.statusCode;
     if (status == 401) {
       await _repository.waitingForAuthentication(work.entry.packageId,
-          now: _clock());
+          now: _clock(), organizationId: work.draft.organizationId);
       return;
     }
     if (status != null && status >= 400 && status < 500) {
       await _repository.block(work.entry.packageId,
-          now: _clock(), safeError: _rejectionMessage(error));
+          organizationId: work.draft.organizationId,
+          now: _clock(),
+          safeError: _rejectionMessage(error));
       return;
     }
     final int attempt = work.entry.attemptCount + 1;
     await _repository.retryLater(
       work.entry.packageId,
+      organizationId: work.draft.organizationId,
       now: _clock(),
       nextAttemptAt: _clock().add(_retryDelay(attempt)),
       safeError: '网络或服务器暂时不可用，将自动重试',
@@ -235,3 +293,5 @@ enum UploadSyncOutcome {
   retryScheduled,
   blocked,
 }
+
+class _IdentityChanged implements Exception {}

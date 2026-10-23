@@ -56,12 +56,14 @@ try {
     $buildingId = [guid]::NewGuid().ToString()
     $sourcePen = [guid]::NewGuid().ToString()
     $failedPen = [guid]::NewGuid().ToString()
+    $confirmPen = [guid]::NewGuid().ToString()
     $seed = @"
 SET @org = (SELECT id FROM farm_organization WHERE code = 'ADMIN-RUNTIME');
 INSERT INTO building (id, organization_id, code, name) VALUES (UUID_TO_BIN('$buildingId'), @org, 'RT-$runId', 'Synthetic runtime building');
 INSERT INTO pen (id, building_id, code, name) VALUES
  (UUID_TO_BIN('$sourcePen'), UUID_TO_BIN('$buildingId'), 'CONF-$runId', 'Synthetic correction pen'),
- (UUID_TO_BIN('$failedPen'), UUID_TO_BIN('$buildingId'), 'FAIL-$runId', 'Synthetic failure pen');
+ (UUID_TO_BIN('$failedPen'), UUID_TO_BIN('$buildingId'), 'FAIL-$runId', 'Synthetic failure pen'),
+ (UUID_TO_BIN('$confirmPen'), UUID_TO_BIN('$buildingId'), 'ZERO-$runId', 'Synthetic manual-zero pen');
 "@
     $seed | & docker compose @composeFiles exec -T mysql sh -lc 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"'
     if ($LASTEXITCODE -ne 0) { throw 'Synthetic fixture seed failed.' }
@@ -69,7 +71,7 @@ INSERT INTO pen (id, building_id, code, name) VALUES
     $me = Invoke-Api 'me' -Token $login.accessToken
     $date = Get-Date -Format 'yyyy-MM-dd'
     $sessions = @()
-    foreach ($penId in @($sourcePen, $failedPen)) {
+    foreach ($penId in @($sourcePen, $failedPen, $confirmPen)) {
         # Generated 1x1 PNG with a unique trailing synthetic tag; no research/production images.
         $png = [Convert]::FromBase64String('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=')
         $bytes = [byte[]]($png + [Text.Encoding]::ASCII.GetBytes([guid]::NewGuid().ToString()))
@@ -95,14 +97,14 @@ INSERT INTO pen (id, building_id, code, name) VALUES
     do {
         $login = Get-Login
         $failed = Invoke-Api 'inference-jobs/failed?limit=100' -Token $login.accessToken
-        $ready = @($failed | Where-Object { $_.sessionId -in $sessions.sessionId }).Count -eq 2
+        $ready = @($failed | Where-Object { $_.sessionId -in $sessions.sessionId }).Count -eq 3
         if ($ready) { break }
         Start-Sleep -Seconds 1
     } while ([DateTimeOffset]::UtcNow -lt $deadline)
     if (-not $ready) { throw 'Synthetic failure callbacks did not reach the administrator query.' }
     $sourceId = $sessions[0].sessionId
     Invoke-Api "inventory-sessions/$sourceId/confirm" POST @{ confirmedCount = 17; reason = 'Synthetic runtime initial confirmation' } $login.accessToken | Out-Null
-    $config = @{ baseUrl = 'http://127.0.0.1:8093'; password = $values.APP_E2E_FIXTURE_PASSWORD; sourceId = $sourceId; sourcePen = $sourcePen; sourceCode = "CONF-$runId"; failedJobId = $sessions[1].inferenceJobId; date = $date }
+    $config = @{ baseUrl = 'http://127.0.0.1:8093'; password = $values.APP_E2E_FIXTURE_PASSWORD; sourceId = $sourceId; sourcePen = $sourcePen; sourceCode = "CONF-$runId"; failedJobId = $sessions[1].inferenceJobId; confirmSessionId = $sessions[2].sessionId; confirmPen = $confirmPen; confirmCode = "ZERO-$runId"; date = $date }
     $template = Get-Content -LiteralPath (Join-Path $repositoryRoot 'test-support/admin-runtime/browser-regression.js') -Raw
     $runnerPath = Join-Path $outputDirectory 'browser-run.js'
     $template.Replace('__RUNTIME_CONFIG__', ($config | ConvertTo-Json -Depth 6 -Compress)) | Set-Content -LiteralPath $runnerPath -Encoding utf8

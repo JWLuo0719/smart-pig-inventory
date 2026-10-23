@@ -12,6 +12,10 @@ import '../../core/network/inventory_browse_api.dart';
 import '../master_data/data/drift_master_data_repository.dart';
 import '../master_data/domain/master_data_changes.dart';
 
+final serverGalleryApiProvider = Provider<InventoryBrowseApi>(
+  (ref) => InventoryBrowseApi(ref.watch(apiBaseUrlProvider)),
+);
+
 class ServerGalleryScreen extends ConsumerStatefulWidget {
   const ServerGalleryScreen({this.sessionId, super.key});
   final String? sessionId;
@@ -28,8 +32,7 @@ class _ServerGalleryScreenState extends ConsumerState<ServerGalleryScreen> {
   bool _loading = true, _busy = false, _more = false;
   int _generation = 0;
   final Map<String, String> _deleteKeys = {};
-  InventoryBrowseApi get _api =>
-      InventoryBrowseApi(ref.read(apiBaseUrlProvider));
+  InventoryBrowseApi get _api => ref.read(serverGalleryApiProvider);
   @override
   void initState() {
     super.initState();

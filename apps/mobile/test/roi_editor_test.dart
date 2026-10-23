@@ -91,6 +91,24 @@ void main() {
     expect(find.text('还没有排除区：当前整张照片都算本栏。'), findsOneWidget);
   });
 
+  testWidgets('mask invalidates its actual painter after add and delete',
+      (tester) async {
+    await pumpEditor(tester, onSave: (_) async {});
+    final paint = find.descendant(
+        of: find.byKey(const Key('roi-canvas')),
+        matching: find.byType(CustomPaint));
+    final original = tester.widget<CustomPaint>(paint).painter!;
+    await drawExclusion(tester, const Offset(.1, .1), const Offset(.5, .5));
+    final added = tester.widget<CustomPaint>(paint).painter!;
+    expect(added.shouldRepaint(original), isTrue,
+        reason: 'The mask must repaint when a finished exclusion is added');
+    await tester.tap(find.byTooltip('删除排除区 1'));
+    await tester.pump();
+    final removed = tester.widget<CustomPaint>(paint).painter!;
+    expect(removed.shouldRepaint(added), isTrue,
+        reason: 'Removing a region must invalidate the red mask');
+  });
+
   testWidgets('an exclusion region can be deleted again',
       (WidgetTester tester) async {
     Roi? saved;

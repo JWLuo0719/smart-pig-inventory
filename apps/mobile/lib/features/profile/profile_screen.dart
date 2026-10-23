@@ -16,23 +16,19 @@ class ProfileScreen extends ConsumerWidget {
     if (auth == null) return const Center(child: CircularProgressIndicator());
     final String organizationId = auth.user.activeOrganizationId;
     return StreamBuilder<LocalActivityStats>(
+      key: ValueKey(organizationId),
       stream:
           ref.watch(localActivityRepositoryProvider).watchStats(organizationId),
       builder:
           (BuildContext context, AsyncSnapshot<LocalActivityStats> snapshot) {
-        final LocalActivityStats stats = snapshot.data ??
-            const LocalActivityStats(
-              draftCount: 0,
-              pendingUploadCount: 0,
-              blockedUploadCount: 0,
-              mediaCount: 0,
-              mediaBytes: 0,
-            );
+        final LocalActivityStats? stats =
+            snapshot.hasError ? null : snapshot.data;
         return ListView(
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
           children: <Widget>[
             Text('我的', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 16),
+            if (snapshot.hasError) const Text('本机作业统计暂不可读取，请重新打开页面重试'),
             Card(
               child: ListTile(
                 leading: CircleAvatar(
@@ -72,7 +68,7 @@ class ProfileScreen extends ConsumerWidget {
                   leading: const Icon(Icons.storage_outlined),
                   title: const Text('本机证据存储'),
                   subtitle: Text(
-                      '${stats.mediaCount} 张原图 · ${_bytes(stats.mediaBytes)} · ${stats.draftCount} 个作业'),
+                      '${stats?.mediaCount ?? '未知'} 张原图 · ${stats == null ? '未知' : _bytes(stats.mediaBytes)} · ${stats?.draftCount ?? '未知'} 个作业'),
                 ),
                 const Divider(height: 1),
                 ListTile(
@@ -87,8 +83,8 @@ class ProfileScreen extends ConsumerWidget {
                   leading: const Icon(Icons.cloud_upload_outlined),
                   title: const Text('上传队列与诊断'),
                   subtitle: Text(
-                    '${stats.pendingUploadCount} 个待处理 · '
-                    '${stats.blockedUploadCount} 个被阻止；提交前原图不会清理',
+                    '${stats?.pendingUploadCount ?? '未知'} 个待处理 · '
+                    '${stats?.blockedUploadCount ?? '未知'} 个被阻止；提交前原图不会清理',
                   ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.push('/outbox'),

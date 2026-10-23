@@ -2,6 +2,7 @@ package com.smartfarm.inventory.inventory.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.smartfarm.inventory.BusinessApiApplication;
 import com.smartfarm.inventory.inventory.application.InventoryException;
@@ -47,6 +48,7 @@ class RbacOrganizationIsolationIntegrationTest {
     @Autowired private JwtDecoder jwtDecoder;
     @Autowired private com.smartfarm.inventory.identity.infrastructure.JwtTokenService tokens;
     @Autowired private SecurityReviewActor actor;
+    @Autowired private com.smartfarm.inventory.inventory.application.InventoryReviewService reviews;
 
     private UUID primaryOrganization;
     private UUID secondOrganization;
@@ -70,7 +72,17 @@ class RbacOrganizationIsolationIntegrationTest {
 
     @Test
     void enforcesOperatorReviewerFarmAdminAndCrossOrganizationBoundaries() {
+        UUID building = UUID.randomUUID(), pen = UUID.randomUUID(), session = UUID.randomUUID();
+        jdbc.update("INSERT INTO building (id,organization_id,code,name) VALUES (?,?,'BV','Synthetic versions')", bytes(building), bytes(primaryOrganization));
+        jdbc.update("INSERT INTO pen (id,building_id,code,name) VALUES (?,?,'PV','Synthetic versions')", bytes(pen), bytes(building));
+        jdbc.update("""
+                INSERT INTO inventory_session
+                (id,pen_id,business_date,status,candidate_count,confirmed_count,version,created_by,
+                 confirmed_by,confirmed_at,confirmation_idempotency_key)
+                VALUES (?,?,'2026-10-20','confirmed',17,17,1,'synthetic','synthetic',CURRENT_TIMESTAMP(6),?)
+                """, bytes(session), bytes(pen), UUID.randomUUID().toString());
         authenticate("e2e-operator", primaryOrganization, "OPERATOR");
+        assertThatThrownBy(() -> reviews.versions(session, null, 20)).isInstanceOf(InventoryException.class);
         assertThatCode(() -> actor.assertCanView(primaryOrganization)).doesNotThrowAnyException();
         assertThatThrownBy(() -> actor.assertCanConfirm(primaryOrganization)).isInstanceOf(InventoryException.class)
                 .hasMessageContaining("not available");
@@ -79,12 +91,15 @@ class RbacOrganizationIsolationIntegrationTest {
         assertThatThrownBy(() -> actor.assertCanCorrect(primaryOrganization)).isInstanceOf(InventoryException.class);
 
         authenticate("e2e-reviewer", primaryOrganization, "REVIEWER");
+        assertThatThrownBy(() -> reviews.versions(session, null, 20)).isInstanceOf(InventoryException.class);
         assertThatCode(() -> actor.assertCanConfirm(primaryOrganization)).doesNotThrowAnyException();
         assertThatThrownBy(() -> actor.assertCanOverrideDelete(primaryOrganization)).isInstanceOf(InventoryException.class);
         assertThatThrownBy(() -> actor.assertCanManageInference(primaryOrganization)).isInstanceOf(InventoryException.class);
         assertThatThrownBy(() -> actor.assertCanCorrect(primaryOrganization)).isInstanceOf(InventoryException.class);
 
         authenticate("e2e-farm-admin", primaryOrganization, "FARM_ADMIN");
+        assertThat(reviews.versions(session, null, 20).currentSessionId()).isEqualTo(session);
+        assertThat(reviews.versions(session, null, 20).items()).hasSize(1);
         assertThatCode(() -> actor.assertCanConfirm(primaryOrganization)).doesNotThrowAnyException();
         assertThatCode(() -> actor.assertCanOverrideDelete(primaryOrganization)).doesNotThrowAnyException();
         assertThatCode(() -> actor.assertCanAudit(primaryOrganization)).doesNotThrowAnyException();
@@ -92,6 +107,8 @@ class RbacOrganizationIsolationIntegrationTest {
         assertThatCode(() -> actor.assertCanCorrect(primaryOrganization)).doesNotThrowAnyException();
 
         authenticate("e2e-second-operator", secondOrganization, "OPERATOR");
+        assertThatThrownBy(() -> reviews.versions(session, null, 20)).isInstanceOf(InventoryException.class)
+                .hasMessageContaining("not available");
         assertThatCode(() -> actor.assertCanView(secondOrganization)).doesNotThrowAnyException();
         assertThatThrownBy(() -> actor.assertCanView(primaryOrganization)).isInstanceOf(InventoryException.class)
                 .hasMessageContaining("not available");

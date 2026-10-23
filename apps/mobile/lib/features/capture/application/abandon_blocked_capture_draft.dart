@@ -10,8 +10,15 @@ class AbandonBlockedCaptureDraft {
 
   final AppDatabase _database;
 
-  Future<void> execute(String draftId, {DateTime? now}) =>
+  Future<void> execute(String draftId,
+          {required String organizationId, DateTime? now}) =>
       _database.transaction(() async {
+        final draft = await (_database.select(_database.captureDrafts)
+              ..where((r) => r.id.equals(draftId)))
+            .getSingle();
+        if (draft.organizationId != organizationId) {
+          throw StateError('采集组不属于当前组织');
+        }
         final OutboxEntry? entry =
             await (_database.select(_database.outboxEntries)
                   ..where((OutboxEntries row) => row.draftId.equals(draftId)))

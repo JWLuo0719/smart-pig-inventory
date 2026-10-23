@@ -35,7 +35,7 @@ class _RoiEditorPageState extends State<RoiEditorPage> {
   /// 小于该边长的拖动视为误触，不产生排除区。
   static const double _minimumExtent = 0.02;
 
-  late final List<RoiRegion> _exclusions;
+  late List<RoiRegion> _exclusions;
   late double _minContainment;
   Offset? _dragOrigin;
   Offset? _dragCurrent;
@@ -64,6 +64,7 @@ class _RoiEditorPageState extends State<RoiEditorPage> {
   }
 
   void _beginDrag(Offset local, Size size) {
+    if (_saving) return;
     setState(() {
       _dragOrigin = _toNormalized(local, size);
       _dragCurrent = _dragOrigin;
@@ -72,11 +73,12 @@ class _RoiEditorPageState extends State<RoiEditorPage> {
   }
 
   void _updateDrag(Offset local, Size size) {
-    if (_dragOrigin == null) return;
+    if (_saving || _dragOrigin == null) return;
     setState(() => _dragCurrent = _toNormalized(local, size));
   }
 
   void _commitDrag() {
+    if (_saving) return;
     final Offset? origin = _dragOrigin;
     final Offset? current = _dragCurrent;
     setState(() {
@@ -90,7 +92,7 @@ class _RoiEditorPageState extends State<RoiEditorPage> {
       setState(() => _error = '最多只能标注 ${widget.maxExclusions} 个排除区，请先删除一个。');
       return;
     }
-    setState(() => _exclusions.add(region));
+    setState(() => _exclusions = [..._exclusions, region]);
   }
 
   Roi? _buildRoi() {
@@ -178,7 +180,7 @@ class _RoiEditorPageState extends State<RoiEditorPage> {
                             ),
                             CustomPaint(
                               painter: _RoiOverlayPainter(
-                                exclusions: _exclusions,
+                                exclusions: List.unmodifiable(_exclusions),
                                 pending: _dragOrigin == null
                                     ? null
                                     : _regionBetween(
@@ -222,7 +224,9 @@ class _RoiEditorPageState extends State<RoiEditorPage> {
                         icon: const Icon(Icons.delete_outline),
                         onPressed: _saving
                             ? null
-                            : () => setState(() => _exclusions.removeAt(index)),
+                            : () => setState(() => _exclusions = [
+                                  ..._exclusions
+                                ]..removeAt(index)),
                       ),
                     );
                   }),

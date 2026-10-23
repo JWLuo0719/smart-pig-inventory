@@ -20,6 +20,7 @@ test("permits every admin workflow route with its expected method", () => {
     ["POST", "inference-jobs/abc/retries"],
     ["POST", "inventory-sessions/abc/confirm"],
     ["POST", "inventory-sessions/abc/corrections"],
+    ["GET", "inventory-sessions/abc/versions"],
     ["GET", "inventory-reports/exports/pdf"],
   ] as const;
 
@@ -31,6 +32,8 @@ test("permits every admin workflow route with its expected method", () => {
 test("rejects wrong methods and route-shape bypasses", () => {
   const routes = [
     ["GET", "auth/login"],
+    ["POST", "inventory-sessions/abc/versions"],
+    ["GET", "inventory-sessions/abc/versions/extra"],
     ["DELETE", "media-assets"],
     ["DELETE", "media-assets/abc/content"],
     ["GET", "media-assets/abc/override-delete"],

@@ -1,0 +1,554 @@
+{
+  "syntheticOnly": true,
+  "fixtures": [
+    {
+      "name": "get_day_overview-input",
+      "valid": true,
+      "payload": {
+        "tool": "get_day_overview",
+        "arguments": {
+          "businessDate": "2026-10-18"
+        }
+      }
+    },
+    {
+      "name": "get_day_overview-sample",
+      "valid": true,
+      "payload": {
+        "schemaVersion": "1.0",
+        "tool": "get_day_overview",
+        "status": "ok",
+        "generatedAt": "2026-10-18T00:00:00Z",
+        "data": {
+          "confirmedPenCount": 1,
+          "scopePenCount": 2,
+          "confirmedHeads": 0,
+          "rows": [
+            {
+              "penId": "00000000-0000-4000-8000-000000000001",
+              "sessionId": "00000000-0000-4000-8000-000000000002",
+              "state": "confirmed",
+              "confirmedCount": 0,
+              "candidateCount": null
+            }
+          ],
+          "hasMore": false
+        },
+        "evidence": [
+          {
+            "kind": "session",
+            "id": "00000000-0000-4000-8000-000000000002",
+            "businessDate": "2026-10-18"
+          }
+        ]
+      }
+    },
+    {
+      "name": "get_day_overview-unauthenticated",
+      "valid": true,
+      "payload": {
+        "schemaVersion": "1.0",
+        "tool": "get_day_overview",
+        "status": "unauthenticated",
+        "generatedAt": "2026-10-18T00:00:00Z",
+        "data": null,
+        "evidence": []
+      }
+    },
+    {
+      "name": "get_day_overview-not_found_or_forbidden",
+      "valid": true,
+      "payload": {
+        "schemaVersion": "1.0",
+        "tool": "get_day_overview",
+        "status": "not_found_or_forbidden",
+        "generatedAt": "2026-10-18T00:00:00Z",
+        "data": null,
+        "evidence": []
+      }
+    },
+    {
+      "name": "get_day_overview-unavailable",
+      "valid": true,
+      "payload": {
+        "schemaVersion": "1.0",
+        "tool": "get_day_overview",
+        "status": "unavailable",
+        "generatedAt": "2026-10-18T00:00:00Z",
+        "data": null,
+        "evidence": []
+      }
+    },
+    {
+      "name": "get_day_overview-reject-organizationId",
+      "valid": false,
+      "payload": {
+        "tool": "get_day_overview",
+        "arguments": {
+          "businessDate": "2026-10-18",
+          "organizationId": "forbidden-test-input"
+        }
+      }
+    },
+    {
+      "name": "get_day_overview-reject-accessToken",
+      "valid": false,
+      "payload": {
+        "tool": "get_day_overview",
+        "arguments": {
+          "businessDate": "2026-10-18",
+          "accessToken": "forbidden-test-input"
+        }
+      }
+    },
+    {
+      "name": "get_day_overview-reject-sql",
+      "valid": false,
+      "payload": {
+        "tool": "get_day_overview",
+        "arguments": {
+          "businessDate": "2026-10-18",
+          "sql": "forbidden-test-input"
+        }
+      }
+    },
+    {
+      "name": "get_day_overview-reject-url",
+      "valid": false,
+      "payload": {
+        "tool": "get_day_overview",
+        "arguments": {
+          "businessDate": "2026-10-18",
+          "url": "forbidden-test-input"
+        }
+      }
+    },
+    {
+      "name": "get_day_overview-reject-objectPath",
+      "valid": false,
+      "payload": {
+        "tool": "get_day_overview",
+        "arguments": {
+          "businessDate": "2026-10-18",
+          "objectPath": "forbidden-test-input"
+        }
+      }
+    },
+    {
+      "name": "get_pen_history-input",
+      "valid": true,
+      "payload": {
+        "tool": "get_pen_history",
+        "arguments": {
+          "penId": "00000000-0000-4000-8000-000000000001",
+          "to": "2026-10-18",
+          "days": 7
+        }
+      }
+    },
+    {
+      "name": "get_pen_history-sample",
+      "valid": true,
+      "payload": {
+        "schemaVersion": "1.0",
+        "tool": "get_pen_history",
+        "status": "ok",
+        "generatedAt": "2026-10-18T00:00:00Z",
+        "data": {
+          "penId": "00000000-0000-4000-8000-000000000001",
+          "points": [
+            {
+              "date": "2026-10-18",
+              "confirmedCount": 0
+            },
+            {
+              "date": "2026-10-17",
+              "confirmedCount": null
+            }
+          ],
+          "scopeBasis": "current_enabled_pens"
+        },
+        "evidence": [
+          {
+            "kind": "session",
+            "id": "00000000-0000-4000-8000-000000000002",
+            "businessDate": "2026-10-18"
+          }
+        ]
+      }
+    },
+    {
+      "name": "get_pen_history-unauthenticated",
+      "valid": true,
+      "payload": {
+        "schemaVersion": "1.0",
+        "tool": "get_pen_history",
+        "status": "unauthenticated",
+        "generatedAt": "2026-10-18T00:00:00Z",
+        "data": null,
+        "evidence": []
+      }
+    },
+    {
+      "name": "get_pen_history-not_found_or_forbidden",
+      "valid": true,
+      "payload": {
+        "schemaVersion": "1.0",
+        "tool": "get_pen_history",
+        "status": "not_found_or_forbidden",
+        "generatedAt": "2026-10-18T00:00:00Z",
+        "data": null,
+        "evidence": []
+      }
+    },
+    {
+      "name": "get_pen_history-unavailable",
+      "valid": true,
+      "payload": {
+        "schemaVersion": "1.0",
+        "tool": "get_pen_history",
+        "status": "unavailable",
+        "generatedAt": "2026-10-18T00:00:00Z",
+        "data": null,
+        "evidence": []
+      }
+    },
+    {
+      "name": "get_pen_history-reject-organizationId",
+      "valid": false,
+      "payload": {
+        "tool": "get_pen_history",
+        "arguments": {
+          "penId": "00000000-0000-4000-8000-000000000001",
+          "to": "2026-10-18",
+          "days": 7,
+          "organizationId": "forbidden-test-input"
+        }
+      }
+    },
+    {
+      "name": "get_pen_history-reject-accessToken",
+      "valid": false,
+      "payload": {
+        "tool": "get_pen_history",
+        "arguments": {
+          "penId": "00000000-0000-4000-8000-000000000001",
+          "to": "2026-10-18",
+          "days": 7,
+          "accessToken": "forbidden-test-input"
+        }
+      }
+    },
+    {
+      "name": "get_pen_history-reject-sql",
+      "valid": false,
+      "payload": {
+        "tool": "get_pen_history",
+        "arguments": {
+          "penId": "00000000-0000-4000-8000-000000000001",
+          "to": "2026-10-18",
+          "days": 7,
+          "sql": "forbidden-test-input"
+        }
+      }
+    },
+    {
+      "name": "get_pen_history-reject-url",
+      "valid": false,
+      "payload": {
+        "tool": "get_pen_history",
+        "arguments": {
+          "penId": "00000000-0000-4000-8000-000000000001",
+          "to": "2026-10-18",
+          "days": 7,
+          "url": "forbidden-test-input"
+        }
+      }
+    },
+    {
+      "name": "get_pen_history-reject-objectPath",
+      "valid": false,
+      "payload": {
+        "tool": "get_pen_history",
+        "arguments": {
+          "penId": "00000000-0000-4000-8000-000000000001",
+          "to": "2026-10-18",
+          "days": 7,
+          "objectPath": "forbidden-test-input"
+        }
+      }
+    },
+    {
+      "name": "inspect_session-input",
+      "valid": true,
+      "payload": {
+        "tool": "inspect_session",
+        "arguments": {
+          "sessionId": "00000000-0000-4000-8000-000000000002"
+        }
+      }
+    },
+    {
+      "name": "inspect_session-sample",
+      "valid": true,
+      "payload": {
+        "schemaVersion": "1.0",
+        "tool": "inspect_session",
+        "status": "ok",
+        "generatedAt": "2026-10-18T00:00:00Z",
+        "data": {
+          "sessionId": "00000000-0000-4000-8000-000000000002",
+          "state": "review_required",
+          "confirmedCount": null,
+          "candidateCount": null,
+          "issues": [
+            "inference_failed",
+            "review_required"
+          ]
+        },
+        "evidence": [
+          {
+            "kind": "session",
+            "id": "00000000-0000-4000-8000-000000000002",
+            "businessDate": "2026-10-18"
+          }
+        ]
+      }
+    },
+    {
+      "name": "inspect_session-unauthenticated",
+      "valid": true,
+      "payload": {
+        "schemaVersion": "1.0",
+        "tool": "inspect_session",
+        "status": "unauthenticated",
+        "generatedAt": "2026-10-18T00:00:00Z",
+        "data": null,
+        "evidence": []
+      }
+    },
+    {
+      "name": "inspect_session-not_found_or_forbidden",
+      "valid": true,
+      "payload": {
+        "schemaVersion": "1.0",
+        "tool": "inspect_session",
+        "status": "not_found_or_forbidden",
+        "generatedAt": "2026-10-18T00:00:00Z",
+        "data": null,
+        "evidence": []
+      }
+    },
+    {
+      "name": "inspect_session-unavailable",
+      "valid": true,
+      "payload": {
+        "schemaVersion": "1.0",
+        "tool": "inspect_session",
+        "status": "unavailable",
+        "generatedAt": "2026-10-18T00:00:00Z",
+        "data": null,
+        "evidence": []
+      }
+    },
+    {
+      "name": "inspect_session-reject-organizationId",
+      "valid": false,
+      "payload": {
+        "tool": "inspect_session",
+        "arguments": {
+          "sessionId": "00000000-0000-4000-8000-000000000002",
+          "organizationId": "forbidden-test-input"
+        }
+      }
+    },
+    {
+      "name": "inspect_session-reject-accessToken",
+      "valid": false,
+      "payload": {
+        "tool": "inspect_session",
+        "arguments": {
+          "sessionId": "00000000-0000-4000-8000-000000000002",
+          "accessToken": "forbidden-test-input"
+        }
+      }
+    },
+    {
+      "name": "inspect_session-reject-sql",
+      "valid": false,
+      "payload": {
+        "tool": "inspect_session",
+        "arguments": {
+          "sessionId": "00000000-0000-4000-8000-000000000002",
+          "sql": "forbidden-test-input"
+        }
+      }
+    },
+    {
+      "name": "inspect_session-reject-url",
+      "valid": false,
+      "payload": {
+        "tool": "inspect_session",
+        "arguments": {
+          "sessionId": "00000000-0000-4000-8000-000000000002",
+          "url": "forbidden-test-input"
+        }
+      }
+    },
+    {
+      "name": "inspect_session-reject-objectPath",
+      "valid": false,
+      "payload": {
+        "tool": "inspect_session",
+        "arguments": {
+          "sessionId": "00000000-0000-4000-8000-000000000002",
+          "objectPath": "forbidden-test-input"
+        }
+      }
+    },
+    {
+      "name": "empty-success",
+      "valid": true,
+      "payload": {
+        "schemaVersion": "1.0",
+        "tool": "get_day_overview",
+        "status": "ok",
+        "generatedAt": "2026-10-18T00:00:00Z",
+        "data": {
+          "confirmedPenCount": 0,
+          "scopePenCount": 0,
+          "confirmedHeads": null,
+          "rows": [],
+          "hasMore": false
+        },
+        "evidence": []
+      }
+    },
+    {
+      "name": "reject-history-over-90-days",
+      "valid": false,
+      "payload": {
+        "tool": "get_pen_history",
+        "arguments": {
+          "penId": "00000000-0000-4000-8000-000000000001",
+          "to": "2026-10-18",
+          "days": 91
+        }
+      }
+    },
+    {
+      "name": "null-session-reference",
+      "valid": false,
+      "payload": {
+        "schemaVersion": "1.0",
+        "tool": "get_day_overview",
+        "status": "ok",
+        "generatedAt": "2026-10-18T00:00:00Z",
+        "data": {
+          "confirmedPenCount": 1,
+          "scopePenCount": 2,
+          "confirmedHeads": 0,
+          "rows": [
+            {
+              "penId": "00000000-0000-4000-8000-000000000001",
+              "sessionId": "00000000-0000-4000-8000-000000000002",
+              "state": "confirmed",
+              "confirmedCount": 0,
+              "candidateCount": null
+            }
+          ],
+          "hasMore": false
+        },
+        "evidence": [
+          {
+            "kind": "session",
+            "id": null,
+            "businessDate": "2026-10-18"
+          }
+        ]
+      }
+    },
+    {
+      "name": "date-addressed-daily-report",
+      "valid": true,
+      "payload": {
+        "schemaVersion": "1.0",
+        "tool": "get_day_overview",
+        "status": "ok",
+        "generatedAt": "2026-10-18T00:00:00Z",
+        "data": {
+          "confirmedPenCount": 1,
+          "scopePenCount": 2,
+          "confirmedHeads": 0,
+          "rows": [
+            {
+              "penId": "00000000-0000-4000-8000-000000000001",
+              "sessionId": "00000000-0000-4000-8000-000000000002",
+              "state": "confirmed",
+              "confirmedCount": 0,
+              "candidateCount": null
+            }
+          ],
+          "hasMore": false
+        },
+        "evidence": [
+          {
+            "kind": "daily_report",
+            "id": null,
+            "businessDate": "2026-10-18"
+          }
+        ]
+      }
+    },
+    {
+      "name": "invented-report-uuid",
+      "valid": false,
+      "payload": {
+        "schemaVersion": "1.0",
+        "tool": "get_day_overview",
+        "status": "ok",
+        "generatedAt": "2026-10-18T00:00:00Z",
+        "data": {
+          "confirmedPenCount": 1,
+          "scopePenCount": 2,
+          "confirmedHeads": 0,
+          "rows": [
+            {
+              "penId": "00000000-0000-4000-8000-000000000001",
+              "sessionId": "00000000-0000-4000-8000-000000000002",
+              "state": "confirmed",
+              "confirmedCount": 0,
+              "candidateCount": null
+            }
+          ],
+          "hasMore": false
+        },
+        "evidence": [
+          {
+            "kind": "daily_report",
+            "id": "00000000-0000-4000-8000-000000000002",
+            "businessDate": "2026-10-18"
+          }
+        ]
+      }
+    },
+    {
+      "name": "successful-null-is-not-empty-data",
+      "valid": false,
+      "payload": {
+        "schemaVersion": "1.0",
+        "tool": "get_day_overview",
+        "status": "ok",
+        "generatedAt": "2026-10-18T00:00:00Z",
+        "data": null,
+        "evidence": [
+          {
+            "kind": "session",
+            "id": "00000000-0000-4000-8000-000000000002",
+            "businessDate": "2026-10-18"
+          }
+        ]
+      }
+    }
+  ]
+}

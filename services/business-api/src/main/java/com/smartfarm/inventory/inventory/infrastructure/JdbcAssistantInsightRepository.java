@@ -137,7 +137,7 @@ public class JdbcAssistantInsightRepository {
      * @param confirmedCount 已确认数量
      * @param inferenceStatus 最近一次推理任务状态
      * @param failureCode 推理失败码
-     * @param detectionCount 检测框数量（候选为空时的替代口径）
+     * @param detectionCount 检测框数量（仅证据位置统计，禁止作为候选数量回退）
      * @param warnings 推理警告
      * @param lastConfirmedDate 上次确认的业务日期
      * @param lastConfirmedCount 上次确认数量

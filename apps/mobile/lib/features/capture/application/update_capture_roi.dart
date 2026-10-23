@@ -10,20 +10,28 @@ class UpdateCaptureRoi {
 
   final AppDatabase database;
 
-  Future<void> execute({required String assetId, required Roi? roi}) async {
-    final LocalMediaAsset asset =
-        await (database.select(database.localMediaAssets)
-              ..where((entry) => entry.id.equals(assetId)))
-            .getSingle();
-    final CaptureDraft draft = await (database.select(database.captureDrafts)
-          ..where((entry) => entry.id.equals(asset.draftId)))
-        .getSingle();
-    if (draft.state != 'draft') {
-      throw StateError(
-          'ROI can only change before the capture set enters the upload queue');
-    }
-    final DateTime now = DateTime.now().toUtc();
+  Future<void> execute(
+      {required String organizationId,
+      required String assetId,
+      required Roi? roi}) async {
     await database.transaction(() async {
+      final LocalMediaAsset asset =
+          await (database.select(database.localMediaAssets)
+                ..where((entry) => entry.id.equals(assetId)))
+              .getSingle();
+      final CaptureDraft draft = await (database.select(database.captureDrafts)
+            ..where((entry) => entry.id.equals(asset.draftId)))
+          .getSingle();
+      final queued = await (database.select(database.outboxEntries)
+            ..where((r) => r.draftId.equals(draft.id)))
+          .get();
+      if (draft.organizationId != organizationId ||
+          draft.state != 'draft' ||
+          queued.isNotEmpty) {
+        throw StateError(
+            'ROI can only change before the capture set enters the upload queue');
+      }
+      final DateTime now = DateTime.now().toUtc();
       await (database.update(database.localMediaAssets)
             ..where((entry) => entry.id.equals(assetId)))
           .write(LocalMediaAssetsCompanion(

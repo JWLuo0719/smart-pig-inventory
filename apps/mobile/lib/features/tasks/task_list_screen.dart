@@ -1,4 +1,6 @@
 import 'package:dio/dio.dart';
+import '../capture/domain/capture_target.dart';
+import '../inventory/inventory_revision.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -22,6 +24,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
   List<RemoteInventoryTask>? _tasks;
   String? _error;
   bool _loading = true;
+  int _generation = 0;
 
   @override
   void initState() {
@@ -30,6 +33,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
   }
 
   Future<void> _load() async {
+    final generation = ++_generation;
     final auth = ref.read(authControllerProvider).valueOrNull;
     if (auth == null || auth.isOffline) {
       setState(() {
@@ -50,16 +54,31 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
           request: (token) =>
               InventoryRemoteApi(baseUrl: ref.read(apiBaseUrlProvider))
                   .tasks(accessToken: token, businessDate: _businessDate));
-      if (mounted) setState(() => _tasks = tasks);
+      if (mounted && generation == _generation) setState(() => _tasks = tasks);
     } on DioException catch (error) {
-      if (mounted) setState(() => _error = _safeError(error));
+      if (mounted && generation == _generation) {
+        setState(() => _error = _safeError(error));
+      }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && generation == _generation) {
+        setState(() => _loading = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(authControllerProvider, (previous, next) {
+      if (previous?.valueOrNull?.user.subjectId !=
+              next.valueOrNull?.user.subjectId ||
+          previous?.valueOrNull?.user.activeOrganizationId !=
+              next.valueOrNull?.user.activeOrganizationId) {
+        _load();
+      }
+    });
+    ref.listen(inventoryRevisionProvider, (_, __) {
+      _load();
+    });
     final date =
         MaterialLocalizations.of(context).formatMediumDate(_businessDate);
     return RefreshIndicator(
@@ -126,10 +145,46 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
           count: task.status == 'confirmed' ? task.confirmedCount : null,
           detail: _detail(task),
           onTap: task.sessionId == null
-              ? () => context.push('/pens')
+              ? () => _startTask(task)
               : () => context.push('/inventory-sessions/${task.sessionId}'),
         ),
       );
+
+  Future<void> _startTask(RemoteInventoryTask task) async {
+    final auth = ref.read(authControllerProvider).valueOrNull;
+    if (auth == null) return;
+    final today = DateUtils.dateOnly(DateTime.now());
+    if (task.businessDate != today.toIso8601String().substring(0, 10)) {
+      final start = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+                  title: const Text('历史任务只读'),
+                  content: Text('该任务日期为 ${task.businessDate}。是否明确开始本栏今天的盘点？'),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('保留历史日期')),
+                    FilledButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('开始今日盘点'))
+                  ]));
+      if (start != true || !mounted) return;
+    }
+    final current = ref.read(authControllerProvider).valueOrNull;
+    if (current?.user.subjectId != auth.user.subjectId ||
+        current?.user.activeOrganizationId != auth.user.activeOrganizationId) {
+      return;
+    }
+    if (mounted) {
+      await context.push('/capture',
+          extra: CaptureTarget(
+              organizationId: auth.user.activeOrganizationId,
+              penId: task.penId,
+              label: '${task.buildingCode} / ${task.penCode} ${task.penName}',
+              businessDate: today));
+    }
+    if (mounted) _load();
+  }
 
   PenWorkState _state(String status) => switch (status) {
         'pending' => PenWorkState.notStarted,
@@ -141,7 +196,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
       };
 
   String _detail(RemoteInventoryTask task) => switch (task.status) {
-        'pending' => '尚未采集，点击选择栏舍开始',
+        'pending' => '尚未采集，点击查看本栏任务',
         'submitted' => '上传已提交，等待推理任务领取',
         'processing' => '服务器正在处理原始证据',
         'review_required' => '需要人工复核，原图仍安全保留',

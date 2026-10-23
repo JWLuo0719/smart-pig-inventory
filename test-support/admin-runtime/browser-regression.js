@@ -55,16 +55,15 @@ async (page) => {
     return image && image.complete && image.naturalWidth > 0;
   });
   const reason = 'Synthetic runtime correction with preserved original evidence';
-  const answers = ['19', reason];
-  const dialogHandler = (dialog) => dialog.accept(answers.shift());
-  page.on('dialog', dialogHandler);
   const correctionResponse = page.waitForResponse((r) => r.url().endsWith(`/inventory-sessions/${config.sourceId}/corrections`));
   await page.getByRole('button', { name: '创建审计更正版本' }).click();
+  await page.getByLabel('人工数量', { exact: true }).fill('19');
+  await page.getByLabel('确认或更正依据', { exact: true }).fill(reason);
+  await page.getByRole('button', { name: '提交审计更正', exact: true }).click();
   const response = await correctionResponse;
   check(response.ok(), 'Correction POST must succeed');
   const correction = await response.json();
   const correctionKey = response.request().headers()['x-idempotency-key'];
-  page.off('dialog', dialogHandler);
   await page.getByRole('heading', { name: `${config.date} · confirmed · v2`, exact: true }).waitFor();
   await page.waitForFunction(() => !document.querySelector('#tasks button').disabled);
   check((await task.innerText()).includes('19'), 'Task must switch to v2 count');
@@ -83,6 +82,8 @@ async (page) => {
   const source = await read(`inventory-sessions/${config.sourceId}`);
   check(source.status === 'superseded' && source.count === 17 && source.version === 1, 'Historical v1 must preserve count');
   check(correction.supersedesSessionId === source.id && correction.evidenceSessionId === source.id && correction.count === 19, 'Correction lineage must reference v1');
+  const versions = await read(`inventory-sessions/${source.id}/versions?limit=20`);
+  check(versions.currentSessionId === correction.id && versions.items.length === 2 && versions.items[1].confirmedCount === 17, 'Version API must preserve the immutable correction lineage');
   const oldMedia = await read(`inventory-sessions/${source.id}/media`);
   const newMedia = await read(`inventory-sessions/${correction.id}/media`);
   check(oldMedia.length === 1 && JSON.stringify(oldMedia) === JSON.stringify(newMedia) && newMedia[0].locked, 'v2 must retain the same locked evidence');
@@ -226,6 +227,27 @@ async (page) => {
   check(await page.locator('#audit article').filter({ hasText: 'media.override_deleted' }).count() > 0, 'Evidence override must have a real audit event');
   await page.screenshot({ path: 'functional-dashboard.png', fullPage: true });
 
+  stage = 'manual-confirmation-ui';
+  const confirmTask = page.locator('#tasks article').filter({ hasText: config.confirmCode });
+  await confirmTask.getByRole('button', { name: '查看会话证据' }).click();
+  await page.getByRole('heading', { name: `${config.date} · review_required · v1`, exact: true }).waitFor();
+  await page.getByRole('button', { name: '人工确认并锁定证据', exact: true }).click();
+  const confirmForm = page.getByRole('form', { name: '人工确认表单' });
+  await confirmForm.getByLabel('人工数量', { exact: true }).fill('0');
+  await confirmForm.getByLabel('确认或更正依据', { exact: true }).fill('Synthetic manual confirmation with unknown model candidate and valid zero');
+  await page.screenshot({ path: 'manual-confirmation-form.png', fullPage: true });
+  const confirmationSaved = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith(`/inventory-sessions/${config.confirmSessionId}/confirm`));
+  await confirmForm.getByRole('button', { name: '提交人工确认', exact: true }).click();
+  const confirmationResponse = await confirmationSaved;
+  check(confirmationResponse.ok(), 'Manual confirmation form must reach the backend');
+  const confirmation = await confirmationResponse.json();
+  check(confirmation.status === 'confirmed' && confirmation.count === 0 && confirmation.rawModelCount === null, 'Manual zero must remain distinct from an unknown candidate');
+  await page.getByRole('heading', { name: `${config.date} · confirmed · v1`, exact: true }).waitFor();
+  await page.waitForFunction(() => !document.querySelector('#tasks button').disabled);
+  const zeroReport = page.locator('#reports li').filter({ hasText: config.confirmCode });
+  check(await zeroReport.count() === 1 && (await zeroReport.innerText()).includes('0 头'), 'Confirmed zero must appear in the actual daily report');
+  await page.getByText('证据已锁定', { exact: true }).waitFor();
+
   stage = 'panel-role-presentation';
   const roleChecks = [];
   for (const username of ['e2e-operator', 'e2e-reviewer']) {
@@ -244,6 +266,11 @@ async (page) => {
     }
     check(requested.length === (username === 'e2e-operator' ? 0 : 1), 'Do not request known unauthorized panels');
     check(await page.locator('#master-data').getByRole('button', { name: '新增栋舍', exact: true }).count() === 0, 'Non-admins must not see master-data write controls');
+    const roleLogin = await page.request.post(`${api}/auth/login`, { data: { username, password: config.password } });
+    check(roleLogin.ok(), 'Synthetic role login must succeed for authorization readback');
+    const roleToken = (await roleLogin.json()).accessToken;
+    const deniedVersions = await page.request.get(`${api}/inventory-sessions/${source.id}/versions`, { headers: { Authorization: `Bearer ${roleToken}` } });
+    check(deniedVersions.status() === 404, 'Non-admin versions query must be masked by backend authorization');
     check(await page.locator('[role="alert"]').filter({ hasText: /\S/ }).count() === 0, 'Denied panels must not break the dashboard');
     page.off('request', collect);
     roleChecks.push(username);
@@ -252,7 +279,7 @@ async (page) => {
   await page.getByRole('heading', { name: '登录现场作业台' }).waitFor();
   check(errors.length === 0, `Browser errors: ${errors.join('; ')}`);
   const summary = { status: 'passed', completedAt: new Date().toISOString(), composeProject: 'pig-inventory-p0-admin-runtime', refreshes, v1: source.id, v2: correction.id, oldCount: 17, correctedCount: 19, mediaLocked: true, retry, correctionReplay: true, conflictStatus: 409, deniedStatus: 404, memoryOnly: true, optionalPanelChecks: faultChecks, panelRoleChecks: roleChecks, browserErrors: errors.length, humanAcceptance: 'pending' };
-  summary.functionalChecks = { masterDataUi: true, hierarchyReadback: true, historicalConfirmedOnly: true, aggregate: true, libraryScoped: true, administrativeDeletionAudited: true };
+  summary.functionalChecks = { masterDataUi: true, hierarchyReadback: true, historicalConfirmedOnly: true, aggregate: true, libraryScoped: true, administrativeDeletionAudited: true, manualConfirmationUi: true, confirmedZeroWithUnknownCandidate: true };
   // CLI can yield early when a native prompt opens. Publish only sanitized final evidence.
   await page.evaluate((result) => { window.__adminRuntimeResult = result; }, summary);
   return summary;

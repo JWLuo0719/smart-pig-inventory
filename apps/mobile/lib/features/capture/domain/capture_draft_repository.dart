@@ -57,6 +57,7 @@ abstract interface class CaptureDraftRepository {
     required String organizationId,
     required String penId,
     required DateTime businessDate,
+    String? draftId,
   });
 
   Future<void> createDraft({

@@ -21,8 +21,7 @@ List<List<int>> densityGrid(List<RemoteDetection> detections,
   return grid;
 }
 
-/// 空间分布热区卡：用颜色深浅呈现“猪集中在栏舍哪个位置”。
-/// 数据来自已复核会话的检测框，网格只是视觉聚合，不代表栏舍真实边界。
+/// One image only: detection positions are evidence, not a calibrated pen map.
 class DensityHeatmapCard extends StatelessWidget {
   const DensityHeatmapCard({super.key, required this.detections});
 
@@ -38,11 +37,11 @@ class DensityHeatmapCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('🗺️ 空间分布 · 共 ${detections.length} 头',
+          Text('🗺️ 本图检测分布 · ${detections.length} 处',
               style:
                   const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
           const SizedBox(height: 4),
-          Text('颜色越深，该区域目标越密集；最密集区域 $peak 头。网格仅聚合检测位置，不代表栏舍实际边界。',
+          Text('颜色越深，该图像区域检测位置越密集；最密集区域 $peak 处。网格仅聚合检测位置，不代表栏舍实际边界。',
               style: const TextStyle(fontSize: 12.5, color: Colors.black54)),
           const SizedBox(height: 12),
           AspectRatio(

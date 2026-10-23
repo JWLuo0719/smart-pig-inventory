@@ -34,7 +34,8 @@ void main() {
           updatedAt: now,
         ));
 
-    await AbandonBlockedCaptureDraft(database).execute('draft-1', now: now);
+    await AbandonBlockedCaptureDraft(database)
+        .execute('draft-1', organizationId: 'organization-1', now: now);
 
     final OutboxEntry entry = await (database.select(database.outboxEntries)
           ..where((OutboxEntries row) => row.packageId.equals('package-1')))
@@ -77,7 +78,8 @@ void main() {
         ));
 
     expect(
-      () => AbandonBlockedCaptureDraft(database).execute('draft-2', now: now),
+      () => AbandonBlockedCaptureDraft(database)
+          .execute('draft-2', organizationId: 'organization-1', now: now),
       throwsA(isA<StateError>()),
     );
   });

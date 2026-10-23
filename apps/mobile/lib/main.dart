@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'features/inventory/inventory_revision.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:workmanager/workmanager.dart';
@@ -43,7 +45,9 @@ class AuthGate extends ConsumerWidget {
 class PigInventoryApp extends StatelessWidget {
   const PigInventoryApp({super.key});
 
-  static final GoRouter _router = GoRouter(routes: <RouteBase>[
+  static final GoRouter _router = GoRouter(observers: [
+    inventoryRouteObserver
+  ], routes: <RouteBase>[
     GoRoute(path: '/', builder: (context, state) => const AuthGate()),
     GoRoute(
         path: '/pens', builder: (context, state) => const PenPickerScreen()),
@@ -68,6 +72,9 @@ class PigInventoryApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp.router(
       title: '智慧猪场场主',
+      locale: const Locale('zh', 'CN'),
+      supportedLocales: const [Locale('zh', 'CN')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       routerConfig: _router,

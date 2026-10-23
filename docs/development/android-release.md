@@ -1,6 +1,6 @@
 # Android 签名候选构建
 
-Release 使用独立密钥，不回退到 debug；应用 ID 保持 `com.smartfarm.smart_pig_inventory`，版本来自 `apps/mobile/pubspec.yaml`。本轮为 `0.1.0+4`。签名构建不代表模型批准、服务可用或人工验收通过。
+Release 使用独立密钥，不回退到 debug；应用 ID 保持 `com.smartfarm.smart_pig_inventory`，版本来自 `apps/mobile/pubspec.yaml`。签名构建不代表模型批准、服务可用或人工验收通过。当前参赛批次见 [v20 验证记录](competition-verification-20261020.md)。
 
 ## 本机密钥
 
@@ -28,7 +28,15 @@ pwsh -NoProfile -File scripts/build-release-apk.ps1 -ApiBaseUrl 'https://<实际
 pwsh -NoProfile -File scripts/test-release-configuration.ps1
 ```
 
-该脚本使用本机签名配置和 Android Debug keystore 验证九项 Gradle 门禁，日志/摘要写入忽略的 `artifacts/release-gates/`。需要已有本机候选密钥，不会修改密钥或产品数据。
+该脚本使用本机签名配置和 Android Debug keystore 验证十一项 Gradle 门禁，日志/摘要写入忽略的 `artifacts/release-gates/`。需要已有本机候选密钥，不会修改密钥或产品数据。
+
+## Windows 中文路径的 Release AOT 边界
+
+2026-10-20：当前 Flutter 3.44.7 的 Debug 可以在本仓中文路径构建，但 Release 的 native AOT snapshotter 无法读取实际存在的 app.dill。保留 AGP 路径覆盖仍不能解决该 native 工具限制。已验证的办法是将同一移动端源码及原构建脚本放到独立 ASCII 目录，再运行原签名脚本；不能把 Debug 成功推断为 Release 成功。
+
+干净版本可以使用 ASCII 路径的独立检出。未提交工作树必须先固定逐文件 SHA-256，复制 Git 可见移动源码与 scripts/build-release-apk.ps1，并在构建后复查源文件未变化。不要复制 key.properties、设备草稿、私钥、授权媒体或模型；通过现有四个 ANDROID_RELEASE_* 环境变量引用原签名身份，构建后清除子进程凭据。公开 LAN CA 仍按原脚本传入，不改变 TLS 身份。
+
+原生依赖在冷目录可能重复下载。可复制本机相同锁定版本的 SQLite 原生下载缓存（仅 .so/.dll/.dylib，不复制含绝对路径的 hook 输出），由原包构建钩子重新校验其内置 SHA-256；不能跳过 hash 校验或修改第三方包源码。v20 的 ASCII 构建、119个源文件核对和签名产物证据见上述验证记录。临时目录与本地辅助脚本属于忽略的构建证据，不代替版本化发布脚本。
 
 ## Debug 到 Release 的数据保留
 

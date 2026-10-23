@@ -201,16 +201,25 @@ class _TrendCard extends StatelessWidget {
                   style: const TextStyle(
                       fontWeight: FontWeight.w700, fontSize: 15)),
               const SizedBox(height: 4),
-              Row(children: const [
+              Wrap(spacing: 12, runSpacing: 6, children: const [
                 _Legend(color: AppColors.barnBlue, label: '人工确认（计入存栏）'),
                 SizedBox(width: 12),
                 _Legend(color: Color(0xFFFF6D00), label: '机器候选（未确认）'),
               ]),
+              if (penId == null)
+                Text(
+                    '查询时启用栏舍：${trend.scopePenCount ?? '未知'}；各日仅统计有数据栏舍，不比较覆盖不同的合计偏差。'),
               const SizedBox(height: 8),
               SizedBox(
                   height: 150,
                   width: double.infinity,
-                  child: CustomPaint(painter: _TrendPainter(points: points))),
+                  child: Semantics(
+                      label: points
+                          .map((p) =>
+                              '${p.date}，确认${p.confirmed ?? '未知'}，候选${p.candidate ?? '未知'}，覆盖${p.confirmedPenCount ?? '未知'}栏')
+                          .join('；'),
+                      child:
+                          CustomPaint(painter: _TrendPainter(points: points)))),
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                 Text(trend.from,
                     style:
@@ -227,7 +236,7 @@ class _TrendCard extends StatelessWidget {
                         : '该栏舍近 14 天暂无已确认或候选记录。',
                     style:
                         const TextStyle(fontSize: 12.5, color: Colors.black54)),
-              if (comparable.isNotEmpty) ...[
+              if (comparable.isNotEmpty && penId != null) ...[
                 const Text('机器提议 vs 人工确认（最近 7 个有数据日）',
                     style:
                         TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
@@ -297,7 +306,7 @@ class _TrendPainter extends CustomPainter {
         .whereType<int>()
         .toList();
     if (values.isEmpty) return;
-    final double maxValue = values.reduce(math.max) * 1.15;
+    final double maxValue = math.max(1, values.reduce(math.max)) * 1.15;
     Offset position(int index, int value) => Offset(
         points.length < 2
             ? size.width / 2

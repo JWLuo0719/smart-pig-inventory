@@ -1,4 +1,9 @@
+import 'package:drift/drift.dart' show BooleanExpressionOperators;
+import '../capture/domain/capture_target.dart';
+import '../../core/storage/database_provider.dart';
 import 'dart:async';
+import '../inventory/inventory_revision.dart';
+import '../inventory/inventory_reports_screen.dart';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -21,6 +26,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  int _generation = 0;
   List<RemoteInventoryTask>? _tasks;
   RemoteAssistantBrief? _assistant;
   String? _error;
@@ -37,9 +43,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         (AsyncValue<AuthState?>? previous, AsyncValue<AuthState?> next) {
       final AuthState? before = previous?.valueOrNull;
       final AuthState? after = next.valueOrNull;
-      if (after?.isOffline == false && before?.isOffline != false) {
+      if (after?.isOffline != before?.isOffline ||
+          after?.user.subjectId != before?.user.subjectId ||
+          after?.user.activeOrganizationId !=
+              before?.user.activeOrganizationId) {
         unawaited(_loadTasks());
       }
+    });
+    ref.listen(inventoryRevisionProvider, (_, __) {
+      unawaited(_loadTasks());
     });
     return _buildContent(context);
   }
@@ -47,14 +59,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<RemoteAssistantBrief?> _loadAssistant(
       AuthState auth, DateTime today) async {
     try {
-      return await ref.read(inventoryRemoteApiProvider).assistantInsights(
-          accessToken: auth.session.accessToken, businessDate: today);
+      return await retryOnceAfterUnauthorized(
+          initialAuth: auth,
+          reconnect: () =>
+              ref.read(authControllerProvider.notifier).reconnect(),
+          request: (token) => ref
+              .read(inventoryRemoteApiProvider)
+              .assistantInsights(accessToken: token, businessDate: today));
     } catch (_) {
-      return null; // 研判不可用时静默降级，不阻塞首页
+      return null; // 主任务继续显示，研判面板提供恢复操作
     }
   }
 
   Future<void> _loadTasks() async {
+    final generation = ++_generation;
     final AuthState? auth = ref.read(authControllerProvider).valueOrNull;
     if (auth == null || auth.isOffline) {
       if (mounted) {
@@ -85,21 +103,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
       );
       final RemoteAssistantBrief? assistant = await assistantFuture;
-      if (mounted) {
+      if (mounted && generation == _generation) {
         setState(() {
           _tasks = tasks;
           _assistant = assistant;
         });
       }
     } on DioException catch (error) {
-      if (mounted) setState(() => _error = _safeError(error));
-    } finally {}
+      if (mounted && generation == _generation) {
+        setState(() => _error = _safeError(error));
+      }
+    }
   }
 
   Widget _buildContent(BuildContext context) {
     final AuthState? auth = ref.watch(authControllerProvider).valueOrNull;
     if (auth == null) return const Center(child: CircularProgressIndicator());
     return StreamBuilder<List<LocalCaptureActivity>>(
+      key: ValueKey(auth.user.activeOrganizationId),
       stream: ref
           .watch(localActivityRepositoryProvider)
           .watchRecent(auth.user.activeOrganizationId, limit: 1000),
@@ -222,12 +243,12 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _ContinueCard extends StatelessWidget {
+class _ContinueCard extends ConsumerWidget {
   const _ContinueCard({required this.activity});
   final LocalCaptureActivity? activity;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final LocalCaptureActivity? value = activity;
     return Container(
       padding: const EdgeInsets.all(18),
@@ -258,14 +279,62 @@ class _ContinueCard extends StatelessWidget {
           ),
           const SizedBox(height: 15),
           FilledButton.icon(
-            onPressed: () => value?.sessionId == null
-                ? context.push('/pens')
-                : context.push('/inventory-sessions/${value!.sessionId}'),
+            onPressed: () async {
+              final auth = ref.read(authControllerProvider).valueOrNull;
+              if (auth == null) return;
+              if (value == null) {
+                context.push('/pens');
+                return;
+              }
+              // Read the actual draft again; recent activity may have changed while the card was visible.
+              final db = ref.read(appDatabaseProvider);
+              final draft = await (db.select(db.captureDrafts)
+                    ..where((d) =>
+                        d.id.equals(value.draftId) &
+                        d.organizationId
+                            .equals(auth.user.activeOrganizationId)))
+                  .getSingleOrNull();
+              if (!context.mounted ||
+                  draft == null ||
+                  ref
+                          .read(authControllerProvider)
+                          .valueOrNull
+                          ?.user
+                          .subjectId !=
+                      auth.user.subjectId ||
+                  ref
+                          .read(authControllerProvider)
+                          .valueOrNull
+                          ?.user
+                          .activeOrganizationId !=
+                      auth.user.activeOrganizationId) {
+                return;
+              }
+              if (value.sessionId != null) {
+                context.push('/inventory-sessions/${value.sessionId}');
+              } else if (value.outboxState != null) {
+                context.push('/outbox');
+              } else if (draft.state == 'draft') {
+                context.push('/capture',
+                    extra: CaptureTarget(
+                        organizationId: draft.organizationId,
+                        penId: draft.penId,
+                        label: '${value.buildingLabel} · ${value.penLabel}',
+                        businessDate: draft.businessDate,
+                        draftId: draft.id));
+              }
+            },
             style: FilledButton.styleFrom(
                 backgroundColor: AppColors.straw,
                 foregroundColor: AppColors.ink),
             icon: const Icon(Icons.arrow_forward),
-            label: Text(value?.sessionId == null ? '选择栏舍' : '查看服务器结果'),
+            label: Text(value == null
+                ? '选择栏舍'
+                : value.sessionId != null
+                    ? '查看服务器结果'
+                    : value.outboxState != null
+                        ? '查看上传作业'
+                        : '继续本份草稿'),
           ),
         ],
       ),
@@ -388,12 +457,12 @@ class _SafeNotice extends StatelessWidget {
       );
 }
 
-class _AssistantPanel extends StatelessWidget {
+class _AssistantPanel extends ConsumerWidget {
   const _AssistantPanel({required this.brief});
   final RemoteAssistantBrief brief;
 
   @override
-  Widget build(BuildContext context) => Card(
+  Widget build(BuildContext context, WidgetRef ref) => Card(
         clipBehavior: Clip.antiAlias,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
@@ -404,7 +473,7 @@ class _AssistantPanel extends StatelessWidget {
                 const Text('🤖', style: TextStyle(fontSize: 18)),
                 const SizedBox(width: 8),
                 Expanded(
-                    child: Text('牧数智核 · 今日研判',
+                    child: Text('今日规则研判',
                         style: Theme.of(context)
                             .textTheme
                             .titleMedium
@@ -420,15 +489,17 @@ class _AssistantPanel extends StatelessWidget {
                       ?.copyWith(color: Theme.of(context).colorScheme.outline)),
               const Divider(height: 18),
               ...brief.insights.map((RemoteAssistantInsight insight) =>
-                  _insightTile(context, insight)),
+                  _insightTile(context, ref, insight)),
             ],
           ),
         ),
       );
 
-  Widget _insightTile(BuildContext context, RemoteAssistantInsight insight) {
-    final bool tappable =
-        insight.sessionId != null || insight.type == 'PENDING_CAPTURE';
+  Widget _insightTile(
+      BuildContext context, WidgetRef ref, RemoteAssistantInsight insight) {
+    final kind = insight.actionTarget?['kind'] as String?;
+    final bool tappable = insight.sessionId != null ||
+        ['capture', 'report', 'master_data'].contains(kind);
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 2),
       leading: _severityIcon(insight.severity),
@@ -438,17 +509,69 @@ class _AssistantPanel extends StatelessWidget {
           style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
       subtitle: Padding(
         padding: const EdgeInsets.only(top: 2),
-        child: Text(insight.detail,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 12.5)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(insight.detail, style: const TextStyle(fontSize: 12.5)),
+          if (insight.basis != null)
+            ExpansionTile(title: const Text('查看数据依据'), children: [
+              Text('来源：${switch (insight.basis!['valueSource']) {
+                'confirmed' => '人工确认',
+                'candidate' => '服务端候选',
+                _ => '未知'
+              }}；基线：${insight.basis!['baselineValue'] ?? '未知'}；样本${insight.basis!['sampleCount']}次；${insight.basis!['from'] ?? '—'} 至 ${insight.basis!['to'] ?? '—'}')
+            ]),
+        ]),
       ),
       trailing: tappable ? const Icon(Icons.chevron_right, size: 20) : null,
       onTap: !tappable
           ? null
-          : () => insight.sessionId != null
-              ? context.push('/inventory-sessions/${insight.sessionId}')
-              : context.push('/pens'),
+          : () async {
+              if (insight.sessionId != null) {
+                context.push('/inventory-sessions/${insight.sessionId}');
+                return;
+              }
+              if (kind == 'report') {
+                Navigator.of(context).push(MaterialPageRoute<void>(
+                    builder: (_) => const InventoryReportsScreen()));
+                return;
+              }
+              final targetId = insight.actionTarget?['id'] as String?;
+              final auth = ref.read(authControllerProvider).valueOrNull;
+              if (kind != 'capture' || targetId == null || auth == null) {
+                context.push('/pens');
+                return;
+              }
+              final db = ref.read(appDatabaseProvider);
+              final pen = await (db.select(db.cachedPens)
+                    ..where((p) => p.id.equals(targetId)))
+                  .getSingleOrNull();
+              if (pen == null || !pen.enabled) {
+                if (context.mounted) context.push('/pens');
+                return;
+              }
+              final building = await (db.select(db.cachedBuildings)
+                    ..where((b) =>
+                        b.id.equals(pen.buildingId) &
+                        b.organizationId
+                            .equals(auth.user.activeOrganizationId)))
+                  .getSingleOrNull();
+              final current = ref.read(authControllerProvider).valueOrNull;
+              if (!context.mounted ||
+                  current?.user.subjectId != auth.user.subjectId ||
+                  current?.user.activeOrganizationId !=
+                      auth.user.activeOrganizationId) {
+                return;
+              }
+              if (building == null || !building.enabled) {
+                context.push('/pens');
+                return;
+              }
+              context.push('/capture',
+                  extra: CaptureTarget(
+                      organizationId: auth.user.activeOrganizationId,
+                      penId: pen.id,
+                      label: '${building.code} / ${pen.code} ${pen.name}',
+                      businessDate: DateUtils.dateOnly(DateTime.now())));
+            },
     );
   }
 

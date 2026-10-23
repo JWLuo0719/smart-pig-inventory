@@ -36,8 +36,15 @@ class QueueCaptureDraft {
   final Future<void> Function()? _scheduleSync;
   final PerceptualHasher _perceptualHasher;
 
-  Future<QueuedCapturePackage> execute(String draftId) async {
+  Future<QueuedCapturePackage> execute(String draftId,
+      {required String organizationId}) async {
     final QueuedCapturePackage result = await database.transaction(() async {
+      final owner = await (database.select(database.captureDrafts)
+            ..where((r) => r.id.equals(draftId)))
+          .getSingle();
+      if (owner.organizationId != organizationId) {
+        throw StateError('采集组不属于当前组织');
+      }
       final OutboxEntry? existing =
           await (database.select(database.outboxEntries)
                 ..where((entry) => entry.draftId.equals(draftId)))

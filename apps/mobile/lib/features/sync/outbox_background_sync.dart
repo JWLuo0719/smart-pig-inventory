@@ -40,7 +40,9 @@ Future<bool> _runOutboxWorker() async {
     if (storedSession == null || user == null) return true;
 
     final DriftOutboxRepository repository = DriftOutboxRepository(database);
-    if (!await repository.hasSynchronizableWork(now: DateTime.now().toUtc())) {
+    if (!await repository.hasSynchronizableWork(
+        organizationId: user.activeOrganizationId,
+        now: DateTime.now().toUtc())) {
       return true;
     }
 
@@ -50,6 +52,10 @@ Future<bool> _runOutboxWorker() async {
         .isBefore(DateTime.now().toUtc().add(_workerTokenRefreshWindow))) {
       try {
         session = await authApi.refresh(session.refreshToken);
+        if ((await sessions.read())?.refreshToken !=
+            storedSession.refreshToken) {
+          return true;
+        }
         await sessions.save(session);
       } on Exception {
         // The refresh token may be expired or revoked. Preserve the queued
@@ -58,20 +64,45 @@ Future<bool> _runOutboxWorker() async {
       }
     }
 
+    final verifiedUser = await authApi.currentUser(session.accessToken);
+    if (verifiedUser.subjectId != user.subjectId ||
+        verifiedUser.activeOrganizationId != user.activeOrganizationId) {
+      return true;
+    }
     AuthState auth = AuthState(
       session: session,
-      user: user,
+      user: verifiedUser,
       isOffline: false,
     );
     final UploadPackageSynchronizer synchronizer = UploadPackageSynchronizer(
       api: UploadRemoteApi(baseUrl: _workerApiBaseUrl),
       repository: repository,
+      currentAuth: () => auth,
+      identityIsCurrent: (expected) async {
+        final persisted = await sessions.read();
+        final context = await contexts.readLatest();
+        return persisted?.accessToken == expected.session.accessToken &&
+            context?.subjectId == expected.user.subjectId &&
+            context?.activeOrganizationId == expected.user.activeOrganizationId;
+      },
       reconnect: () async {
         try {
           final AuthSession refreshed =
               await authApi.refresh(auth.session.refreshToken);
+          if ((await sessions.read())?.refreshToken !=
+              auth.session.refreshToken) {
+            return null;
+          }
           await sessions.save(refreshed);
-          auth = AuthState(session: refreshed, user: user, isOffline: false);
+          final refreshedUser =
+              await authApi.currentUser(refreshed.accessToken);
+          if (refreshedUser.subjectId != verifiedUser.subjectId ||
+              refreshedUser.activeOrganizationId !=
+                  verifiedUser.activeOrganizationId) {
+            return null;
+          }
+          auth = AuthState(
+              session: refreshed, user: refreshedUser, isOffline: false);
           return auth;
         } on Exception {
           // Never discard queued media if the refresh token was revoked.
@@ -97,16 +128,7 @@ Future<bool> _runOutboxWorker() async {
         case UploadSyncOutcome.retryScheduled:
           return false;
         case UploadSyncOutcome.waitingForAuthentication:
-          try {
-            final AuthSession refreshed =
-                await authApi.refresh(auth.session.refreshToken);
-            await sessions.save(refreshed);
-            await repository.retryAuthenticationWaiting(
-                now: DateTime.now().toUtc());
-            auth = AuthState(session: refreshed, user: user, isOffline: false);
-          } on Exception {
-            return true;
-          }
+          return true;
       }
     }
     return true;

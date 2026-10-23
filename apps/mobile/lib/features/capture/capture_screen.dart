@@ -4,11 +4,13 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:video_player/video_player.dart';
 import '../../shared/widgets/local_video_player.dart';
 import 'application/create_video_draft.dart';
+import 'application/abandon_unqueued_capture_draft.dart';
 
 import '../../core/auth/auth_controller.dart';
 import '../../core/storage/app_database.dart';
@@ -47,6 +49,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
   final List<String> _savedPositions = <String>[];
   final List<_LocalEvidence> _savedEvidence = <_LocalEvidence>[];
   CreatedCaptureDraft? _savedDraft;
+  String? _replacementId;
   bool _threeView = false;
   bool _video = false;
   bool _saving = false;
@@ -89,13 +92,15 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
 
   Future<void> _restoreCaptureScreen() async {
     await _recoverLostPickerData();
-    final DriftCaptureDraftRepository repository =
-        DriftCaptureDraftRepository(ref.read(appDatabaseProvider));
+    final DriftCaptureDraftRepository repository = DriftCaptureDraftRepository(
+        ref.read(appDatabaseProvider),
+        replaceDraftId: _replacementId);
     try {
       final snapshot = await repository.findLatestForTarget(
         organizationId: widget.target.organizationId,
         penId: widget.target.penId,
         businessDate: widget.target.businessDate,
+        draftId: widget.target.draftId,
       );
       if (!mounted || snapshot == null) return;
       if (snapshot.media.isEmpty ||
@@ -182,6 +187,11 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
     bool restoringLostData = false,
   }) async {
     if (!_canAddPhoto && !restoringLostData) return;
+    final auth = ref.read(authControllerProvider).valueOrNull;
+    if (auth == null ||
+        auth.user.activeOrganizationId != widget.target.organizationId) {
+      return;
+    }
     setState(() {
       _saving = true;
       _error = null;
@@ -196,7 +206,8 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
       final ImageMetadata metadata = await _metadataReader.read(sourceFile);
       final Directory documents = await getApplicationDocumentsDirectory();
       final DriftCaptureDraftRepository repository =
-          DriftCaptureDraftRepository(ref.read(appDatabaseProvider));
+          DriftCaptureDraftRepository(ref.read(appDatabaseProvider),
+              replaceDraftId: _replacementId);
       final MediaMaterializer materializer = MediaMaterializer(documents);
       final DateTime capturedAt = DateTime.now();
 
@@ -227,6 +238,11 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
         );
         if (!mounted) return;
         setState(() {
+          if (_replacementId != null) {
+            _savedEvidence.clear();
+            _savedPositions.clear();
+            _replacementId = null;
+          }
           _savedDraft = saved;
           _savedPositions.add('single');
           _savedEvidence.add(_LocalEvidence(
@@ -278,7 +294,8 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
       final saved = await CreateVideoDraft(
         materializer:
             MediaMaterializer(await getApplicationDocumentsDirectory()),
-        repository: DriftCaptureDraftRepository(ref.read(appDatabaseProvider)),
+        repository: DriftCaptureDraftRepository(ref.read(appDatabaseProvider),
+            replaceDraftId: _replacementId),
       ).execute(
           source: source,
           originalName: name,
@@ -291,6 +308,11 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
       setState(() {
         _video = true;
         _threeView = false;
+        if (_replacementId != null) {
+          _savedEvidence.clear();
+          _savedPositions.clear();
+          _replacementId = null;
+        }
         _savedDraft = saved;
         _savedPositions.add('video');
         _savedEvidence.add(_LocalEvidence(
@@ -310,6 +332,11 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
   Future<void> _openRoiEditor(_LocalEvidence item) async {
     final String? assetId = item.assetId;
     if (assetId == null) return;
+    if (_isQueued) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('已入队的证据标注只读，原图保留')));
+      return;
+    }
     final AppDatabase database = ref.read(appDatabaseProvider);
     Roi? savedRoi;
     final bool? saved = await Navigator.of(context).push<bool>(
@@ -319,8 +346,18 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
           aspectRatio: item.aspectRatio,
           initialRoi: _roiFromJson(item.roiJson),
           onSave: (Roi? roi) async {
-            await UpdateCaptureRoi(database)
-                .execute(assetId: assetId, roi: roi);
+            if (ref
+                    .read(authControllerProvider)
+                    .valueOrNull
+                    ?.user
+                    .activeOrganizationId !=
+                widget.target.organizationId) {
+              throw StateError('账号已变化');
+            }
+            await UpdateCaptureRoi(database).execute(
+                organizationId: widget.target.organizationId,
+                assetId: assetId,
+                roi: roi);
             savedRoi = roi;
           },
         ),
@@ -359,7 +396,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
       await QueueCaptureDraft(
         ref.read(appDatabaseProvider),
         scheduleSync: scheduleOutboxSync,
-      ).execute(draft.draftId);
+      ).execute(draft.draftId, organizationId: widget.target.organizationId);
       if (!mounted) return;
       setState(() => _isQueued = true);
     } on StateError catch (error) {
@@ -374,6 +411,77 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
       }
     } finally {
       if (mounted) setState(() => _queueing = false);
+    }
+  }
+
+  Future<void> _abandonUnqueued() async {
+    final draft = _savedDraft;
+    if (draft == null || _isQueued || _saving || _queueing) return;
+    final consent = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+                title: const Text('放弃这组未上传草稿？'),
+                content: const Text('本机原始照片会保留，这组草稿停止使用；不会修改服务器或锁定证据。'),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('继续本组')),
+                  FilledButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('放弃本组'))
+                ]));
+    if (consent != true || !mounted) return;
+    try {
+      final auth = ref.read(authControllerProvider).valueOrNull;
+      if (auth?.user.activeOrganizationId != widget.target.organizationId) {
+        return;
+      }
+      await AbandonUnqueuedCaptureDraft(ref.read(appDatabaseProvider))
+          .execute(draft.draftId, organizationId: widget.target.organizationId);
+      if (mounted) {
+        setState(() {
+          _savedDraft = null;
+          _savedEvidence.clear();
+          _savedPositions.clear();
+        });
+      }
+    } on StateError {
+      if (mounted) setState(() => _error = '草稿已入队或账号发生变化，原证据保持不变');
+    }
+  }
+
+  Future<void> _recaptureGroup() async {
+    final old = _savedDraft;
+    if (old == null || _saving || _isQueued || _queueing) return;
+    final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+                title: const Text('重新采集整组？'),
+                content:
+                    const Text('三图会从左图重新开始；新照片安全保存后才停止旧草稿，旧原图保留。取消拍摄不会改变旧组。'),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('取消')),
+                  FilledButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('重新拍摄'))
+                ]));
+    if (confirmed != true || !mounted) return;
+    try {
+      final picked = _video
+          ? await _picker.pickVideo(
+              source: ImageSource.camera,
+              maxDuration: const Duration(minutes: 2))
+          : await _picker.pickImage(
+              source: ImageSource.camera, imageQuality: 92);
+      if (picked == null || !mounted) return;
+      _replacementId = old.draftId;
+      await _savePicked(picked, restoringLostData: true);
+    } catch (_) {
+      if (mounted) setState(() => _error = '重新采集未完成，旧草稿仍保留');
+    } finally {
+      _replacementId = null;
     }
   }
 
@@ -401,7 +509,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
     setState(() => _abandoning = true);
     try {
       await AbandonBlockedCaptureDraft(ref.read(appDatabaseProvider))
-          .execute(draft.draftId);
+          .execute(draft.draftId, organizationId: widget.target.organizationId);
       if (!mounted) return;
       setState(() {
         _savedDraft = null;
@@ -428,7 +536,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
     required DriftCaptureDraftRepository repository,
     required DateTime capturedAt,
   }) async {
-    if (_savedDraft == null) {
+    if (_savedDraft == null || _replacementId != null) {
       final CreatedCaptureDraft saved = await CreateThreeViewDraft(
         materializer: materializer,
         repository: repository,
@@ -446,6 +554,11 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
       );
       if (!mounted) return;
       setState(() {
+        if (_replacementId != null) {
+          _savedEvidence.clear();
+          _savedPositions.clear();
+          _replacementId = null;
+        }
         _savedDraft = saved;
         _savedPositions.add('left');
         _savedEvidence.add(_LocalEvidence(
@@ -497,6 +610,11 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = ref.watch(authControllerProvider).valueOrNull;
+    if (auth == null ||
+        auth.user.activeOrganizationId != widget.target.organizationId) {
+      return const Scaffold(body: Center(child: Text('当前账号无法访问此采集组，请返回当前组织')));
+    }
     final CreatedCaptureDraft? savedDraft = _savedDraft;
     final bool? offline =
         ref.watch(authControllerProvider).valueOrNull?.isOffline;
@@ -591,6 +709,18 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
                       : '已保存到待上传'),
             ),
           ],
+          if (_savedDraft != null && !_isQueued)
+            OutlinedButton(
+                onPressed: _saving || _queueing ? null : _recaptureGroup,
+                child: const Text('重新采集整组')),
+          if (_savedDraft != null && !_isQueued)
+            TextButton(
+                onPressed: _saving || _queueing ? null : _abandonUnqueued,
+                child: const Text('放弃未上传草稿')),
+          if (_isQueued)
+            OutlinedButton(
+                onPressed: () => context.push('/outbox'),
+                child: const Text('查看上传进度')),
           if (_canAbandonBlockedDraft) ...<Widget>[
             const SizedBox(height: 10),
             OutlinedButton.icon(

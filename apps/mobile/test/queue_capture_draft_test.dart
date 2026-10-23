@@ -54,8 +54,10 @@ void main() {
     );
     final QueueCaptureDraft queue = QueueCaptureDraft(database);
 
-    final QueuedCapturePackage first = await queue.execute(draft.draftId);
-    final QueuedCapturePackage replay = await queue.execute(draft.draftId);
+    final QueuedCapturePackage first =
+        await queue.execute(draft.draftId, organizationId: 'organization-1');
+    final QueuedCapturePackage replay =
+        await queue.execute(draft.draftId, organizationId: 'organization-1');
 
     expect(first.wasAlreadyQueued, isFalse);
     expect(replay.wasAlreadyQueued, isTrue);
@@ -103,8 +105,12 @@ void main() {
                 width: 640,
                 height: 480);
     final queue = QueueCaptureDraft(database);
-    final first = await queue.execute(draft.draftId);
-    expect((await queue.execute(draft.draftId)).packageId, first.packageId);
+    final first =
+        await queue.execute(draft.draftId, organizationId: 'organization-1');
+    expect(
+        (await queue.execute(draft.draftId, organizationId: 'organization-1'))
+            .packageId,
+        first.packageId);
     final manifest = jsonDecode(
         (await database.select(database.outboxEntries).getSingle())
             .manifestJson) as Map<String, dynamic>;
@@ -138,7 +144,8 @@ void main() {
     );
 
     await expectLater(
-      QueueCaptureDraft(database).execute(draft.draftId),
+      QueueCaptureDraft(database)
+          .execute(draft.draftId, organizationId: 'organization-1'),
       throwsA(isA<StateError>()),
     );
 

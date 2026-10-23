@@ -136,6 +136,8 @@ class RemoteAssistantInsight {
     required this.detail,
     required this.action,
     this.sessionId,
+    this.basis,
+    this.actionTarget,
   });
 
   final String type;
@@ -144,6 +146,8 @@ class RemoteAssistantInsight {
   final String detail;
   final String action;
   final String? sessionId;
+  final Map<String, dynamic>? basis;
+  final Map<String, dynamic>? actionTarget;
 
   factory RemoteAssistantInsight.fromJson(Map<String, dynamic> body) =>
       RemoteAssistantInsight(
@@ -153,6 +157,8 @@ class RemoteAssistantInsight {
         detail: body['detail'] as String,
         action: (body['action'] as String?) ?? '查看',
         sessionId: body['sessionId'] as String?,
+        basis: body['basis'] as Map<String, dynamic>?,
+        actionTarget: body['actionTarget'] as Map<String, dynamic>?,
       );
 }
 

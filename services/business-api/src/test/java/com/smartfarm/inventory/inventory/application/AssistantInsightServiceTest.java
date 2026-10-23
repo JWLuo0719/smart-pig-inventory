@@ -25,6 +25,18 @@ class AssistantInsightServiceTest {
     }
 
     @Test
+    void neverReconstructsMultiImageCandidatesAndKeepsLegitimateZero() {
+        var unknown = AssistantInsightService.build(DATE, List.of(row("review_required", null, null, 72, DATE.minusDays(1), 28)));
+        assertTrue(unknown.insights().stream().noneMatch(i -> i.title().contains("72")));
+        var zero = AssistantInsightService.build(DATE, List.of(row("review_required", 0, null, 0, null, null)));
+        var review = zero.insights().stream().filter(i -> i.type().equals("REVIEW_REQUIRED")).findFirst().orElseThrow();
+        assertTrue(review.title().contains("0 头"));
+        assertEquals(0, review.basis().value());
+        assertEquals("candidate", review.basis().valueSource());
+        assertEquals("session", review.actionTarget().kind());
+    }
+
+    @Test
     void emptyMasterDataProducesGuidance() {
         AssistantBrief brief = AssistantInsightService.build(DATE, List.of());
         assertEquals(1, brief.insights().size());

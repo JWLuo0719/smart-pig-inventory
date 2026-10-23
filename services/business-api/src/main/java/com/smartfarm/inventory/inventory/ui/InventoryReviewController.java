@@ -98,6 +98,13 @@ public class InventoryReviewController {
         return service.session(sessionId);
     }
 
+    @GetMapping("/inventory-sessions/{sessionId}/versions")
+    InventoryReviewService.VersionPage versions(@PathVariable UUID sessionId,
+            @RequestParam(required = false) Integer beforeVersion,
+            @RequestParam(defaultValue = "20") int limit) {
+        return service.versions(sessionId, beforeVersion, limit);
+    }
+
     @GetMapping("/inventory-sessions/{sessionId}/media")
     List<InventoryReviewService.MediaEvidenceView> sessionMedia(@PathVariable UUID sessionId) {
         return service.sessionMedia(sessionId);

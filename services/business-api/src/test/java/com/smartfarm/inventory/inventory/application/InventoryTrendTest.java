@@ -44,6 +44,19 @@ class InventoryTrendTest {
     }
 
     @Test
+    void preservesEmptyPensAndDistinguishesMissingDaysAndCoverage() {
+        InventoryTrend trend = InventoryReviewService.assembleTrend(FROM, TO, List.of(
+                row(FROM, PEN_A, "01", "confirmed", 0, 0)), 3);
+        assertEquals(0, trend.total().get(0).confirmed());
+        assertEquals(0, trend.total().get(0).candidate());
+        assertEquals(1, trend.total().get(0).confirmedPenCount());
+        assertEquals(0, trend.total().get(1).confirmedPenCount());
+        assertNull(trend.total().get(1).confirmed());
+        assertEquals(3, trend.scopePenCount());
+        assertEquals("current_enabled_pens", trend.scopeBasis());
+    }
+
+    @Test
     void emptyWindowStillProducesADenseAxis() {
         InventoryTrend trend = InventoryReviewService.assembleTrend(FROM, FROM.plusDays(2), List.of());
         assertEquals(3, trend.total().size());

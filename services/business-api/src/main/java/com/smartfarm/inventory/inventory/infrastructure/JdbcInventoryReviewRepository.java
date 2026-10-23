@@ -490,6 +490,34 @@ public class JdbcInventoryReviewRepository {
                 from, to, bytes(organizationId));
     }
 
+    public int enabledPenCount(UUID organizationId) {
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM pen p JOIN building b ON b.id=p.building_id WHERE b.organization_id=? AND b.enabled=TRUE AND p.enabled=TRUE", Integer.class, bytes(organizationId));
+        return count == null ? 0 : count;
+    }
+
+    public List<com.smartfarm.inventory.inventory.application.InventoryReviewService.VersionView> versions(UUID organizationId, UUID sourceSessionId) {
+        return jdbc.query("""
+                WITH RECURSIVE ancestors AS (
+                  SELECT id, supersedes_session_id FROM inventory_session WHERE id=?
+                  UNION ALL SELECT parent.id, parent.supersedes_session_id FROM inventory_session parent
+                    JOIN ancestors child ON parent.id=child.supersedes_session_id
+                ), lineage AS (
+                  SELECT id FROM ancestors WHERE supersedes_session_id IS NULL
+                  UNION ALL SELECT child.id FROM inventory_session child JOIN lineage parent ON child.supersedes_session_id=parent.id
+                )
+                SELECT s.id, s.version, s.status, s.confirmed_count, s.supersedes_session_id, s.correction_reason, s.confirmed_at
+                FROM lineage JOIN inventory_session s ON s.id=lineage.id
+                JOIN pen p ON p.id=s.pen_id JOIN building b ON b.id=p.building_id
+                WHERE b.organization_id=?
+                  AND s.confirmed_count IS NOT NULL AND s.status IN ('confirmed','superseded')
+                ORDER BY s.version DESC
+                """, (rs, n) -> new com.smartfarm.inventory.inventory.application.InventoryReviewService.VersionView(
+                    readUuid(rs,"id"), rs.getInt("version"), rs.getString("status"), nullableInt(rs,"confirmed_count"),
+                    readUuid(rs,"supersedes_session_id"), rs.getString("correction_reason"),
+                    rs.getTimestamp("confirmed_at") == null ? null : rs.getTimestamp("confirmed_at").toInstant().toString()),
+                bytes(sourceSessionId), bytes(organizationId));
+    }
+
     public record TrendRow(LocalDate businessDate, UUID penId, String buildingCode, String penCode,
             String penName, String status, Integer confirmedCount, Integer candidateCount) {
     }

@@ -1,0 +1,727 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:smartfarm:assistant-tools:1.0",
+  "title": "Read-only assistant tool contracts, no runtime agent",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/get_day_overviewRequest"
+    },
+    {
+      "$ref": "#/$defs/get_day_overviewResponse"
+    },
+    {
+      "$ref": "#/$defs/get_pen_historyRequest"
+    },
+    {
+      "$ref": "#/$defs/get_pen_historyResponse"
+    },
+    {
+      "$ref": "#/$defs/inspect_sessionRequest"
+    },
+    {
+      "$ref": "#/$defs/inspect_sessionResponse"
+    }
+  ],
+  "$defs": {
+    "get_day_overviewRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tool": {
+          "const": "get_day_overview"
+        },
+        "arguments": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "businessDate": {
+              "type": "string",
+              "format": "date"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          },
+          "required": [
+            "businessDate"
+          ]
+        }
+      },
+      "required": [
+        "tool",
+        "arguments"
+      ]
+    },
+    "get_day_overviewResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0"
+        },
+        "tool": {
+          "const": "get_day_overview"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "unknown",
+            "unauthenticated",
+            "not_found_or_forbidden",
+            "unavailable",
+            "invalid_arguments"
+          ]
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "data": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "confirmedPenCount": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "scopePenCount": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "confirmedHeads": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "rows": {
+                  "type": "array",
+                  "maxItems": 50,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "penId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "sessionId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "format": "uuid"
+                      },
+                      "state": {
+                        "enum": [
+                          "pending",
+                          "submitted",
+                          "processing",
+                          "review_required",
+                          "confirmed",
+                          "superseded",
+                          "unknown"
+                        ]
+                      },
+                      "confirmedCount": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ],
+                        "minimum": 0
+                      },
+                      "candidateCount": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ],
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "penId",
+                      "sessionId",
+                      "state",
+                      "confirmedCount",
+                      "candidateCount"
+                    ]
+                  }
+                },
+                "hasMore": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "confirmedPenCount",
+                "scopePenCount",
+                "confirmedHeads",
+                "rows",
+                "hasMore"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "enum": [
+                  "session",
+                  "daily_report"
+                ]
+              },
+              "id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "businessDate": {
+                "type": "string",
+                "format": "date"
+              }
+            },
+            "required": [
+              "kind",
+              "id",
+              "businessDate"
+            ],
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "session"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "id": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "tool",
+        "status",
+        "generatedAt",
+        "data",
+        "evidence"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "unauthenticated",
+                  "not_found_or_forbidden",
+                  "unavailable",
+                  "invalid_arguments"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "null"
+              },
+              "evidence": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "ok"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "get_pen_historyRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tool": {
+          "const": "get_pen_history"
+        },
+        "arguments": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "penId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "to": {
+              "type": "string",
+              "format": "date"
+            },
+            "days": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 90,
+              "default": 7
+            }
+          },
+          "required": [
+            "penId",
+            "to"
+          ]
+        }
+      },
+      "required": [
+        "tool",
+        "arguments"
+      ]
+    },
+    "get_pen_historyResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0"
+        },
+        "tool": {
+          "const": "get_pen_history"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "unknown",
+            "unauthenticated",
+            "not_found_or_forbidden",
+            "unavailable",
+            "invalid_arguments"
+          ]
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "data": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "penId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "points": {
+                  "type": "array",
+                  "maxItems": 90,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "date": {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      "confirmedCount": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ],
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "date",
+                      "confirmedCount"
+                    ]
+                  }
+                },
+                "scopeBasis": {
+                  "const": "current_enabled_pens"
+                }
+              },
+              "required": [
+                "penId",
+                "points",
+                "scopeBasis"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "enum": [
+                  "session",
+                  "daily_report"
+                ]
+              },
+              "id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "businessDate": {
+                "type": "string",
+                "format": "date"
+              }
+            },
+            "required": [
+              "kind",
+              "id",
+              "businessDate"
+            ],
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "session"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "id": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "tool",
+        "status",
+        "generatedAt",
+        "data",
+        "evidence"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "unauthenticated",
+                  "not_found_or_forbidden",
+                  "unavailable",
+                  "invalid_arguments"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "null"
+              },
+              "evidence": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "ok"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "inspect_sessionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tool": {
+          "const": "inspect_session"
+        },
+        "arguments": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "required": [
+            "sessionId"
+          ]
+        }
+      },
+      "required": [
+        "tool",
+        "arguments"
+      ]
+    },
+    "inspect_sessionResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0"
+        },
+        "tool": {
+          "const": "inspect_session"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "unknown",
+            "unauthenticated",
+            "not_found_or_forbidden",
+            "unavailable",
+            "invalid_arguments"
+          ]
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "data": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "sessionId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "state": {
+                  "enum": [
+                    "pending",
+                    "submitted",
+                    "processing",
+                    "review_required",
+                    "confirmed",
+                    "superseded",
+                    "unknown"
+                  ]
+                },
+                "confirmedCount": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "candidateCount": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "issues": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "enum": [
+                      "review_required",
+                      "inference_failed",
+                      "missing_evidence",
+                      "insufficient_evidence",
+                      "unknown"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "sessionId",
+                "state",
+                "confirmedCount",
+                "candidateCount",
+                "issues"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "enum": [
+                  "session",
+                  "daily_report"
+                ]
+              },
+              "id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "businessDate": {
+                "type": "string",
+                "format": "date"
+              }
+            },
+            "required": [
+              "kind",
+              "id",
+              "businessDate"
+            ],
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "session"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "id": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "tool",
+        "status",
+        "generatedAt",
+        "data",
+        "evidence"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "unauthenticated",
+                  "not_found_or_forbidden",
+                  "unavailable",
+                  "invalid_arguments"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "null"
+              },
+              "evidence": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "ok"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
