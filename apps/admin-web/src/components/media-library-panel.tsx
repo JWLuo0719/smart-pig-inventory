@@ -1,14 +1,15 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { directionLabel } from "@/lib/presentation-labels";
+import { ThumbnailQueue } from "@/lib/thumbnail-queue";
 
 type Media = { assetId: string; sessionId: string; buildingCode: string; penCode: string; businessDate: string; viewPosition: string; contentType: string; locked: boolean; deleted: boolean };
 type PenOption = { penId: string; buildingCode: string; penCode: string };
 type Query = { businessDate: string; penId: string; offset: number };
 
-function Thumbnail({ item, load }: { item: Media; load: (assetId: string) => Promise<Blob> }) {
+function Thumbnail({ item, queue }: { item: Media; queue: ThumbnailQueue }) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const supported = !item.deleted && ["image/jpeg", "image/png"].includes(item.contentType);
@@ -16,38 +17,47 @@ function Thumbnail({ item, load }: { item: Media; load: (assetId: string) => Pro
     if (!supported) return;
     let active = true;
     let current: string | null = null;
-    load(item.assetId).then((blob) => {
+    const cancellation = new AbortController();
+    queue.enqueue(item.assetId, cancellation.signal).then((blob) => {
       if (!active) return;
       current = URL.createObjectURL(blob); setUrl(current);
     }).catch(() => { if (active) setFailed(true); });
-    return () => { active = false; if (current) URL.revokeObjectURL(current); };
-  }, [item.assetId, supported, load]);
+    return () => { active = false; cancellation.abort(); if (current) URL.revokeObjectURL(current); };
+  }, [item.assetId, supported, queue]);
   const label = item.deleted ? "已删除，保留审计" : item.contentType === "video/mp4" ? "视频证据" : !supported ? "此格式暂无缩略图" : failed ? "缩略图暂不可用" : "缩略图加载中…";
   return <div className="library-thumbnail">{url && !failed ? <Image src={url} width={160} height={120} unoptimized alt={`${item.buildingCode} / ${item.penCode} ${directionLabel(item.viewPosition)}缩略图`} onError={() => setFailed(true)} /> : <span role="status">{label}</span>}</div>;
 }
 
-export function MediaLibraryPanel({ api, loadThumbnail, pens, openSession }: {
-  api: <T>(path: string) => Promise<T>; loadThumbnail: (assetId: string) => Promise<Blob>;
+export function MediaLibraryPanel({ api, loadThumbnail, sessionRevision, pens, openSession }: {
+  api: <T>(path: string) => Promise<T>; loadThumbnail: (assetId: string, signal: AbortSignal) => Promise<Blob>;
+  sessionRevision: () => number;
   pens: PenOption[]; openSession: (id: string) => Promise<void>;
 }) {
   const [date, setDate] = useState(() => new Date().toLocaleDateString("en-CA"));
   const [penId, setPenId] = useState("");
   const [query, setQuery] = useState<Query | null>(null);
-  const [rows, setRows] = useState<Media[] | null>(null);
+  const [page, setPage] = useState<{ rows: Media[]; queue: ThumbnailQueue } | null>(null);
+  const rows = page?.rows ?? null;
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(false);
+  const cancelQuery = useRef<() => void>(() => undefined);
   useEffect(() => {
     if (!query) return;
     let active = true;
+    const identity = sessionRevision();
+    const isCurrent = () => active && identity === sessionRevision();
+    const queue = new ThumbnailQueue(loadThumbnail, isCurrent);
+    const cancel = () => { active = false; queue.dispose(); };
+    cancelQuery.current = cancel;
     const params = new URLSearchParams({ businessDate: query.businessDate, limit: "50", offset: query.offset.toString() });
     if (query.penId) params.set("penId", query.penId);
     api<Media[]>(`media-assets?${params}`).then((items) => {
       if (!Array.isArray(items)) throw new Error("Invalid media list");
-      if (active) setRows(items);
-    }).catch(() => { if (active) setError(true); }).finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [query, api]);
-  function begin(next: Query) { setRows(null); setError(false); setLoading(true); setQuery(next); }
+      if (isCurrent()) setPage({ rows: items, queue });
+    }).catch(() => { if (isCurrent()) setError(true); }).finally(() => { if (isCurrent()) setLoading(false); });
+    return cancel;
+  }, [query, api, loadThumbnail, sessionRevision]);
+  function begin(next: Query) { cancelQuery.current(); setPage(null); setError(false); setLoading(true); setQuery(next); }
   function submit(event: FormEvent) { event.preventDefault(); if (!loading) begin({ businessDate: date, penId, offset: 0 }); }
   return <section id="media-library" className="panel" aria-labelledby="media-library-title">
     <h2 id="media-library-title">按栏日期媒体库</h2>
@@ -59,8 +69,8 @@ export function MediaLibraryPanel({ api, loadThumbnail, pens, openSession }: {
     </form>
     {loading && <p role="status">正在读取媒体列表…</p>}
     {error && <p role="alert">媒体库暂不可读取，请重新查询。</p>}
-    {rows && <><p>查询范围：{query?.businessDate}；本页 {rows.length} 份证据。</p><ul className="library-grid">{rows.map((item) => <li key={item.assetId}>
-      <Thumbnail key={`${item.assetId}/${item.deleted}`} item={item} load={loadThumbnail} />
+    {rows && page && <><p>查询范围：{query?.businessDate}；本页 {rows.length} 份证据。</p><ul className="library-grid">{rows.map((item) => <li key={item.assetId}>
+      <Thumbnail key={`${item.assetId}/${item.deleted}`} item={item} queue={page.queue} />
       <strong>{item.buildingCode} / {item.penCode} · {directionLabel(item.viewPosition)}</strong>
       <span>{item.deleted ? "已删除" : item.locked ? "证据已锁定" : "尚未锁定"}</span>
       <button className="text-button" onClick={() => void openSession(item.sessionId)}>{item.deleted ? "查看历史证据记录" : "打开原图与会话证据"}</button>

@@ -5,7 +5,7 @@ const inventoryStatuses: Record<string, string> = {
 const evidenceStates: Record<string, string> = {
   staged: "待提交", uploaded: "已上传", submitted: "已提交", locked: "已锁定", deleted: "已删除",
 };
-const directions: Record<string, string> = { single: "单图", left: "左图", center: "中图", right: "右图" };
+const directions: Record<string, string> = { single: "单图", left: "左图", center: "中图", right: "右图", video: "视频" };
 const inferenceSources: Record<string, string> = { manual: "人工", device: "设备端", server: "服务端" };
 
 export function inventoryStatusLabel(status: string): string { return inventoryStatuses[status] ?? "状态未知"; }

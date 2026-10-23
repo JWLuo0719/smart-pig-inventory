@@ -104,7 +104,8 @@ export function FieldOverview() {
     return response.blob();
   }, [authorizedResponse]);
 
-  const loadThumbnail = useCallback((assetId: string) => authenticatedClient.authorizedBlob(`media-assets/${assetId}/thumbnail`), [authenticatedClient]);
+  const loadThumbnail = useCallback((assetId: string, signal: AbortSignal) => authenticatedClient.authorizedBlob(`media-assets/${assetId}/thumbnail`, { signal }), [authenticatedClient]);
+  const sessionRevision = useCallback(() => authenticatedClient.sessionRevision, [authenticatedClient]);
   async function loadReports(rows: Task[]) {
     const date = today();
     const penId = rows[0]?.penId;
@@ -226,7 +227,7 @@ export function FieldOverview() {
       <section id="reports" className="panel"><div className="section-heading"><div><span className="eyebrow">已确认数据</span><h2>日报与综合</h2></div></div><p className="summary-number">日盘：{daily.length} 条已确认记录</p><p className="muted-copy">综合均值（首个可见栏舍、当日）：{aggregate?.rawMean ?? "—"}；展示数量：{aggregate?.roundedCount ?? "—"}</p><ul className="report-list">{daily.map((row) => <li key={row.sessionId}>{row.buildingCode} / {row.penCode}<strong>{row.confirmedCount} 头</strong></li>)}{daily.length === 0 && <li>无已确认记录；待复核结果绝不计入报表。</li>}</ul><div className="report-export-controls" aria-label="导出已确认盘点报表"><label>开始日期<input type="date" value={reportFrom} onChange={(event) => setReportFrom(event.target.value)} /></label><label>结束日期<input type="date" value={reportTo} onChange={(event) => setReportTo(event.target.value)} /></label><button className="primary-inline" disabled={loading} onClick={() => downloadReport("pdf")}>下载 PDF</button><button className="primary-inline" disabled={loading} onClick={() => downloadReport("xlsx")}>下载 Excel</button></div><p className="muted-copy">导出最多 366 天，仅包含已确认记录；候选、失败、模型和媒体内部信息不会写入文件。</p></section></div>
     <section id="audit" className="panel"><div className="section-heading"><div><span className="eyebrow">不可变记录</span><h2>审计日志</h2></div></div><div className="audit-list">{audit.map((event) => <article key={event.id}><strong>{event.action}</strong><span>{new Date(event.createdAt).toLocaleString()}</span><p>{event.targetType} · {event.targetId}{event.reason ? ` · ${event.reason}` : ""}</p></article>)}<PanelFeedback state={auditPanel} emptyMessage="当前组织暂无审计记录。" loading={loading} retry={() => refresh()} /></div></section>
     {currentUser ? <MasterDataPanel key={currentUser.activeOrganizationId} api={authorizedApi} organizationId={currentUser.activeOrganizationId} canManage={canCorrect} /> : null}
-    {currentUser ? <MediaLibraryPanel key={`library-${currentUser.activeOrganizationId}`} api={authorizedApi} loadThumbnail={loadThumbnail} pens={tasks} openSession={openSession} /> : null}
+    {currentUser ? <MediaLibraryPanel key={`library-${currentUser.activeOrganizationId}`} api={authorizedApi} loadThumbnail={loadThumbnail} sessionRevision={sessionRevision} pens={tasks} openSession={openSession} /> : null}
     {currentUser ? <InventoryHistoryPanel key={`history-${currentUser.activeOrganizationId}`} api={authorizedApi} openSession={openSession} /> : null}
   </div>;
 }

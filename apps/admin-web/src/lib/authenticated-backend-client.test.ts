@@ -115,6 +115,16 @@ test("a delayed thumbnail blob from an old identity is rejected before rendering
   await assert.rejects(pending, /登录会话已更换/);
 });
 
+test("thumbnail requests forward their query cancellation signal to fetch", async () => {
+  const cancellation = new AbortController();
+  const client = new AuthenticatedBackendClient(() => undefined, async (_path, _token, init) => {
+    assert.equal(init?.signal, cancellation.signal);
+    return new Response(new Blob(["thumbnail"], { type: "image/jpeg" }), { status: 200 });
+  });
+  client.installTokens(newTokens);
+  assert.equal(await (await client.authorizedBlob("media-assets/a/thumbnail", { signal: cancellation.signal })).text(), "thumbnail");
+});
+
 test("network failure during refresh clears the session", async () => {
   const changes: Array<TokenPair | null> = [];
   const client = new AuthenticatedBackendClient((pair) => changes.push(pair), async (path) => {

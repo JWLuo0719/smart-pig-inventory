@@ -9,7 +9,7 @@ test("core status and direction labels are Chinese and unknown protocol values s
   assert.equal(inventoryStatusLabel("new_future_state"), "状态未知");
   assert.equal(evidenceStateLabel("submitted"), "已提交");
   assert.equal(evidenceStateLabel("new_future_state"), "状态未知");
-  assert.deepEqual(["single", "left", "center", "right"].map(directionLabel), ["单图", "左图", "中图", "右图"]);
+  assert.deepEqual(["single", "left", "center", "right", "video"].map(directionLabel), ["单图", "左图", "中图", "右图", "视频"]);
   assert.equal(directionLabel("new_future_direction"), "方向未知");
   assert.equal(inferenceSourceLabel("manual"), "人工");
   assert.equal(inferenceSourceLabel(null), "未知");

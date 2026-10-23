@@ -101,10 +101,10 @@ export class AuthenticatedBackendClient {
     }
   }
 
-  async authorizedBlob(path: string): Promise<Blob> {
+  async authorizedBlob(path: string, init?: RequestInit): Promise<Blob> {
     const generation = this.sessionGeneration;
     try {
-      const response = await this.authorizedResponse(path);
+      const response = await this.authorizedResponse(path, init);
       if (!response.ok) await readResponseData(response);
       const blob = await response.blob();
       this.assertSession(generation);
