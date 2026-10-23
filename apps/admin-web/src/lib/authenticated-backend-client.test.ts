@@ -79,6 +79,42 @@ test("a late old-token 401 reuses the completed rotation", async () => {
   assert.equal(rotations, 1);
 });
 
+test("a delayed JSON body from an old identity cannot reach the new session", async () => {
+  let finishBody!: (body: string) => void;
+  let bodyStarted!: () => void;
+  const started = new Promise<void>((resolve) => { bodyStarted = resolve; });
+  const body = new Promise<string>((resolve) => { finishBody = resolve; });
+  const client = new AuthenticatedBackendClient(() => undefined, async () => {
+    const response = jsonResponse({});
+    response.json = async () => { bodyStarted(); return JSON.parse(await body); };
+    return response;
+  });
+  client.installTokens(oldTokens);
+  const pending = client.authorizedData("me");
+  await started;
+  client.installTokens(newTokens);
+  finishBody('{"activeOrganizationId":"old-organization"}');
+  await assert.rejects(pending, /登录会话已更换/);
+});
+
+test("a delayed thumbnail blob from an old identity is rejected before rendering", async () => {
+  let finishBody!: (body: Blob) => void;
+  let bodyStarted!: () => void;
+  const started = new Promise<void>((resolve) => { bodyStarted = resolve; });
+  const body = new Promise<Blob>((resolve) => { finishBody = resolve; });
+  const client = new AuthenticatedBackendClient(() => undefined, async () => {
+    const response = new Response(null, { status: 200 });
+    response.blob = async () => { bodyStarted(); return body; };
+    return response;
+  });
+  client.installTokens(oldTokens);
+  const pending = client.authorizedBlob("media-assets/a/thumbnail");
+  await started;
+  client.installTokens(newTokens);
+  finishBody(new Blob(["old organization evidence"], { type: "image/jpeg" }));
+  await assert.rejects(pending, /登录会话已更换/);
+});
+
 test("network failure during refresh clears the session", async () => {
   const changes: Array<TokenPair | null> = [];
   const client = new AuthenticatedBackendClient((pair) => changes.push(pair), async (path) => {

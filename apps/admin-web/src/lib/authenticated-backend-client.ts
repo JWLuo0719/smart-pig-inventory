@@ -71,6 +71,8 @@ export class AuthenticatedBackendClient {
     this.onTokensChanged(tokens);
   }
 
+  get sessionRevision(): number { return this.sessionGeneration; }
+
   async authorizedResponse(path: string, init?: RequestInit): Promise<Response> {
     const current = this.tokens;
     const generation = this.sessionGeneration;
@@ -84,6 +86,33 @@ export class AuthenticatedBackendClient {
     this.assertSession(generation);
     if (response.status === 401 && this.tokens === rotated) this.installTokens(null);
     return response;
+  }
+
+  async authorizedData<T>(path: string, init?: RequestInit): Promise<T> {
+    const generation = this.sessionGeneration;
+    try {
+      const data = await readResponseData<T>(await this.authorizedResponse(path, init));
+      // Headers may arrive before the body. A delayed JSON body must not escape the session guard.
+      this.assertSession(generation);
+      return data;
+    } catch (cause) {
+      this.assertSession(generation);
+      throw cause;
+    }
+  }
+
+  async authorizedBlob(path: string): Promise<Blob> {
+    const generation = this.sessionGeneration;
+    try {
+      const response = await this.authorizedResponse(path);
+      if (!response.ok) await readResponseData(response);
+      const blob = await response.blob();
+      this.assertSession(generation);
+      return blob;
+    } catch (cause) {
+      this.assertSession(generation);
+      throw cause;
+    }
   }
 
   private assertSession(generation: number): void {

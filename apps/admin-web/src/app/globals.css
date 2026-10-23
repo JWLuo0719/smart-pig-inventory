@@ -187,3 +187,8 @@ h2 { font-size: 18px; letter-spacing: -.02em; }
 .review-workspace .evidence-grid {grid-template-columns:minmax(0,1fr);margin:0;}
 .review-workspace .review-command-form {margin:0;position:sticky;top:16px;}
 @media (max-width: 960px) {.review-workspace {grid-template-columns:minmax(0,1fr);} .review-workspace .review-command-form {position:static;}}
+.library-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;padding:0;list-style:none;}
+.library-grid li {display:grid;gap:8px;padding:12px;border:1px solid var(--line);border-radius:10px;}
+.library-thumbnail {height:120px;display:grid;place-items:center;background:#e8f0f2;color:var(--muted);font-size:12px;text-align:center;}
+.library-thumbnail img {width:100%;height:100%;object-fit:contain;}
+.library-pagination {display:flex;gap:12px;}

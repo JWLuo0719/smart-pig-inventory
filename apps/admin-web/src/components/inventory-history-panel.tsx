@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { inventoryStatusLabel } from "@/lib/presentation-labels";
 type Api = <T>(path: string, init?: RequestInit) => Promise<T>;
 type Task = { penId: string; buildingCode: string; penCode: string; sessionId: string | null; status: string; confirmedCount: number | null };
 type Daily = { sessionId: string; buildingCode: string; penCode: string; confirmedCount: number };
@@ -41,6 +42,6 @@ export function InventoryHistoryPanel({ api, openSession }: { api: Api; openSess
     {error ? <p role="alert" className="form-error">{error}</p> : null}
     {aggregate ? <p role="status">原始均值 {aggregate.rawMean ?? "—"}；展示数量 {aggregate.roundedCount ?? "—"} 头；参与日期 {aggregate.includedDates.join("、") || "无已确认样本"}</p> : null}
     {daily ? <><h3>已确认日报</h3><ul className="report-list">{daily.map(row => <li key={row.sessionId}><span>{row.buildingCode} / {row.penCode} · {row.confirmedCount} 头</span><button className="text-button" onClick={() => void openSession(row.sessionId)}>查看确认记录</button></li>)}</ul>{daily.length === 0 ? <p>该日期暂无已确认记录。</p> : null}</> : null}
-    {tasks ? <><h3>该日期栏舍任务</h3><ul className="report-list">{tasks.map(row => <li key={row.penId}><span>{row.buildingCode} / {row.penCode} · {row.status} · {row.confirmedCount ?? "—"} 头</span>{row.sessionId ? <button className="text-button" onClick={() => void openSession(row.sessionId!)}>查看历史会话</button> : null}</li>)}</ul></> : null}
+    {tasks ? <><h3>该日期栏舍任务</h3><ul className="report-list">{tasks.map(row => <li key={row.penId}><span>{row.buildingCode} / {row.penCode} · {inventoryStatusLabel(row.status)} · {row.confirmedCount ?? "—"} 头</span>{row.sessionId ? <button className="text-button" onClick={() => void openSession(row.sessionId!)}>查看历史会话</button> : null}</li>)}</ul></> : null}
   </section>;
 }

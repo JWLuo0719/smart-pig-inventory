@@ -21,6 +21,7 @@ const getRoutes = [
   /^inventory-sessions\/[^/]+\/media$/,
   /^inventory-sessions\/[^/]+\/versions$/,
   /^media-assets\/[^/]+\/content$/,
+  /^media-assets\/[^/]+\/thumbnail$/,
 ];
 
 export function isPermittedBackendRoute(method: string, route: string): boolean {

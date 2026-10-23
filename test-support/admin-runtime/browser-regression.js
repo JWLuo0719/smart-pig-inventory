@@ -48,7 +48,7 @@ async (page) => {
 
   stage = 'correction-ui';
   await task.getByRole('button', { name: '查看会话证据' }).click();
-  await page.getByRole('heading', { name: `${config.date} · confirmed · v1`, exact: true }).waitFor();
+  await page.getByRole('heading', { name: `${config.date} · 已确认 · v1`, exact: true }).waitFor();
   await page.getByText('证据已锁定', { exact: true }).waitFor();
   await page.waitForFunction(() => {
     const image = document.querySelector('#media-review img');
@@ -64,7 +64,7 @@ async (page) => {
   check(response.ok(), 'Correction POST must succeed');
   const correction = await response.json();
   const correctionKey = response.request().headers()['x-idempotency-key'];
-  await page.getByRole('heading', { name: `${config.date} · confirmed · v2`, exact: true }).waitFor();
+  await page.getByRole('heading', { name: `${config.date} · 已确认 · v2`, exact: true }).waitFor();
   await page.waitForFunction(() => !document.querySelector('#tasks button').disabled);
   check((await task.innerText()).includes('19'), 'Task must switch to v2 count');
   const reportRow = page.locator('#reports li').filter({ hasText: config.sourceCode });
@@ -212,6 +212,23 @@ async (page) => {
   check(libraryResponse.ok(), 'Library route must be available through the proxy');
   const library = await libraryResponse.json();
   check(library.length === 1 && library[0].locked && !library[0].deleted, 'Library must expose only selected pen evidence with its real lock');
+  stage = 'media-library-thumbnail-ui';
+  const mediaLibrary = page.locator('#media-library');
+  await mediaLibrary.getByLabel('媒体业务日期', { exact: true }).fill(config.date);
+  await mediaLibrary.getByLabel('媒体栏舍', { exact: true }).selectOption(correction.penId);
+  const thumbnailResponse = page.waitForResponse(r => r.url().endsWith(`/media-assets/${library[0].assetId}/thumbnail`));
+  const originalRequests = [];
+  const observeOriginal = request => { if (request.url().endsWith(`/media-assets/${library[0].assetId}/content`)) originalRequests.push(request.url()); };
+  page.on('request', observeOriginal);
+  await mediaLibrary.getByRole('button', { name: '查询媒体库', exact: true }).click();
+  const thumbnail = await thumbnailResponse;
+  check(thumbnail.ok() && thumbnail.headers()['content-type'].startsWith('image/jpeg'), 'Library must use an authenticated JPEG thumbnail');
+  const thumbnailImage = mediaLibrary.getByRole('img');
+  await thumbnailImage.waitFor();
+  await page.waitForFunction(() => { const image = document.querySelector('#media-library img'); return image && image.naturalWidth > 0 && image.naturalWidth <= 320 && image.naturalHeight <= 320; });
+  page.off('request', observeOriginal);
+  check(originalRequests.length === 0, 'Listing thumbnails must never download original evidence as fallback');
+  check(await mediaLibrary.getByRole('button', { name: '打开原图与会话证据', exact: true }).count() === 1, 'Thumbnail keeps an explicit original-evidence entry');
   stage = 'admin-evidence-override';
   await historyRecord.getByRole('button', { name: '查看确认记录', exact: true }).click();
   // The CLI can yield again on a third native dialog while its completion reader is active.
@@ -230,7 +247,7 @@ async (page) => {
   stage = 'manual-confirmation-ui';
   const confirmTask = page.locator('#tasks article').filter({ hasText: config.confirmCode });
   await confirmTask.getByRole('button', { name: '查看会话证据' }).click();
-  await page.getByRole('heading', { name: `${config.date} · review_required · v1`, exact: true }).waitFor();
+  await page.getByRole('heading', { name: `${config.date} · 待复核 · v1`, exact: true }).waitFor();
   await page.getByRole('button', { name: '人工确认并锁定证据', exact: true }).click();
   const confirmForm = page.getByRole('form', { name: '人工确认表单' });
   await confirmForm.getByLabel('人工数量', { exact: true }).fill('0');
@@ -242,11 +259,11 @@ async (page) => {
   check(confirmationResponse.ok(), 'Manual confirmation form must reach the backend');
   const confirmation = await confirmationResponse.json();
   check(confirmation.status === 'confirmed' && confirmation.count === 0 && confirmation.rawModelCount === null, 'Manual zero must remain distinct from an unknown candidate');
-  await page.getByRole('heading', { name: `${config.date} · confirmed · v1`, exact: true }).waitFor();
+  await page.getByRole('heading', { name: `${config.date} · 已确认 · v1`, exact: true }).waitFor();
   await page.waitForFunction(() => !document.querySelector('#tasks button').disabled);
   const zeroReport = page.locator('#reports li').filter({ hasText: config.confirmCode });
   check(await zeroReport.count() === 1 && (await zeroReport.innerText()).includes('0 头'), 'Confirmed zero must appear in the actual daily report');
-  await page.getByText('证据已锁定', { exact: true }).waitFor();
+  await page.locator('#media-review').getByText('证据已锁定', { exact: true }).waitFor();
 
   stage = 'panel-role-presentation';
   const roleChecks = [];
