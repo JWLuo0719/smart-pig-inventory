@@ -5,5 +5,5 @@ String evidencePositionLabel(String position) => switch (position) {
       'right' => '右图',
       'single' => '单图',
       'video' => '视频',
-      _ => '原图',
+      _ => '方向未知',
     };

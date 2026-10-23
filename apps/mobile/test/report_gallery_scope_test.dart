@@ -134,6 +134,58 @@ class _Gallery extends InventoryBrowseApi {
   }
 }
 
+class _QueuedGallery extends InventoryBrowseApi {
+  _QueuedGallery() : super('https://synthetic.invalid');
+  int queries = 0, originalReads = 0;
+  final started = <(String, String)>[];
+  final controls = <String, Completer<Uint8List>>{};
+  final active = <String, int>{}, peak = <String, int>{};
+
+  @override
+  Future<List<LibraryMedia>> sessionMedia(
+      String token, String sessionId) async {
+    final query = ++queries;
+    return List.generate(
+        10,
+        (index) => LibraryMedia.fromJson({
+              'assetId': 'query$query-asset$index',
+              'sessionId': sessionId,
+              'buildingCode': '查询$query',
+              'penCode': 'P$index',
+              'viewPosition': 'single',
+              'contentType': 'image/jpeg',
+              'locked': true,
+              'deleted': false,
+            }));
+  }
+
+  @override
+  Future<Uint8List> thumbnail(String token, String assetId) async {
+    started.add((token, assetId));
+    final group = assetId.split('-').first;
+    active[group] = (active[group] ?? 0) + 1;
+    if ((active[group] ?? 0) > (peak[group] ?? 0)) peak[group] = active[group]!;
+    final pending = controls.putIfAbsent(assetId, Completer<Uint8List>.new);
+    try {
+      return await pending.future;
+    } finally {
+      active[group] = active[group]! - 1;
+    }
+  }
+
+  @override
+  Future<Uint8List> content(String token, String assetId) async {
+    originalReads++;
+    return _Gallery.png;
+  }
+
+  void finishIssued() {
+    for (final control in controls.values.toList()) {
+      if (!control.isCompleted) control.complete(_Gallery.png);
+    }
+  }
+}
+
 void main() {
   late AppDatabase db;
   late ProviderContainer container;
@@ -346,5 +398,65 @@ void main() {
     expect(find.text('SYN / P1 · 左图'), findsNothing);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets(
+      'gallery thumbnails use two slots and queued work cannot cross identity',
+      (tester) async {
+    final gallery = _QueuedGallery();
+    await pump(tester, const ServerGalleryScreen(sessionId: 'session'),
+        gallery: gallery);
+    expect(gallery.started, hasLength(2));
+    expect(gallery.peak['query1'], 2);
+    expect(find.text('缩略图读取中…'), findsWidgets);
+    (container.read(authControllerProvider.notifier)
+            as CompetitionAuthController)
+        .switchTo(competitionAuth(org: 'org-b'));
+    await tester.pump();
+    await tester.pump();
+    // Neither old HTTP request has completed. B still owns two fresh slots.
+    expect(gallery.started.where((call) => call.$1 == 'synthetic-org-a'),
+        hasLength(2));
+    expect(gallery.started.where((call) => call.$1 == 'synthetic-org-b'),
+        hasLength(2));
+    expect(gallery.started.where((call) => call.$2.startsWith('query1')),
+        hasLength(2));
+    expect(gallery.peak['query2'], 2);
+    expect(gallery.originalReads, 0);
+    gallery.controls['query1-asset0']!.complete(_Gallery.png);
+    gallery.controls['query1-asset1']!.complete(_Gallery.png);
+    await tester.pump();
+    await tester.pump();
+    expect(gallery.started.where((call) => call.$2.startsWith('query1')),
+        hasLength(2));
+    expect(find.textContaining('查询1 /'), findsNothing);
+    expect(find.byType(Image), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    gallery.finishIssued();
+    await tester.pump();
+  });
+
+  testWidgets(
+      'refresh cancels pending thumbnails and starts a query without awaiting old HTTP',
+      (tester) async {
+    final gallery = _QueuedGallery();
+    await pump(tester, const ServerGalleryScreen(sessionId: 'session'),
+        gallery: gallery);
+    expect(gallery.started, hasLength(2));
+    await tester.tap(find.text('刷新照片'));
+    await tester.pump();
+    await tester.pump();
+    expect(gallery.started.where((call) => call.$2.startsWith('query1')),
+        hasLength(2));
+    expect(gallery.started.where((call) => call.$2.startsWith('query2')),
+        hasLength(2));
+    expect(gallery.peak.values, everyElement(2));
+    expect(gallery.originalReads, 0);
+    expect(find.textContaining('查询1 /'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    gallery.finishIssued();
+    await tester.pump();
+    // Disposing also prevents any queued HTTP from being issued afterwards.
+    expect(gallery.started, hasLength(4));
   });
 }

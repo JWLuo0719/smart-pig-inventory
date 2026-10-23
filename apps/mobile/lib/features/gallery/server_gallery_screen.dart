@@ -14,6 +14,7 @@ import '../../core/auth/authorized_retry.dart';
 import '../../core/network/inventory_browse_api.dart';
 import '../master_data/data/drift_master_data_repository.dart';
 import '../master_data/domain/master_data_changes.dart';
+import 'application/thumbnail_request_queue.dart';
 
 final serverGalleryApiProvider = Provider<InventoryBrowseApi>(
   (ref) => InventoryBrowseApi(ref.watch(apiBaseUrlProvider)),
@@ -34,6 +35,8 @@ class _ServerGalleryScreenState extends ConsumerState<ServerGalleryScreen> {
   String? _error;
   bool _loading = true, _busy = false, _more = false;
   int _generation = 0;
+  int _thumbnailGeneration = 0;
+  ThumbnailRequestQueue _thumbnailRequests = ThumbnailRequestQueue();
   final Map<String, String> _deleteKeys = {};
   InventoryBrowseApi get _api => ref.read(serverGalleryApiProvider);
   @override
@@ -46,6 +49,12 @@ class _ServerGalleryScreenState extends ConsumerState<ServerGalleryScreen> {
   void didUpdateWidget(covariant ServerGalleryScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.sessionId != widget.sessionId) _load();
+  }
+
+  @override
+  void dispose() {
+    _thumbnailRequests.dispose();
+    super.dispose();
   }
 
   bool _sameIdentity(AuthState? expected) {
@@ -70,6 +79,11 @@ class _ServerGalleryScreenState extends ConsumerState<ServerGalleryScreen> {
 
   Future<void> _load({bool append = false}) async {
     final generation = ++_generation;
+    if (!append) {
+      _thumbnailGeneration++;
+      _thumbnailRequests.dispose();
+      _thumbnailRequests = ThumbnailRequestQueue();
+    }
     final auth = ref.read(authControllerProvider).valueOrNull;
     final date = _date, penId = _penId, sessionId = widget.sessionId;
     final offset = append ? _media.length : 0;
@@ -212,6 +226,9 @@ class _ServerGalleryScreenState extends ConsumerState<ServerGalleryScreen> {
     });
     final auth = ref.watch(authControllerProvider).valueOrNull;
     if (auth == null) return const Center(child: CircularProgressIndicator());
+    // Pagination extends this logical query; refresh/filter/identity changes
+    // create a new thumbnail scope and discard all queued work from the old one.
+    final thumbnailGeneration = _thumbnailGeneration;
     return ListView(
         shrinkWrap: widget.sessionId != null,
         physics: widget.sessionId == null
@@ -272,8 +289,13 @@ class _ServerGalleryScreenState extends ConsumerState<ServerGalleryScreen> {
                         if (!item.deleted)
                           _ServerThumbnail(
                               key: ValueKey(
-                                  '${auth.user.subjectId}/${auth.user.activeOrganizationId}/${item.assetId}'),
+                                  '${auth.user.subjectId}/${auth.user.activeOrganizationId}/$thumbnailGeneration/${item.assetId}'),
                               media: item,
+                              queue: _thumbnailRequests,
+                              isQueryCurrent: () =>
+                                  mounted &&
+                                  thumbnailGeneration == _thumbnailGeneration &&
+                                  _sameIdentity(auth),
                               onOpen: _busy ? null : () => _preview(item)),
                         Text(
                             '${item.buildingCode} / ${item.penCode} · ${evidencePositionLabel(item.position)}',
@@ -330,9 +352,15 @@ class _ServerGalleryScreenState extends ConsumerState<ServerGalleryScreen> {
 
 class _ServerThumbnail extends ConsumerStatefulWidget {
   const _ServerThumbnail(
-      {super.key, required this.media, required this.onOpen});
+      {super.key,
+      required this.media,
+      required this.onOpen,
+      required this.queue,
+      required this.isQueryCurrent});
   final LibraryMedia media;
   final VoidCallback? onOpen;
+  final ThumbnailRequestQueue queue;
+  final bool Function() isQueryCurrent;
   @override
   ConsumerState<_ServerThumbnail> createState() => _ServerThumbnailState();
 }
@@ -354,24 +382,33 @@ class _ServerThumbnailState extends ConsumerState<_ServerThumbnail> {
       _error = '此格式请打开原图';
       return;
     }
-    try {
-      final bytes = await retryOnceAfterUnauthorized(
-          initialAuth: auth,
-          reconnect: () =>
-              ref.read(authControllerProvider.notifier).reconnect(),
-          request: (token) => ref
-              .read(serverGalleryApiProvider)
-              .thumbnail(token, widget.media.assetId));
-      if (!mounted) return;
+    bool isCurrent() {
+      if (!mounted || !widget.isQueryCurrent()) return false;
       final current = ref.read(authControllerProvider).valueOrNull;
-      if (current?.user.subjectId != auth.user.subjectId ||
-          current?.user.activeOrganizationId !=
-              auth.user.activeOrganizationId) {
-        return;
-      }
+      return current?.user.subjectId == auth.user.subjectId &&
+          current?.user.activeOrganizationId ==
+              auth.user.activeOrganizationId &&
+          current?.isOffline == false;
+    }
+
+    try {
+      final bytes = await widget.queue.load(
+          isCurrent: isCurrent,
+          request: () => retryOnceAfterUnauthorized(
+              initialAuth: auth,
+              reconnect: () =>
+                  ref.read(authControllerProvider.notifier).reconnect(),
+              request: (token) {
+                // A queued request or 401 replay must never inherit a later login.
+                if (!isCurrent()) throw StateError('缩略图查询已失效');
+                return ref
+                    .read(serverGalleryApiProvider)
+                    .thumbnail(token, widget.media.assetId);
+              }));
+      if (bytes == null || !isCurrent()) return;
       setState(() => _bytes = bytes);
     } catch (_) {
-      if (mounted) setState(() => _error = '缩略图暂不可用，可打开原图');
+      if (isCurrent()) setState(() => _error = '缩略图暂不可用，可打开原图');
     }
   }
 
