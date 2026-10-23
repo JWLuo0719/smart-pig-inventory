@@ -491,6 +491,7 @@ paths:
           application/json:
             schema: {$ref: '#/components/schemas/ConfirmInventory'}
       responses:
+        '400': {description: 数量必须为JSON整数且在int32范围内，拒绝小数、字符串及其他类型}
         '200':
           description: 已确认并记录审计
           content:
@@ -564,6 +565,7 @@ paths:
           application/json:
             schema: {$ref: '#/components/schemas/CorrectInventory'}
       responses:
+        '400': {description: 数量必须为JSON整数且在int32范围内，拒绝小数、字符串及其他类型}
         '200':
           description: 已创建更正版本，或以相同幂等键和相同意图重放已有版本
           content:
@@ -1223,14 +1225,14 @@ components:
       type: object
       required: [confirmedCount]
       properties:
-        confirmedCount: {type: integer, minimum: 0}
+        confirmedCount: {type: integer, format: int32, minimum: 0, maximum: 2147483647}
         reason: {type: [string, 'null'], minLength: 8, maxLength: 500}
     CorrectInventory:
       type: object
       additionalProperties: false
       required: [correctedCount, reason]
       properties:
-        correctedCount: {type: integer, minimum: 0}
+        correctedCount: {type: integer, format: int32, minimum: 0, maximum: 2147483647}
         reason: {type: string, minLength: 8, maxLength: 500}
     RetryInferenceJob:
       type: object
