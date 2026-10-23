@@ -6,7 +6,10 @@ import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
 import io.minio.CopySource;
+import io.minio.errors.ErrorResponseException;
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -63,6 +66,29 @@ public class MinioStagedObjectStorage implements StagedObjectStorage {
             return client.getObject(GetObjectArgs.builder().bucket(bucket).object(key).build());
         } catch (Exception exception) {
             throw UploadStorageException.readFailed(exception);
+        }
+    }
+
+    @Override
+    public Optional<InputStream> openDerived(String key) {
+        try {
+            return Optional.of(client.getObject(GetObjectArgs.builder().bucket(bucket).object(key).build()));
+        } catch (ErrorResponseException exception) {
+            if ("NoSuchKey".equals(exception.errorResponse().code())) return Optional.empty();
+            throw UploadStorageException.readFailed(exception);
+        } catch (Exception exception) {
+            throw UploadStorageException.readFailed(exception);
+        }
+    }
+
+    @Override
+    public void putDerivedJpeg(String key, byte[] content) {
+        if (!key.startsWith("thumbnails/v1/")) throw new IllegalArgumentException("Invalid derivative namespace");
+        try (var input = new ByteArrayInputStream(content)) {
+            client.putObject(PutObjectArgs.builder().bucket(bucket).object(key)
+                    .stream(input, content.length, -1).contentType("image/jpeg").build());
+        } catch (Exception exception) {
+            throw UploadStorageException.writeFailed(exception);
         }
     }
 
