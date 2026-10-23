@@ -1,5 +1,9 @@
 # 当前状态
 
+## 2026-10-23 有效计划代码收口
+
+PRD P0、原始功能收口六包和参赛F01—F10已逐项审计并补齐实际代码缺口，合并开发计划与可回退提交已保存。当前代码v21、OpenAPI0.11.0；没有业务迁移、部署、设备安装或模型/签名/TLS变化。自动检查与34项Docker/1项TLS跳过、后置整体验收详见[代码收口记录](docs/development/code-completion-20261023.md)，代码完成不宣称联网/现场/比赛验收通过。
+
 ## 2026-10-20 参赛实现批次
 
 参赛主线与扩展契约已落地，尚未完成M4/M5。Spring test/verify均106通过、0跳过；Flutter71通过、1真实LAN环境跳过，analyze/Debug通过；Admin26项及lint/typecheck/build通过。v20同签名Release BuildOnly与119个移动源码哈希已核验。Admin隔离栈在独立串行后端镜像构建期间再次收到Docker RPC EOF，未到浏览器验收；真机、授权实猪、模型与联网部署读回仍待验。实现/证据映射见 [开发追踪](docs/product/competition-development-plan.md)，实际日志见 [验证记录](docs/development/competition-verification-20261020.md)。旧状态保留作历史证据。

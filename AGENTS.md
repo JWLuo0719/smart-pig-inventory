@@ -8,6 +8,8 @@ Project-local rules for future agents and contributors.
 - `docs/product/acceptance-criteria.md`: release acceptance gates.
 - `docs/product/non-functional-requirements.md`: measurable quality targets.
 - `docs/product/requirements-traceability.md`: implementation and verification status.
+- `docs/product/competition-development-plan.md`: current combined code-development plan; code completion and deferred acceptance are separate columns.
+- `docs/development/competition-code-recovery.md`: local competition branch checkpoints and safe forward-fix/revert workflow.
 - `docs/architecture.md`: B+ system architecture and module ownership.
 - `docs/deployment/pilot-baseline.md`: pilot device and edge-server sizing assumptions.
 - `contracts/openapi.yaml`: external HTTP contract; change contract first.

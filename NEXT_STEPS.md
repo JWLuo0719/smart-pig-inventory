@@ -1,5 +1,12 @@
 # 下一步
 
+## 2026-10-23 代码已收口，后续集中验收
+
+1. 有效开发计划的本轮代码已完成并分批提交，先读[代码检查与边界](docs/development/code-completion-20261023.md)和[回退清单](docs/development/competition-code-recovery.md)，不要重复从旧TODO重写。
+2. 用户后置整体验收：恢复可用Docker环境后，重新执行本轮跳过的34项Spring集成及固定Admin栈，验证真实MinIO缩略图、数据库缓存、确认/锁图/更正/报表读回。不要把旧镜像健康当新代码通过。
+3. 按[集中验收脚本](docs/development/competition-acceptance-runbook.md)执行同版本部署/迁移/模型身份、EXIF坐标、真机/弱网/后台恢复/可用性、授权实猪与连续三次彩排，再构建和冻结联网签名候选。旧v20 BuildOnly与新v21 Debug都不能替代这些出口。
+4. 后续新问题在当前代码分支产生独立修复提交并重跑受影响检查，保持旧草稿/媒体和签名/TLS；在线Agent/公网评审、许可/模型批准、金蝶/生产目标与报名仍是独立外部里程碑。
+
 ## 2026-10-20 当前执行顺序
 
 1. Spring test/verify均106通过/0跳过，Admin26及lint/typecheck/build通过；依据 [验证记录](docs/development/competition-verification-20261020.md) 完成固定隔离运行栈语义读回及图像坐标走查。

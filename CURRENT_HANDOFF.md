@@ -1,5 +1,11 @@
 # 新对话交接
 
+## 2026-10-23 代码收口完成，整体验收后置
+
+用户明确先完成有效计划全部代码，再集中整体验收。已逐项核对PRD P0、原始功能计划和参赛计划，补齐数量严格绑定、Admin迟到JSON/Blob、手机三图追加/恢复、研判恢复、报表/图库身份与缺失口径、可见覆盖、中文及真实私有缩略图链路；两端查询级两并发/取消队列避免单页批量503。当前分支`codex/competition-code-completion-20261023`，基线`966b6bd`，最终产品源码`7d8710b`；分批提交与回退见[回退清单](docs/development/competition-code-recovery.md)。未推送、部署或安装手机。
+
+先读[当前合并计划](docs/product/competition-development-plan.md)与[本轮代码检查](docs/development/code-completion-20261023.md)。Spring test/verify执行成功，128项中94通过、34因Docker不可用跳过；Admin35项与lint/typecheck/build通过；Flutter96通过、1真实TLS环境跳过，格式/analyze及v21 Debug通过。跳过不算通过，Docker/MinIO/浏览器/镜像迁移/真机/弱网/授权样本/像素/三次彩排按用户后置，不再阻断无关代码开发。旧v20签名BuildOnly不代表v21代码。OpenAPI0.11.0；Drift6与Flyway13保持；签名/TLS/模型身份和自动计数开关不变。在线Agent仍只有契约，不是运行交付。
+
 ## 2026-10-20 参赛主线实现与验收收尾
 
 用户已批准并实施 App 主线＋扩展契约。F01–F10、上传作业卡、手机证据缩放、Admin 正式复核/更正和版本查询、结构化规则依据及三个只读工具契约已落入工作树。v20同签名Release BuildOnly及119文件源码哈希已核验，仍未冻结联网候选。Flutter71通过/1环境跳过，Admin26及lint/typecheck/build通过；后端test/verify均106通过/0跳过。固定Admin运行栈在独立串行后端镜像构建期间再次Docker RPC EOF，无浏览器语义读回；不要因旧图像健康或CLI退出0视为已验。先读 [开发追踪](docs/product/competition-development-plan.md) 与 [本轮验证记录](docs/development/competition-verification-20261020.md)；不要把旧 v19/真机结果当新代码验收。Docker/提交内存曾造成测试跳过和运行栈失败；新候选构建、真实运行、真机和模型批准分开登记。Drift v6、旧草稿、签名/TLS 身份及 P0 卷保持；未安装手机、未公开服务、未实施在线 Agent、未报名提交。

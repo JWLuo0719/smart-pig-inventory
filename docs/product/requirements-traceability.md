@@ -1,5 +1,9 @@
 # 需求—实现—验收追踪矩阵
 
+## 2026-10-23 代码与后置验收分列
+
+PRD P0、[既有功能六包](functional-release-plan.md)与[参赛代码计划](competition-development-plan.md)已逐项审计，补齐真实缩略图与受控队列、严格数量、身份迟到响应、三图追加/恢复、报表缺失与覆盖显示、中文一致性。v21源码与分批提交已保存；[本轮代码证据](../development/code-completion-20261023.md)列出94项Spring通过/34项Docker跳过、Admin35项、Flutter96通过/1真实TLS跳过及Debug。用户要求整体验收后置，代码实现不得被解释为旧或新部署、真机、模型、样本或三次彩排已经通过。
+
 ## 2026-10-20 参赛主线追踪
 
 本轮批准的 F01–F10 与体验、Admin、扩展契约逐项映射见 [参赛开发追踪](competition-development-plan.md)。源码状态与验收状态分开：自动测试、APK 构建、部署/真实会话、真机与模型批准均使用 [本轮验证记录](../development/competition-verification-20261020.md)。没有运行证据的项继续待验，旧截图/测试不替代 v20。
