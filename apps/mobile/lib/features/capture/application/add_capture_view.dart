@@ -53,6 +53,7 @@ class AddCaptureView {
     );
     try {
       await _repository.addMedia(
+        organizationId: organizationId,
         draftId: draftId,
         media: CapturedMediaRecord(
           assetId: assetId,

@@ -10,6 +10,7 @@ import 'package:smart_pig_inventory/core/network/inventory_api.dart';
 import 'package:smart_pig_inventory/features/inventory/annotated_evidence.dart';
 import 'package:smart_pig_inventory/features/inventory/inventory_revision.dart';
 import 'package:smart_pig_inventory/features/inventory/session_review_screen.dart';
+import 'support/competition_auth.dart';
 
 class _Auth extends AuthController {
   @override
@@ -56,6 +57,60 @@ class _Gallery extends InventoryBrowseApi {
 }
 
 void main() {
+  testWidgets(
+      'changing identity immediately hides the old result while new read is pending',
+      (tester) async {
+    final pending = Completer<RemoteInventorySession>();
+    var reads = 0;
+    final api = _Api(() {
+      if (++reads > 1) return pending.future;
+      return RemoteInventorySession.fromJson({
+        'id': 'session',
+        'penId': 'pen',
+        'businessDate': '2026-10-23',
+        'status': 'confirmed',
+        'version': 1,
+        'rawModelCount': 24,
+        'count': 24,
+        'detections': [],
+        'warnings': [],
+      });
+    });
+    final container = ProviderContainer(overrides: [
+      authControllerProvider.overrideWith(CompetitionAuthController.new),
+      serverGalleryApiProvider.overrideWithValue(_Gallery()),
+      inventoryRemoteApiProvider.overrideWithValue(api),
+    ]);
+    await tester.runAsync(() => container.read(authControllerProvider.future));
+    await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+            navigatorObservers: [inventoryRouteObserver],
+            home: const SessionReviewScreen(sessionId: 'session'))));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('24 头'), findsOneWidget);
+    (container.read(authControllerProvider.notifier)
+            as CompetitionAuthController)
+        .switchTo(competitionAuth(org: 'org-b'));
+    await tester.pump();
+    expect(find.text('24 头'), findsNothing);
+    pending.complete(RemoteInventorySession.fromJson({
+      'id': 'session',
+      'penId': 'pen',
+      'businessDate': '2026-10-23',
+      'status': 'review_required',
+      'version': 1,
+      'rawModelCount': null,
+      'detections': [],
+      'warnings': [],
+    }));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('24 头'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    container.dispose();
+  });
   test('status labels preserve every server state and image letterboxing', () {
     for (final state in [
       'submitted',

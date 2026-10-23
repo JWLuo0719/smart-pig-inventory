@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/auth_controller.dart';
 import '../../core/auth/authorized_retry.dart';
+import '../../shared/evidence_labels.dart';
 import '../../core/network/inventory_api.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/network/inventory_browse_api.dart'
@@ -98,6 +99,7 @@ class _AnnotatedEvidenceSectionState
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(authControllerProvider);
     ref.listen(authControllerProvider, (previous, next) {
       if (previous?.valueOrNull?.user.activeOrganizationId !=
               next.valueOrNull?.user.activeOrganizationId ||
@@ -376,12 +378,3 @@ Rect evidenceContainRect(double aspect, Size size) {
   final height = size.width / aspect;
   return Rect.fromLTWH(0, (size.height - height) / 2, size.width, height);
 }
-
-String evidencePositionLabel(String position) => switch (position) {
-      'single' => '单图',
-      'left' => '左侧',
-      'center' => '中间',
-      'right' => '右侧',
-      'video' => '视频',
-      _ => '原始证据'
-    };

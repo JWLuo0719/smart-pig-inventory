@@ -27,8 +27,11 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _generation = 0;
+  int _assistantGeneration = 0;
   List<RemoteInventoryTask>? _tasks;
   RemoteAssistantBrief? _assistant;
+  bool _assistantLoading = false;
+  String? _assistantError;
   String? _error;
 
   @override
@@ -56,19 +59,53 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return _buildContent(context);
   }
 
-  Future<RemoteAssistantBrief?> _loadAssistant(
-      AuthState auth, DateTime today) async {
+  bool _isCurrent(AuthState auth, int generation) {
+    if (!mounted) return false;
+    final current = ref.read(authControllerProvider).valueOrNull;
+    return generation == _generation &&
+        current?.user.subjectId == auth.user.subjectId &&
+        current?.user.activeOrganizationId == auth.user.activeOrganizationId &&
+        current?.isOffline == false;
+  }
+
+  Future<void> _loadAssistant(
+      AuthState auth, DateTime today, int generation) async {
+    final assistantGeneration = ++_assistantGeneration;
+    if (!_isCurrent(auth, generation)) return;
+    setState(() {
+      _assistant = null;
+      _assistantLoading = true;
+      _assistantError = null;
+    });
     try {
-      return await retryOnceAfterUnauthorized(
+      final brief = await retryOnceAfterUnauthorized(
           initialAuth: auth,
           reconnect: () =>
               ref.read(authControllerProvider.notifier).reconnect(),
           request: (token) => ref
               .read(inventoryRemoteApiProvider)
               .assistantInsights(accessToken: token, businessDate: today));
+      if (_isCurrent(auth, generation) &&
+          assistantGeneration == _assistantGeneration) {
+        setState(() => _assistant = brief);
+      }
     } catch (_) {
-      return null; // 主任务继续显示，研判面板提供恢复操作
+      if (_isCurrent(auth, generation) &&
+          assistantGeneration == _assistantGeneration) {
+        setState(() => _assistantError = '规则研判暂时不可用，今日任务和本机证据仍可继续使用。');
+      }
+    } finally {
+      if (_isCurrent(auth, generation) &&
+          assistantGeneration == _assistantGeneration) {
+        setState(() => _assistantLoading = false);
+      }
     }
+  }
+
+  Future<void> _retryAssistant() async {
+    final auth = ref.read(authControllerProvider).valueOrNull;
+    if (auth == null || auth.isOffline) return;
+    await _loadAssistant(auth, DateUtils.dateOnly(DateTime.now()), _generation);
   }
 
   Future<void> _loadTasks() async {
@@ -78,6 +115,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (mounted) {
         setState(() {
           _tasks = null;
+          _assistant = null;
+          _assistantLoading = false;
+          _assistantError = null;
           _error = '当前离线，首页只显示本机已经保存的作业。';
         });
       }
@@ -89,9 +129,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       _assistant = null;
     });
     final DateTime today = DateUtils.dateOnly(DateTime.now());
-    // 智能体研判与任务并行加载；研判失败不打扰任务展示（静默降级）。
-    final Future<RemoteAssistantBrief?> assistantFuture =
-        _loadAssistant(auth, today);
+    // The optional panel must never hold the task projection behind its request.
+    unawaited(_loadAssistant(auth, today, generation));
     try {
       final List<RemoteInventoryTask> tasks = await retryOnceAfterUnauthorized(
         initialAuth: auth,
@@ -102,15 +141,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   businessDate: today,
                 ),
       );
-      final RemoteAssistantBrief? assistant = await assistantFuture;
-      if (mounted && generation == _generation) {
+      if (_isCurrent(auth, generation)) {
         setState(() {
           _tasks = tasks;
-          _assistant = assistant;
         });
       }
     } on DioException catch (error) {
-      if (mounted && generation == _generation) {
+      if (_isCurrent(auth, generation)) {
         setState(() => _error = _safeError(error));
       }
     }
@@ -128,8 +165,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           AsyncSnapshot<List<LocalCaptureActivity>> snapshot) {
         final List<LocalCaptureActivity> activities =
             snapshot.data ?? const <LocalCaptureActivity>[];
-        final LocalCaptureActivity? latest =
-            activities.isEmpty ? null : activities.first;
+        final LocalCaptureActivity? latest = activities
+            .where((row) =>
+                row.draftState != 'abandoned' && row.outboxState != 'abandoned')
+            .firstOrNull;
         final List<RemoteInventoryTask> tasks =
             _tasks ?? const <RemoteInventoryTask>[];
         final int confirmed = tasks
@@ -162,10 +201,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ],
                   const SizedBox(height: 16),
                   _ContinueCard(activity: latest),
-                  if (_assistant != null &&
-                      _assistant!.insights.isNotEmpty) ...<Widget>[
+                  if (_assistantLoading ||
+                      _assistantError != null ||
+                      _assistant != null) ...<Widget>[
                     const SizedBox(height: 22),
-                    _AssistantPanel(brief: _assistant!),
+                    if (_assistantLoading)
+                      const Card(
+                          child: Padding(
+                              padding: EdgeInsets.all(16),
+                              child: Text('正在读取今日规则研判…')))
+                    else if (_assistantError != null)
+                      Card(
+                          child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(_assistantError!),
+                                    TextButton(
+                                        onPressed: _retryAssistant,
+                                        child: const Text('重新读取研判')),
+                                  ])))
+                    else
+                      _AssistantPanel(brief: _assistant!),
                   ],
                   const SizedBox(height: 22),
                   const _SectionTitle(title: '今日进度', action: '以服务器为准'),

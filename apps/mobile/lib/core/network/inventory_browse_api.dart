@@ -44,6 +44,13 @@ class InventoryBrowseApi {
     return Uint8List.fromList(response.data!);
   }
 
+  Future<Uint8List> thumbnail(String token, String assetId) async {
+    final response = await _dio.get<List<int>>(
+        '/api/v1/media-assets/$assetId/thumbnail',
+        options: _auth(token, type: ResponseType.bytes));
+    return Uint8List.fromList(response.data!);
+  }
+
   Future<void> delete(String token, String assetId, String key) async {
     await _dio.delete<dynamic>('/api/v1/media-assets/$assetId',
         options: _auth(token, key: key));

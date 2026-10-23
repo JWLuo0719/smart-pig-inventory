@@ -38,6 +38,7 @@ class LocalGalleryScreen extends ConsumerWidget {
     final auth = ref.watch(authControllerProvider).valueOrNull;
     if (auth == null) return const Center(child: CircularProgressIndicator());
     return StreamBuilder<List<LocalCaptureActivity>>(
+      key: ValueKey('${auth.user.subjectId}/${auth.user.activeOrganizationId}'),
       stream: ref
           .watch(localActivityRepositoryProvider)
           .watchRecent(auth.user.activeOrganizationId),

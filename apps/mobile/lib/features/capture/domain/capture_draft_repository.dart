@@ -46,6 +46,7 @@ class CapturedMediaRecord {
 
 abstract interface class CaptureDraftRepository {
   Future<void> addMedia({
+    required String organizationId,
     required String draftId,
     required CapturedMediaRecord media,
     required DateTime now,

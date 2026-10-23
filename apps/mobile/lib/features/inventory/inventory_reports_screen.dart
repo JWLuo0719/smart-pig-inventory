@@ -4,11 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/auth/auth_controller.dart';
+import '../../core/auth/auth_session.dart';
 import '../../core/auth/authorized_retry.dart';
 import '../../core/network/inventory_browse_api.dart';
 import '../../core/theme/app_theme.dart';
 import '../master_data/data/drift_master_data_repository.dart';
 import '../master_data/domain/master_data_changes.dart';
+
+final inventoryReportsApiProvider = Provider<InventoryBrowseApi>(
+    (ref) => InventoryBrowseApi(ref.watch(apiBaseUrlProvider)));
 
 class InventoryReportsScreen extends ConsumerStatefulWidget {
   const InventoryReportsScreen({super.key});
@@ -26,6 +30,7 @@ class _InventoryReportsScreenState
   Map<String, dynamic>? _aggregate;
   RemoteTrend? _trend;
   bool _loading = false;
+  int _generation = 0;
   @override
   void initState() {
     super.initState();
@@ -33,7 +38,9 @@ class _InventoryReportsScreenState
   }
 
   Future<void> _load() async {
+    final generation = ++_generation;
     final auth = ref.read(authControllerProvider).valueOrNull;
+    final from = _from, to = _to, penId = _penId;
     setState(() {
       _loading = true;
       _error = null;
@@ -45,20 +52,21 @@ class _InventoryReportsScreenState
       if (auth == null || auth.isOffline) {
         throw StateError('联网后可读取已确认报表；离线不显示估算数量。');
       }
-      final api = InventoryBrowseApi(ref.read(apiBaseUrlProvider));
+      final api = ref.read(inventoryReportsApiProvider);
       final daily = await retryOnceAfterUnauthorized(
           initialAuth: auth,
           reconnect: () =>
               ref.read(authControllerProvider.notifier).reconnect(),
-          request: (token) => api.daily(token, _to));
+          request: (token) => api.daily(token, to));
+      if (!_isCurrent(auth, generation)) return;
       Map<String, dynamic>? aggregate;
-      if (_penId != null) {
-        final latest = ref.read(authControllerProvider).valueOrNull ?? auth;
+      if (penId != null) {
         aggregate = await retryOnceAfterUnauthorized(
-            initialAuth: latest,
+            initialAuth: auth,
             reconnect: () =>
                 ref.read(authControllerProvider.notifier).reconnect(),
-            request: (token) => api.aggregate(token, _penId!, _from, _to));
+            request: (token) => api.aggregate(token, penId, from, to));
+        if (!_isCurrent(auth, generation)) return;
       }
       RemoteTrend? trend;
       try {
@@ -66,11 +74,11 @@ class _InventoryReportsScreenState
             initialAuth: auth,
             reconnect: () =>
                 ref.read(authControllerProvider.notifier).reconnect(),
-            request: (token) => api.trend(token, _to, days: 14));
+            request: (token) => api.trend(token, to, days: 14));
       } catch (_) {
         // 趋势缺失不阻塞报表主内容；卡片自动隐藏。
       }
-      if (mounted) {
+      if (_isCurrent(auth, generation)) {
         setState(() {
           _daily = daily;
           _aggregate = aggregate;
@@ -78,13 +86,23 @@ class _InventoryReportsScreenState
         });
       }
     } catch (error) {
-      if (mounted) {
+      if (mounted && generation == _generation) {
         setState(() => _error =
             error is StateError ? error.message.toString() : '无法读取报表，请联网后重试。');
       }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && generation == _generation) {
+        setState(() => _loading = false);
+      }
     }
+  }
+
+  bool _isCurrent(AuthState auth, int generation) {
+    if (!mounted || generation != _generation) return false;
+    final current = ref.read(authControllerProvider).valueOrNull;
+    return current?.user.subjectId == auth.user.subjectId &&
+        current?.user.activeOrganizationId == auth.user.activeOrganizationId &&
+        current?.isOffline == false;
   }
 
   Future<void> _range() async {
@@ -108,6 +126,16 @@ class _InventoryReportsScreenState
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(authControllerProvider, (previous, next) {
+      final before = previous?.valueOrNull, after = next.valueOrNull;
+      if (before?.user.subjectId != after?.user.subjectId ||
+          before?.user.activeOrganizationId !=
+              after?.user.activeOrganizationId ||
+          before?.isOffline != after?.isOffline) {
+        _penId = null;
+        _load();
+      }
+    });
     final auth = ref.watch(authControllerProvider).valueOrNull;
     final locale = MaterialLocalizations.of(context);
     return Scaffold(
@@ -120,10 +148,13 @@ class _InventoryReportsScreenState
                   '${locale.formatMediumDate(_from)} — ${locale.formatMediumDate(_to)}')),
           if (auth != null)
             StreamBuilder<List<PenChoice>>(
+                key: ValueKey(auth.user.activeOrganizationId),
                 stream: ref
                     .watch(masterDataRepositoryProvider)
                     .watchPens(auth.user.activeOrganizationId),
                 builder: (context, snapshot) => DropdownButtonFormField<String>(
+                      key:
+                          ValueKey('${auth.user.activeOrganizationId}/$_penId'),
                       initialValue: _penId ?? '',
                       isExpanded: true,
                       decoration: const InputDecoration(labelText: '综合盘点栏舍'),
@@ -188,7 +219,7 @@ class _TrendCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (String label, List<RemoteTrendPoint> points) =
-        trend.seriesFor(penId) ?? ('', trend.total);
+        trend.seriesFor(penId) ?? ('所选栏舍', const []);
     final List<RemoteTrendPoint> comparable = points
         .where((point) => point.confirmed != null || point.candidate != null)
         .toList();
@@ -209,6 +240,24 @@ class _TrendCard extends StatelessWidget {
               if (penId == null)
                 Text(
                     '查询时启用栏舍：${trend.scopePenCount ?? '未知'}；各日仅统计有数据栏舍，不比较覆盖不同的合计偏差。'),
+              if (penId == null && comparable.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text('最近有数据日 ${comparable.last.date}：'
+                    '确认覆盖 ${comparable.last.confirmedPenCount ?? '未知'} 栏；'
+                    '候选覆盖 ${comparable.last.candidatePenCount ?? '未知'} 栏。'),
+                ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    title: const Text('查看每日覆盖栏舍数'),
+                    children: points.reversed
+                        .map((point) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text('${point.date}：确认覆盖 '
+                                    '${point.confirmedPenCount ?? '未知'} 栏；候选覆盖 '
+                                    '${point.candidatePenCount ?? '未知'} 栏。'))))
+                        .toList()),
+              ],
               const SizedBox(height: 8),
               SizedBox(
                   height: 150,

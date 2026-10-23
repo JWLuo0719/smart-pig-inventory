@@ -272,9 +272,13 @@ class _SessionReviewScreenState extends ConsumerState<SessionReviewScreen>
               after?.user.activeOrganizationId) {
         _generation++;
         _poll?.cancel();
-        _session = null;
-        _countController.clear();
-        _reasonController.clear();
+        setState(() {
+          _session = null;
+          _loading = true;
+          _error = null;
+          _countController.clear();
+          _reasonController.clear();
+        });
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _load(restart: true);
         });

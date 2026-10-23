@@ -1,12 +1,15 @@
 import 'package:dio/dio.dart';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 import '../../shared/widgets/local_video_player.dart';
+import '../../shared/evidence_labels.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/auth/auth_controller.dart';
+import '../../core/auth/auth_session.dart';
 import '../../core/auth/authorized_retry.dart';
 import '../../core/network/inventory_browse_api.dart';
 import '../master_data/data/drift_master_data_repository.dart';
@@ -39,6 +42,21 @@ class _ServerGalleryScreenState extends ConsumerState<ServerGalleryScreen> {
     _load();
   }
 
+  @override
+  void didUpdateWidget(covariant ServerGalleryScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.sessionId != widget.sessionId) _load();
+  }
+
+  bool _sameIdentity(AuthState? expected) {
+    if (!mounted || expected == null) return false;
+    final current = ref.read(authControllerProvider).valueOrNull;
+    return current?.user.subjectId == expected.user.subjectId &&
+        current?.user.activeOrganizationId ==
+            expected.user.activeOrganizationId &&
+        current?.isOffline == false;
+  }
+
   Future<T> _request<T>(Future<T> Function(String) request) async {
     final auth = ref.read(authControllerProvider).valueOrNull;
     if (auth == null || auth.isOffline) {
@@ -52,6 +70,8 @@ class _ServerGalleryScreenState extends ConsumerState<ServerGalleryScreen> {
 
   Future<void> _load({bool append = false}) async {
     final generation = ++_generation;
+    final auth = ref.read(authControllerProvider).valueOrNull;
+    final date = _date, penId = _penId, sessionId = widget.sessionId;
     final offset = append ? _media.length : 0;
     setState(() {
       _loading = true;
@@ -59,10 +79,10 @@ class _ServerGalleryScreenState extends ConsumerState<ServerGalleryScreen> {
       if (!append) _media = [];
     });
     try {
-      final rows = await _request((token) => widget.sessionId == null
-          ? _api.media(token, _date, penId: _penId, offset: offset)
-          : _api.sessionMedia(token, widget.sessionId!));
-      if (mounted && generation == _generation) {
+      final rows = await _request((token) => sessionId == null
+          ? _api.media(token, date, penId: penId, offset: offset)
+          : _api.sessionMedia(token, sessionId));
+      if (_sameIdentity(auth) && generation == _generation) {
         setState(() {
           _media = append ? [..._media, ...rows] : rows;
           _more = widget.sessionId == null && rows.length == 50;
@@ -92,6 +112,8 @@ class _ServerGalleryScreenState extends ConsumerState<ServerGalleryScreen> {
   }
 
   Future<void> _preview(LibraryMedia item) async {
+    final auth = ref.read(authControllerProvider).valueOrNull;
+    if (!_sameIdentity(auth)) return;
     setState(() => _busy = true);
     try {
       if (item.contentType == 'video/mp4') {
@@ -102,14 +124,16 @@ class _ServerGalleryScreenState extends ConsumerState<ServerGalleryScreen> {
         try {
           await _request(
               (token) => _api.download(token, item.assetId, file.path));
-          if (!mounted) return;
+          if (!mounted || !_sameIdentity(auth)) return;
           await showDialog<void>(
               context: context,
               builder: (context) => Dialog.fullscreen(
-                      child: Scaffold(
-                    appBar: AppBar(title: const Text('视频证据 · 人工复核')),
-                    body: Center(child: LocalVideoPlayer(file: file)),
-                  )));
+                  child: _identityBoundPreview(
+                      auth!,
+                      Scaffold(
+                        appBar: AppBar(title: const Text('视频证据 · 人工复核')),
+                        body: Center(child: LocalVideoPlayer(file: file)),
+                      ))));
         } finally {
           // Only this temporary playback copy is removed; original evidence stays intact.
           if (await file.exists()) await file.delete();
@@ -118,30 +142,33 @@ class _ServerGalleryScreenState extends ConsumerState<ServerGalleryScreen> {
       }
       final bytes =
           await _request((token) => _api.content(token, item.assetId));
-      if (!mounted) return;
+      if (!mounted || !_sameIdentity(auth)) return;
       await showDialog<void>(
           context: context,
           builder: (context) => Dialog.fullscreen(
-                  child: Scaffold(
-                appBar: AppBar(
-                    title: Text(
-                        '${item.buildingCode} / ${item.penCode} · ${item.position}')),
-                body: InteractiveViewer(
-                    minScale: 0.5,
-                    maxScale: 8,
-                    child: Center(
-                        child: Image.memory(bytes,
-                            errorBuilder: (_, __, ___) =>
-                                const Text('当前设备不能预览此媒体格式。')))),
-              )));
+              child: _identityBoundPreview(
+                  auth!,
+                  Scaffold(
+                    appBar: AppBar(
+                        title: Text(
+                            '${item.buildingCode} / ${item.penCode} · ${evidencePositionLabel(item.position)}')),
+                    body: InteractiveViewer(
+                        minScale: 0.5,
+                        maxScale: 8,
+                        child: Center(
+                            child: Image.memory(bytes,
+                                errorBuilder: (_, __, ___) =>
+                                    const Text('当前设备不能预览此媒体格式。')))),
+                  ))));
     } catch (error) {
-      if (mounted) setState(() => _error = _message(error));
+      if (_sameIdentity(auth)) setState(() => _error = _message(error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<void> _delete(LibraryMedia item) async {
+    final auth = ref.read(authControllerProvider).valueOrNull;
     final accepted = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
@@ -156,15 +183,15 @@ class _ServerGalleryScreenState extends ConsumerState<ServerGalleryScreen> {
                     child: const Text('删除错图'))
               ],
             ));
-    if (accepted != true || !mounted) return;
+    if (accepted != true || !_sameIdentity(auth)) return;
     setState(() => _busy = true);
     try {
       final key =
           _deleteKeys.putIfAbsent(item.assetId, () => const Uuid().v4());
       await _request((token) => _api.delete(token, item.assetId, key));
-      if (mounted) await _load();
+      if (_sameIdentity(auth)) await _load();
     } catch (error) {
-      if (mounted) setState(() => _error = _message(error));
+      if (_sameIdentity(auth)) setState(() => _error = _message(error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -172,6 +199,17 @@ class _ServerGalleryScreenState extends ConsumerState<ServerGalleryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(authControllerProvider, (previous, next) {
+      final before = previous?.valueOrNull, after = next.valueOrNull;
+      if (before?.user.subjectId != after?.user.subjectId ||
+          before?.user.activeOrganizationId !=
+              after?.user.activeOrganizationId ||
+          before?.isOffline != after?.isOffline) {
+        _penId = null;
+        _deleteKeys.clear();
+        _load();
+      }
+    });
     final auth = ref.watch(authControllerProvider).valueOrNull;
     if (auth == null) return const Center(child: CircularProgressIndicator());
     return ListView(
@@ -190,10 +228,13 @@ class _ServerGalleryScreenState extends ConsumerState<ServerGalleryScreen> {
                     '日期：${MaterialLocalizations.of(context).formatMediumDate(_date)}')),
           if (widget.sessionId == null)
             StreamBuilder<List<PenChoice>>(
+                key: ValueKey(auth.user.activeOrganizationId),
                 stream: ref
                     .watch(masterDataRepositoryProvider)
                     .watchPens(auth.user.activeOrganizationId),
                 builder: (context, snapshot) => DropdownButtonFormField<String>(
+                      key:
+                          ValueKey('${auth.user.activeOrganizationId}/$_penId'),
                       initialValue: _penId ?? '',
                       decoration: const InputDecoration(labelText: '栏舍'),
                       isExpanded: true,
@@ -228,8 +269,14 @@ class _ServerGalleryScreenState extends ConsumerState<ServerGalleryScreen> {
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (!item.deleted)
+                          _ServerThumbnail(
+                              key: ValueKey(
+                                  '${auth.user.subjectId}/${auth.user.activeOrganizationId}/${item.assetId}'),
+                              media: item,
+                              onOpen: _busy ? null : () => _preview(item)),
                         Text(
-                            '${item.buildingCode} / ${item.penCode} · ${item.position}',
+                            '${item.buildingCode} / ${item.penCode} · ${evidencePositionLabel(item.position)}',
                             style: Theme.of(context).textTheme.titleMedium),
                         Text(item.deleted
                             ? '已删除 · 审计保留'
@@ -262,6 +309,16 @@ class _ServerGalleryScreenState extends ConsumerState<ServerGalleryScreen> {
         ]);
   }
 
+  Widget _identityBoundPreview(AuthState owner, Widget child) =>
+      Consumer(builder: (context, ref, _) {
+        final current = ref.watch(authControllerProvider).valueOrNull;
+        return current?.user.subjectId == owner.user.subjectId &&
+                current?.user.activeOrganizationId ==
+                    owner.user.activeOrganizationId
+            ? child
+            : const Scaffold(body: Center(child: Text('账号已变化，请重新打开当前组织证据。')));
+      });
+
   String _message(Object error) {
     if (error is StateError) return error.message.toString();
     if (error is DioException && error.response?.statusCode == 409) {
@@ -269,4 +326,73 @@ class _ServerGalleryScreenState extends ConsumerState<ServerGalleryScreen> {
     }
     return '操作未完成，请联网后重试；未清除本机原图。';
   }
+}
+
+class _ServerThumbnail extends ConsumerStatefulWidget {
+  const _ServerThumbnail(
+      {super.key, required this.media, required this.onOpen});
+  final LibraryMedia media;
+  final VoidCallback? onOpen;
+  @override
+  ConsumerState<_ServerThumbnail> createState() => _ServerThumbnailState();
+}
+
+class _ServerThumbnailState extends ConsumerState<_ServerThumbnail> {
+  Uint8List? _bytes;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final auth = ref.read(authControllerProvider).valueOrNull;
+    if (auth == null || auth.isOffline) return;
+    if (!['image/jpeg', 'image/png'].contains(widget.media.contentType)) {
+      _error = '此格式请打开原图';
+      return;
+    }
+    try {
+      final bytes = await retryOnceAfterUnauthorized(
+          initialAuth: auth,
+          reconnect: () =>
+              ref.read(authControllerProvider.notifier).reconnect(),
+          request: (token) => ref
+              .read(serverGalleryApiProvider)
+              .thumbnail(token, widget.media.assetId));
+      if (!mounted) return;
+      final current = ref.read(authControllerProvider).valueOrNull;
+      if (current?.user.subjectId != auth.user.subjectId ||
+          current?.user.activeOrganizationId !=
+              auth.user.activeOrganizationId) {
+        return;
+      }
+      setState(() => _bytes = bytes);
+    } catch (_) {
+      if (mounted) setState(() => _error = '缩略图暂不可用，可打开原图');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+      image: true,
+      label: '${evidencePositionLabel(widget.media.position)}缩略图，仅作预览，点击核验原图',
+      child: InkWell(
+          onTap: widget.onOpen,
+          child: Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _error != null
+                  ? Text(_error!)
+                  : _bytes == null
+                      ? const SizedBox(
+                          height: 96,
+                          width: 128,
+                          child: Center(child: Text('缩略图读取中…')))
+                      : Image.memory(_bytes!,
+                          height: 96,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) =>
+                              const Text('缩略图无法显示，可打开原图')))));
 }

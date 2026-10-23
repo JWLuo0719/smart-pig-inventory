@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:video_player/video_player.dart';
 import '../../shared/widgets/local_video_player.dart';
+import '../../shared/evidence_labels.dart';
 import 'application/create_video_draft.dart';
 import 'application/abandon_unqueued_capture_draft.dart';
 
@@ -33,6 +34,12 @@ import 'roi_editor_page.dart';
 import '../outbox/application/queue_capture_draft.dart';
 import '../sync/outbox_background_sync.dart';
 
+final captureImagePickerProvider =
+    Provider<ImagePicker>((ref) => ImagePicker());
+final captureDocumentsDirectoryProvider =
+    Provider<Future<Directory> Function()>(
+        (ref) => getApplicationDocumentsDirectory);
+
 class CaptureScreen extends ConsumerStatefulWidget {
   const CaptureScreen({required this.target, super.key});
 
@@ -43,7 +50,7 @@ class CaptureScreen extends ConsumerStatefulWidget {
 }
 
 class _CaptureScreenState extends ConsumerState<CaptureScreen> {
-  final ImagePicker _picker = ImagePicker();
+  ImagePicker get _picker => ref.read(captureImagePickerProvider);
   final PlatformImageMetadataReader _metadataReader =
       PlatformImageMetadataReader();
   final List<String> _savedPositions = <String>[];
@@ -91,7 +98,6 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
   }
 
   Future<void> _restoreCaptureScreen() async {
-    await _recoverLostPickerData();
     final DriftCaptureDraftRepository repository = DriftCaptureDraftRepository(
         ref.read(appDatabaseProvider),
         replaceDraftId: _replacementId);
@@ -102,7 +108,11 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
         businessDate: widget.target.businessDate,
         draftId: widget.target.draftId,
       );
-      if (!mounted || snapshot == null) return;
+      if (!mounted) return;
+      if (snapshot == null) {
+        await _recoverLostPickerData();
+        return;
+      }
       if (snapshot.media.isEmpty ||
           !await File(snapshot.media.first.materializedPath).exists()) {
         setState(() {
@@ -142,6 +152,9 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
         _canAbandonBlockedDraft =
             outbox?.state == 'blocked' && outbox?.sessionId == null;
       });
+      // A recovered picker result belongs to the restored mode and next
+      // direction, never a new implicit single-image group.
+      await _recoverLostPickerData();
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -160,6 +173,11 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
       setState(
         () => _error = '上次拍摄未能恢复。已有本地草稿没有被删除，请重新拍摄。',
       );
+      return;
+    }
+    if (_isQueued ||
+        (_savedDraft != null && (!_threeView || _threeViewComplete))) {
+      setState(() => _error = '已有完整或入队草稿，上次拍摄未覆盖原证据；可返回查看或明确重新采集整组。');
       return;
     }
     await _savePicked(response.file!, restoringLostData: true);
@@ -204,7 +222,8 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
         return;
       }
       final ImageMetadata metadata = await _metadataReader.read(sourceFile);
-      final Directory documents = await getApplicationDocumentsDirectory();
+      final Directory documents =
+          await ref.read(captureDocumentsDirectoryProvider)();
       final DriftCaptureDraftRepository repository =
           DriftCaptureDraftRepository(ref.read(appDatabaseProvider),
               replaceDraftId: _replacementId);
@@ -292,8 +311,8 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
         throw ArgumentError('视频时长需大于 0 且不超过 2 分钟。');
       }
       final saved = await CreateVideoDraft(
-        materializer:
-            MediaMaterializer(await getApplicationDocumentsDirectory()),
+        materializer: MediaMaterializer(
+            await ref.read(captureDocumentsDirectoryProvider)()),
         repository: DriftCaptureDraftRepository(ref.read(appDatabaseProvider),
             replaceDraftId: _replacementId),
       ).execute(
@@ -388,6 +407,14 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
   Future<void> _queueForUpload() async {
     final CreatedCaptureDraft? draft = _savedDraft;
     if (draft == null || _queueing || _isQueued) return;
+    if (ref
+            .read(authControllerProvider)
+            .valueOrNull
+            ?.user
+            .activeOrganizationId !=
+        widget.target.organizationId) {
+      return;
+    }
     setState(() {
       _queueing = true;
       _error = null;
@@ -506,6 +533,14 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
       ),
     );
     if (confirmed != true || !mounted) return;
+    if (ref
+            .read(authControllerProvider)
+            .valueOrNull
+            ?.user
+            .activeOrganizationId !=
+        widget.target.organizationId) {
+      return;
+    }
     setState(() => _abandoning = true);
     try {
       await AbandonBlockedCaptureDraft(ref.read(appDatabaseProvider))
@@ -564,7 +599,9 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
         _savedEvidence.add(_LocalEvidence(
             position: 'left',
             file: saved.materializedFile,
-            assetId: saved.assetId));
+            assetId: saved.assetId,
+            width: metadata.width,
+            height: metadata.height));
       });
       return;
     }
@@ -588,6 +625,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
       organizationId: widget.target.organizationId,
       penId: widget.target.penId,
       businessDate: widget.target.businessDate,
+      draftId: _savedDraft!.draftId,
     );
     if (!mounted) return;
     setState(() {
@@ -878,13 +916,7 @@ class _EvidenceThumbnail extends StatelessWidget {
   final Future<void> Function(_LocalEvidence item) onAnnotate;
 
   String get _label {
-    return switch (item.position) {
-      'left' => '左图',
-      'center' => '中图',
-      'right' => '右图',
-      'video' => '视频',
-      _ => '单图',
-    };
+    return evidencePositionLabel(item.position);
   }
 
   @override

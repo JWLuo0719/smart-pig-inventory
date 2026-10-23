@@ -1,8 +1,58 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_pig_inventory/core/network/inventory_browse_api.dart';
+import 'package:smart_pig_inventory/core/auth/authorized_retry.dart';
+import 'support/competition_auth.dart';
 
 void main() {
+  test('thumbnail 401 cannot replay after the active identity changes',
+      () async {
+    final requests = <RequestOptions>[];
+    final dio = Dio(BaseOptions(baseUrl: 'https://example.invalid'));
+    dio.interceptors.add(InterceptorsWrapper(onRequest: (request, handler) {
+      requests.add(request);
+      handler.reject(DioException(
+          requestOptions: request,
+          response: Response(requestOptions: request, statusCode: 401),
+          type: DioExceptionType.badResponse));
+    }));
+    final api = InventoryBrowseApi('https://example.invalid', dio: dio);
+    await expectLater(
+        retryOnceAfterUnauthorized(
+            initialAuth: competitionAuth(),
+            reconnect: () async => competitionAuth(org: 'org-b'),
+            request: (token) => api.thumbnail(token, 'asset')),
+        throwsA(isA<DioException>()));
+    expect(requests, hasLength(1));
+    expect(requests.single.path, '/api/v1/media-assets/asset/thumbnail');
+    expect(requests.single.headers['Authorization'], 'Bearer synthetic-org-a');
+  });
+  test(
+      'thumbnail uses its authenticated endpoint and never substitutes original',
+      () async {
+    final requests = <RequestOptions>[];
+    final dio = Dio(BaseOptions(baseUrl: 'https://example.invalid'));
+    dio.interceptors.add(InterceptorsWrapper(onRequest: (request, handler) {
+      requests.add(request);
+      if (request.path.endsWith('/thumbnail')) {
+        handler.reject(DioException(
+            requestOptions: request,
+            response: Response(requestOptions: request, statusCode: 422),
+            type: DioExceptionType.badResponse));
+      } else {
+        handler.resolve(Response(
+            requestOptions: request, statusCode: 200, data: <int>[1, 2, 3]));
+      }
+    }));
+    final api = InventoryBrowseApi('https://example.invalid', dio: dio);
+    await expectLater(
+        api.thumbnail('synthetic', 'asset'), throwsA(isA<DioException>()));
+    expect(requests.single.path, '/api/v1/media-assets/asset/thumbnail');
+    expect(requests.single.headers['Authorization'], 'Bearer synthetic');
+    expect(requests.single.responseType, ResponseType.bytes);
+    expect(await api.content('synthetic', 'asset'), [1, 2, 3]);
+    expect(requests.last.path, '/api/v1/media-assets/asset/content');
+  });
   test(
       'gallery scopes date and pen, preserves lock state and deletion idempotency',
       () async {

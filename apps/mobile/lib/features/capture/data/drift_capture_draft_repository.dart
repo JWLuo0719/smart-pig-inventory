@@ -11,28 +11,51 @@ class DriftCaptureDraftRepository implements CaptureDraftRepository {
 
   @override
   Future<void> addMedia({
+    required String organizationId,
     required String draftId,
     required CapturedMediaRecord media,
     required DateTime now,
   }) {
-    return database.into(database.localMediaAssets).insert(
-          LocalMediaAssetsCompanion.insert(
-            id: media.assetId,
-            draftId: draftId,
-            viewPosition: media.position,
-            materializedPath: media.materializedPath,
-            originalName: media.originalName,
-            contentType: media.contentType,
-            byteSize: media.byteSize,
-            sha256: media.sha256,
-            roiJson: Value<String>(media.roiJson),
-            exifJson: Value<String>(media.exifJson),
-            capturedAt: Value<DateTime>(media.capturedAt),
-            width: Value<int>(media.width),
-            height: Value<int>(media.height),
-            createdAt: now,
-          ),
-        );
+    return database.transaction(() async {
+      // Recheck after materialization: another action may have queued or
+      // abandoned the draft while the new file was being copied.
+      final draft = await (database.select(database.captureDrafts)
+            ..where((entry) => entry.id.equals(draftId)))
+          .getSingle();
+      final outbox = await (database.select(database.outboxEntries)
+            ..where((entry) => entry.draftId.equals(draftId)))
+          .getSingleOrNull();
+      final positions = await viewPositions(draftId);
+      if (draft.organizationId != organizationId ||
+          draft.state != 'draft' ||
+          draft.captureKind != 'left_center_right' ||
+          outbox != null ||
+          !const {'left', 'center', 'right'}.contains(media.position) ||
+          positions.contains(media.position)) {
+        throw StateError('只有当前组织尚未入队的三图草稿可补充新方向');
+      }
+      await database.into(database.localMediaAssets).insert(
+            LocalMediaAssetsCompanion.insert(
+              id: media.assetId,
+              draftId: draftId,
+              viewPosition: media.position,
+              materializedPath: media.materializedPath,
+              originalName: media.originalName,
+              contentType: media.contentType,
+              byteSize: media.byteSize,
+              sha256: media.sha256,
+              roiJson: Value<String>(media.roiJson),
+              exifJson: Value<String>(media.exifJson),
+              capturedAt: Value<DateTime>(media.capturedAt),
+              width: Value<int>(media.width),
+              height: Value<int>(media.height),
+              createdAt: now,
+            ),
+          );
+      await (database.update(database.captureDrafts)
+            ..where((entry) => entry.id.equals(draftId)))
+          .write(CaptureDraftsCompanion(updatedAt: Value(now)));
+    });
   }
 
   @override
