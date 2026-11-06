@@ -16,9 +16,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/master-data")
 public class MasterDataController {
     private final MasterDataService service;
+    private final com.smartfarm.inventory.inventory.infrastructure.SecurityReviewActor actor;
 
-    public MasterDataController(MasterDataService service) {
+    public MasterDataController(MasterDataService service, com.smartfarm.inventory.inventory.infrastructure.SecurityReviewActor actor) {
         this.service = service;
+        this.actor = actor;
     }
 
     @GetMapping("/changes")
@@ -27,6 +29,8 @@ public class MasterDataController {
         if (organizationId == null) {
             throw new IllegalArgumentException("Token does not contain an active organization");
         }
-        return service.changes(UUID.fromString(organizationId), cursor);
+        UUID organization = UUID.fromString(organizationId);
+        actor.assertCanView(organization);
+        return service.changes(organization, cursor);
     }
 }

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Smart Pig Inventory Business API
-  version: 0.11.0
+  version: 0.13.0
   description: >-
     路线 B+ 的业务合同基线。所有写操作接受 X-Idempotency-Key，所有时间使用 ISO 8601；
     离线采集必须完成 package/blob/manifest/commit 后才创建正式推理任务。ROI 使用完成
@@ -21,6 +21,115 @@ tags:
   - {name: InferenceOperations}
   - {name: InternalInference}
 paths:
+  /assistant/tools/get-day-overview:
+    post:
+      tags: [Assistant]
+      operationId: getDayOverviewTool
+      summary: 查询当前组织当前启用栏舍的当日概况，只读且认证关闭时拒绝
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: './assistant-tools/v1.schema.json#/$defs/get_day_overviewRequest'}
+      responses:
+        '200':
+          description: 全部启用栏舍的覆盖/确认汇总，最多50行并明确hasMore；无确认记录时总量为null
+          content:
+            application/json:
+              schema: {$ref: './assistant-tools/v1.schema.json#/$defs/get_day_overviewResponse'}
+        '401': {description: 无有效身份或用户认证关闭}
+        '404': {description: 无权限与不存在不可区分}
+        '422': {description: 非法参数或额外字段}
+        '503': {description: 事实源不可用}
+  /assistant/tools/get-pen-history:
+    post:
+      tags: [Assistant]
+      operationId: getPenHistoryTool
+      summary: 指定启用栏舍的连续日期确认历史，只读，最多90天，缺失为null
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: './assistant-tools/v1.schema.json#/$defs/get_pen_historyRequest'}
+      responses:
+        '200':
+          description: 只含当前确认版本；引用最多50条，不代表完整引用覆盖
+          content:
+            application/json:
+              schema: {$ref: './assistant-tools/v1.schema.json#/$defs/get_pen_historyResponse'}
+        '401': {description: 无有效身份或用户认证关闭}
+        '404': {description: 无权限、栏舍停用与不存在不可区分}
+        '422': {description: 非法日期、天数、ID或额外字段}
+        '503': {description: 事实源不可用}
+  /assistant/chat:
+    post:
+      tags: [Assistant]
+      operationId: chatWithInventoryAssistant
+      summary: 有限轮次的只读证据问答，不执行业务写操作
+      description: >-
+        模型默认关闭；只有配置真实接口并允许外发最小结构化事实后启用。
+        对话上下文仅保留本次请求，历史是非可信文本；工具参数不允许组织、SQL或URL。
+        facts为服务端工具原始结果，answer为经引用校验的模型解释，不能替代事实卡。
+        数字解释若无法通过保守核对则隐藏；不声明语义完全正确。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [message, businessDate]
+              properties:
+                message: {type: string, minLength: 1, maxLength: 2000}
+                businessDate: {type: string, format: date}
+                sessionId: {type: [string, 'null'], format: uuid}
+                penId: {type: [string, 'null'], format: uuid}
+                history:
+                  type: array
+                  maxItems: 6
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [role, content]
+                    properties:
+                      role: {type: string, enum: [user, assistant]}
+                      content: {type: string, minLength: 1, maxLength: 2000}
+      responses:
+        '200':
+          description: 实测工具事实、有限引用、模型解释和运行状态；失败时不伪造回答
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [requestId, status, answer, facts, evidence, model, promptVersion, elapsedMs, toolCalls]
+                properties:
+                  requestId: {type: string, format: uuid}
+                  status: {type: string, enum: [ok, insufficient_evidence, answer_rejected, model_unavailable, limit_reached]}
+                  answer: {type: [string, 'null']}
+                  facts: {type: array, items: {type: object}}
+                  evidence: {type: array, maxItems: 50, items: {type: object}}
+                  model: {type: string}
+                  promptVersion: {type: string}
+                  elapsedMs: {type: integer, minimum: 0}
+                  toolCalls: {type: integer, minimum: 0, maximum: 6}
+                  usage:
+                    type: object
+                    description: 仅累计供应方返回的有效token字段；缺字段表示未知，不代表零或实际费用
+                    additionalProperties: {type: integer, minimum: 0}
+        '401': {description: 未认证、过期或用户认证关闭}
+        '404': {description: 当前组织授权已失效}
+        '422': {description: 请求不符合契约}
+        '429': {description: 并发/调用频率上限，稍后重试}
+        '503': {description: 模型未配置/未授权数据外发，服务不可用}
+  /assistant/status:
+    get:
+      tags: [Assistant]
+      operationId: getAssistantStatus
+      summary: 当前身份的只读Agent可用状态，不返回端点或密钥
+      responses:
+        '200': {description: enabled、model、promptVersion和工具名称}
+        '401': {description: 未认证或认证关闭}
+        '404': {description: 当前组织授权已失效}
   /media-assets:
     get:
       tags: [Inventory]
@@ -371,6 +480,33 @@ paths:
               schema: {type: string, format: binary}
         '422':
           description: 日期顺序、范围或记录数超过安全边界
+  /assistant/tools/inspect-session:
+    post:
+      tags: [Assistant]
+      operationId: inspectSessionTool
+      summary: 受认证的只读会话工具，返回最小事实与证据引用
+      description: >-
+        只实现 inspect_session v1；不调用模型、不修改业务。即使关闭开发用户认证也拒绝调用。
+        每次通过既有会话服务重新校验活动组织与成员权限；不暴露原图、模型身份或内部错误详情。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: './assistant-tools/v1.schema.json#/$defs/inspect_sessionRequest'}
+      responses:
+        '200':
+          description: 只读事实；候选与确认分列，未知不补零
+          content:
+            application/json:
+              schema: {$ref: './assistant-tools/v1.schema.json#/$defs/inspect_sessionResponse'}
+        '401':
+          description: 无有效用户认证，或开发用户认证关闭；status=unauthenticated
+        '404':
+          description: 不存在与无权限不可区分；status=not_found_or_forbidden
+        '422':
+          description: 参数缺失、非法或包含额外字段；status=invalid_arguments
+        '503':
+          description: 数据源暂不可用；status=unavailable
   /assistant/insights:
     get:
       tags: [Assistant]
@@ -861,7 +997,7 @@ components:
           type: array
           minItems: 1
           uniqueItems: true
-          items: {type: string, enum: [OPERATOR, REVIEWER, FARM_ADMIN, SYSTEM_ADMIN]}
+          items: {type: string, enum: [OPERATOR, REVIEWER, FARM_ADMIN, SYSTEM_ADMIN, COMPETITION_VIEWER]}
     MasterDataChanges:
       type: object
       required: [cursor, fullResyncRequired, organizations, buildings, pens, deletedEntities]

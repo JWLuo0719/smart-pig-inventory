@@ -45,6 +45,22 @@ class InventoryReviewServiceTest {
     }
 
     @Test
+    void toolFactsReauthorizeAndDoNotUseTheDisplayFallback() {
+        when(repository.findSession(sessionId)).thenReturn(Optional.of(session("confirmed", 7, null, null)));
+        var facts = service.inspectSessionFacts(sessionId);
+        verify(actor).assertCanView(organizationId);
+        assertThat(facts.candidateCount()).isEqualTo(7);
+        assertThat(facts.confirmedCount()).isNull();
+    }
+
+    @Test
+    void toolFactsCannotReturnAnUnauthorizedSession() {
+        when(repository.findSession(sessionId)).thenReturn(Optional.of(session("confirmed", 7, 9, null)));
+        org.mockito.Mockito.doThrow(InventoryException.notFound()).when(actor).assertCanView(organizationId);
+        assertThatThrownBy(() -> service.inspectSessionFacts(sessionId)).isInstanceOf(InventoryException.class);
+    }
+
+    @Test
     void versionHistoryRequiresAuditPermissionAndDoesNotInventAConfirmedVersion() {
         when(repository.findSession(sessionId)).thenReturn(Optional.of(session("review_required", null, null, null)));
         when(repository.versions(organizationId, sessionId)).thenReturn(List.of());
@@ -146,6 +162,18 @@ class InventoryReviewServiceTest {
                 .isInstanceOf(InventoryException.class)
                 .hasMessageContaining("locked");
 
+        verify(repository, never()).softDelete(any(), any());
+    }
+
+    @Test
+    void readOnlyMembershipCannotDeleteEvenUnlockedEvidence() {
+        UUID assetId = UUID.randomUUID();
+        when(repository.evidenceSessionForAsset(assetId)).thenReturn(Optional.of(sessionId));
+        when(repository.lockSession(sessionId)).thenReturn(Optional.of(session("review_required", 9, null, null)));
+        when(repository.lockMediaByAssetId(assetId)).thenReturn(Optional.of(new MediaRow(UUID.randomUUID(), assetId, organizationId, false, false)));
+        org.mockito.Mockito.doThrow(InventoryException.notFound()).when(actor).assertCanDeleteEvidence(organizationId);
+        assertThatThrownBy(() -> service.deleteUnlockedEvidence(assetId, UUID.randomUUID(), "read-only"))
+                .isInstanceOf(InventoryException.class);
         verify(repository, never()).softDelete(any(), any());
     }
 

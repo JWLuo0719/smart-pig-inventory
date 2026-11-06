@@ -39,6 +39,7 @@ public class JdbcIdentityRepository {
                 FROM organization_membership m
                 JOIN farm_organization o ON o.id = m.organization_id
                 WHERE m.subject_id = ? AND m.enabled = TRUE AND o.enabled = TRUE
+                  AND (m.access_expires_at IS NULL OR m.access_expires_at > CURRENT_TIMESTAMP(6))
                 ORDER BY o.code, m.role_key
                 """, (resultSet, rowNumber) -> new Membership(
                 readUuid(resultSet, "organization_id"), resultSet.getString("code"),

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:smartfarm:assistant-tools:1.0",
-  "title": "Read-only assistant tool contracts, no runtime agent",
+  "title": "Read-only inventory assistant tool contracts v1",
   "oneOf": [
     {
       "$ref": "#/$defs/get_day_overviewRequest"

@@ -9,11 +9,16 @@ Project-local rules for future agents and contributors.
 - `docs/product/non-functional-requirements.md`: measurable quality targets.
 - `docs/product/requirements-traceability.md`: implementation and verification status.
 - `docs/product/competition-development-plan.md`: current combined code-development plan; code completion and deferred acceptance are separate columns.
+- `docs/product/ai-race-topic1-delivery-plan.md`: selected AI-race scope and required submission/evidence gates.
+- `deployment/joycode/README.md`: cloud source-bundle, middleware, model and judge-account setup; configuration/source packaging is not deployment.
 - `docs/development/competition-code-recovery.md`: local competition branch checkpoints and safe forward-fix/revert workflow.
 - `docs/architecture.md`: B+ system architecture and module ownership.
 - `docs/deployment/pilot-baseline.md`: pilot device and edge-server sizing assumptions.
 - `contracts/openapi.yaml`: external HTTP contract; change contract first.
 - `CURRENT_HANDOFF.md`: first-read operational handoff for a new conversation.
+- `task-prompts/current.md`: current reusable AI-race continuation prompt; dated handoff archives are evidence only.
+- `docs/deployment/joycode-network-repair.md`: verified workstation-specific JoyCode public endpoint repair, remote-file evidence, and remaining SSH/application checks.
+- `docs/research/ai-race-platform-recheck-20261106.md`: official competition platform benefits, support sources, and unresolved entitlement boundaries.
 - `PROJECT_STATUS.md` and `NEXT_STEPS.md`: detailed current evidence and ordered remaining work.
 - `docs/development/workstation-setup.md`: verified workstation setup and local startup procedure.
 - `docs/development/test-data-governance.md`: test-data authorization, storage, and fixture boundaries.
@@ -28,6 +33,10 @@ Project-local rules for future agents and contributors.
 
 ## Engineering rules
 
+- For AI-race delivery, use the current ordered `NEXT_STEPS.md` and selected-topic plan. Keep development-workspace connectivity, application deployment, real-model validation, accepted business results, final materials, and competition submission receipts as separate evidence gates. A connected IDE or uploaded file alone does not complete the competition delivery.
+- JoyCode management APIs and project application URLs are distinct endpoints. Use the verified repair document for this workstation; do not invent DNS/Hosts mappings from a management hostname to an application IP or assume an unrelated VPN can reach the provider. Preserve SSH host-key verification, existing signing/TLS identities and drafts; keep local connection backups and credentials outside source bundles and Git.
+- Competition-provided free programming/model services do not establish independent application API access or free cloud/database capacity. Verify the actual account/tenant, entitlement, limit and expiry before enabling a provider or accepting billable resources. Keep anonymous work contents and official filename requirements distinct, and verify actual submission receipts.
+
 - Release delivery priority follows `NEXT_STEPS.md`: signed Android Release with real single-image AI candidate counting, then consolidated authorized real-pig/manual acceptance. Keep automated regression during development. Do not treat Release signing as model approval or automatically promote AI candidates to confirmed report values. Release signing must not fall back to the debug key; keep signing secrets out of Git.
 - Android Release workflow: `scripts/initialize-release-signing.ps1` refuses existing keys; `scripts/build-release-apk.ps1` pins the expected certificate and verifies APK metadata/cleartext policy; `scripts/test-release-configuration.ps1` checks Gradle gates. See `docs/development/android-release.md`. A `-BuildOnly` APK with a reserved endpoint is only build evidence, never a connected acceptance candidate. Preserve the local signing identity and existing Debug device drafts; do not uninstall or rotate keys to work around signature mismatch.
 - Before runtime acceptance, verify deployed images and Flyway migrations match the intended source version. A healthy old image is not evidence for current code. Process-scoped Compose environment overrides must be passed again to every separate shell invocation, including fixture scripts that recreate services. Preserve device drafts when planning transitions between debug and release signing identities.
@@ -39,6 +48,8 @@ Project-local rules for future agents and contributors.
 - Multi-view images are one capture set. Never sum left/center/right results until a validated deduplication provider exists.
 - Mobile home, gallery, task, and profile surfaces must read organization-scoped repositories or APIs. Do not ship hard-coded farm names, counts, progress, queue sizes, or demo activity in product screens.
 - Every admin workflow endpoint must be admitted explicitly by the same-origin backend route policy and covered by a method/path allow-list test. Keep access and refresh tokens memory-only; a 401 retry must rotate once and replay the original request without changing its idempotency key.
+- The competition Agent is read-only: authorize every tool from the signed request context and current membership, keep candidate/confirmed/unknown distinct, and treat model text as an explanation separate from authoritative fact cards. External model calls default off and require explicit configured credentials and minimum-data egress approval. Never send business tokens, original media, object URLs or internal failure details to the model. Synthetic HTTP model tests do not prove real-model quality.
+- `COMPETITION_VIEWER` is read-only and expiring (Flyway V14). Do not reuse operator/admin credentials for judges or grant write roles. Ordinary evidence deletion requires `assertCanDeleteEvidence`, not view permission. Preserve V14 and membership-expiry checks when modifying authorization; verify actual MySQL and cloud access separately from unit tests.
 - Admin optional panels must distinguish loading, known permission denial, request failure, and successful empty data. Only a successful list response may display zero. Derive presentation permissions from the active organization, keep backend authorization authoritative, and never infer permission denial from a masked 404 alone. Hide stale panel rows during reload and verify error recovery in the fixed admin runtime stack.
 - An administrative inference retry creates a new job in the same immutable linear lineage. Never reopen or overwrite the failed attempt; preserve its media, failure evidence, requested model identity, and audit history. The same idempotency key and normalized reason replay the same successor, and a late retry callback must not demote a confirmed session.
 - Late callbacks must also leave `superseded` evidence sessions unchanged after a correction; they may finalize the retry job, but must not reopen historical inventory versions or replace the current task projection.

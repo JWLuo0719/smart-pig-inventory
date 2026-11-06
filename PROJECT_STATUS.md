@@ -1,5 +1,13 @@
 # 当前状态
 
+## 2026-11-06 比赛交付交接与云端连接状态
+
+当前续办入口已整理为[简明交接](CURRENT_HANDOFF.md)、[下一步](NEXT_STEPS.md)及[复用提示词](task-prompts/current.md)，原交接全文原样保留在[历史快照](docs/development/handoffs/20261106-before-consolidation.md)。JoyCode用户设置 `server.baseUrl=https://joycode.jd.com` 已修复客户端连接，远端模板文件实读通过；公网入口仍502、CLI主机指纹待可信核验。业务源码未上线、真实模型未调用、V14真实迁移未验、正式PPT/MP4和赛事提交回执未完成。报名/缴费/组队状态也未读回；官网湖南通知的免费编程/大模型权益已查明，应用API和免费云资源细则未核实。此次交接只修改文档，未重跑或宣称业务运行验收通过，未提交Git或推送。
+
+## 2026-11-02 参赛 Agent 本地实现完成
+
+三项只读工具、HTTP模型接入、有限工具循环、独立评审页与只读到期身份、JoyCode源码/环境配置和材料底稿已落地。OpenAPI0.13.0、待应用Flyway14；当前只是本地代码交付，不是已部署在线作品。最终Spring196项中161通过/35Docker跳过，Admin41项及lint/typecheck/build通过，18项合成HTTP工作流及合同/配置等检查通过。Docker/MySQL/镜像/浏览器/真实模型与现场验收未完成，浏览器启动受自动审批阻止；见[本轮记录](docs/development/agent-delivery-20261102.md)。
+
 ## 2026-10-23 有效计划代码收口
 
 PRD P0、原始功能收口六包和参赛F01—F10已逐项审计并补齐实际代码缺口，合并开发计划与可回退提交已保存。当前代码v21、OpenAPI0.11.0；没有业务迁移、部署、设备安装或模型/签名/TLS变化。自动检查与34项Docker/1项TLS跳过、后置整体验收详见[代码收口记录](docs/development/code-completion-20261023.md)，代码完成不宣称联网/现场/比赛验收通过。

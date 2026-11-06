@@ -34,9 +34,11 @@ public class SecurityUploadActor implements UploadActor {
             throw UploadException.notFound();
         }
         Integer memberships = jdbc.queryForObject("""
-                SELECT COUNT(*) FROM organization_membership
-                WHERE organization_id = ? AND subject_id = ? AND enabled = TRUE
-                  AND role_key IN ('OPERATOR', 'FARM_ADMIN', 'SYSTEM_ADMIN')
+                SELECT COUNT(*) FROM organization_membership m
+                JOIN farm_organization o ON o.id = m.organization_id
+                WHERE m.organization_id = ? AND m.subject_id = ? AND m.enabled = TRUE AND o.enabled = TRUE
+                  AND (m.access_expires_at IS NULL OR m.access_expires_at > CURRENT_TIMESTAMP(6))
+                  AND m.role_key IN ('OPERATOR', 'FARM_ADMIN', 'SYSTEM_ADMIN')
                 """, Integer.class, bytes(organizationId), jwt.getName());
         if (memberships == null || memberships == 0) {
             throw UploadException.notFound();

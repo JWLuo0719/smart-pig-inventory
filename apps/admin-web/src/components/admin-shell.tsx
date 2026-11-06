@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Image from "next/image";
 
 const navigation = [
+  ["盘点助手", "依据与复核建议", "/assistant"],
   ["现场态势", "今日需处理", "#top"],
   ["盘点任务", "下发与进度", "#tasks"],
   ["媒体审核", "会话与近重复", "#media-review"],

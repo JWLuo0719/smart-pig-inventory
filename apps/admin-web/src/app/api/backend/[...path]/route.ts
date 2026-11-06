@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { isPermittedBackendRoute } from "@/lib/backend-route-policy";
+import { readLimitedRequestBody } from "@/lib/limited-request-body";
 
 const upstream = process.env.BUSINESS_API_BASE_URL;
 
@@ -29,10 +30,14 @@ async function proxy(request: Request, { params }: RouteContext) {
     if (value) headers.set(name, value);
   }
 
+  let body: ArrayBuffer | Uint8Array | undefined;
+  try { body = request.method === "GET" ? undefined : route.startsWith("assistant/") ? await readLimitedRequestBody(request) : await request.arrayBuffer(); }
+  catch { return NextResponse.json({ code: "ASSISTANT_REQUEST_TOO_LARGE", message: "问题内容过长或读取中断，请缩短后重试。" }, { status: 413 }); }
   const response = await fetch(target, {
     method: request.method,
     headers,
-    body: request.method === "GET" ? undefined : await request.arrayBuffer(),
+    body: body as BodyInit | undefined,
+    signal: request.signal,
     cache: "no-store",
   });
   return new Response(response.body, {

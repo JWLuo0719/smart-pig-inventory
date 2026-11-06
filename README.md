@@ -4,6 +4,8 @@
 
 ## 当前阶段
 
+团队录制金种子杯 Demo：先读[最新代码取用与录屏说明](docs/development/golden-seed-demo-handoff-20261106.md)，使用其中指定的分支，`main` 尚未包含本次完整版本。
+
 当前是 `Development Readiness / Not Release Ready`。已完成 P0 上传、推理安全降级、人工复核、管理端审核与合成 RBAC Fixture；仍须完成全部人工验收、安全运行与模型准入门禁。工程按以下边界独立演进：
 
 | 目录 | 责任 | 状态 |

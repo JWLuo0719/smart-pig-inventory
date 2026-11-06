@@ -31,6 +31,17 @@ management:
         enabled: true
 
 app:
+  assistant:
+    viewer-provision-enabled: ${COMPETITION_VIEWER_PROVISION_ENABLED:false}
+    viewer-username: ${COMPETITION_VIEWER_USERNAME:}
+    viewer-password: ${COMPETITION_VIEWER_PASSWORD:}
+    viewer-organization-code: ${COMPETITION_VIEWER_ORGANIZATION_CODE:}
+    viewer-expires-at: ${COMPETITION_VIEWER_EXPIRES_AT:}
+    enabled: ${ASSISTANT_ENABLED:false}
+    data-egress-approved: ${ASSISTANT_DATA_EGRESS_APPROVED:false}
+    endpoint: ${ASSISTANT_MODEL_ENDPOINT:}
+    api-key: ${ASSISTANT_MODEL_API_KEY:}
+    model: ${ASSISTANT_MODEL_NAME:}
   monitoring:
     service-key: ${MONITORING_SERVICE_KEY:}
     snapshot-delay-ms: ${METRICS_SNAPSHOT_DELAY_MS:30000}

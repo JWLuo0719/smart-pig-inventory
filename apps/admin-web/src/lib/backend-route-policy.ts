@@ -1,4 +1,7 @@
 const postRoutes = [
+  /^assistant\/chat$/,
+  /^assistant\/tools\/(get-day-overview|get-pen-history)$/,
+  /^assistant\/tools\/inspect-session$/,
   /^auth\/(login|refresh|logout)$/,
   /^inventory-sessions\/[^/]+\/confirm$/,
   /^inventory-sessions\/[^/]+\/corrections$/,
@@ -8,6 +11,7 @@ const postRoutes = [
 ];
 
 const getRoutes = [
+  /^assistant\/status$/,
   /^master-data\/changes$/,
   /^media-assets$/,
   /^me$/,

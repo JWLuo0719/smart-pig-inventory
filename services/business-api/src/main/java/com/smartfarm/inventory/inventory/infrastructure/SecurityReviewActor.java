@@ -55,11 +55,15 @@ public class SecurityReviewActor {
     }
 
     public void assertCanView(UUID organizationId) {
-        assertRole(organizationId, List.of("OPERATOR", "REVIEWER", "FARM_ADMIN", "SYSTEM_ADMIN"));
+        assertRole(organizationId, List.of("OPERATOR", "REVIEWER", "FARM_ADMIN", "SYSTEM_ADMIN", "COMPETITION_VIEWER"));
     }
 
     public void assertCanConfirm(UUID organizationId) {
         assertRole(organizationId, List.of("REVIEWER", "FARM_ADMIN", "SYSTEM_ADMIN"));
+    }
+
+    public void assertCanDeleteEvidence(UUID organizationId) {
+        assertRole(organizationId, List.of("OPERATOR", "REVIEWER", "FARM_ADMIN", "SYSTEM_ADMIN"));
     }
 
     public void assertCanOverrideDelete(UUID organizationId) {
@@ -92,13 +96,16 @@ public class SecurityReviewActor {
             throw InventoryException.notFound();
         }
         Integer allowed = jdbc.queryForObject("""
-                SELECT COUNT(*) FROM organization_membership
-                WHERE organization_id = ? AND subject_id = ? AND enabled = TRUE
-                  AND role_key IN (?, ?, ?, ?)
+                SELECT COUNT(*) FROM organization_membership m
+                JOIN farm_organization o ON o.id = m.organization_id
+                WHERE m.organization_id = ? AND m.subject_id = ? AND m.enabled = TRUE AND o.enabled = TRUE
+                  AND (m.access_expires_at IS NULL OR m.access_expires_at > CURRENT_TIMESTAMP(6))
+                  AND m.role_key IN (?, ?, ?, ?, ?)
                 """, Integer.class, bytes(organizationId), jwt.getName(),
                 allowedRoles.getFirst(), allowedRoles.size() > 1 ? allowedRoles.get(1) : "__none__",
                 allowedRoles.size() > 2 ? allowedRoles.get(2) : "__none__",
-                allowedRoles.size() > 3 ? allowedRoles.get(3) : "__none__");
+                allowedRoles.size() > 3 ? allowedRoles.get(3) : "__none__",
+                allowedRoles.size() > 4 ? allowedRoles.get(4) : "__none__");
         if (allowed == null || allowed == 0) {
             throw InventoryException.notFound();
         }

@@ -1,0 +1,42 @@
+# Fill these in the JoyCode/JD Cloud server-side environment, never in browser/public variables.
+# This template deliberately contains no usable credentials or real endpoints.
+SPRING_PROFILES_ACTIVE=prod
+SECURITY_ENABLED=true
+APP_E2E_FIXTURES_ENABLED=false
+MYSQL_URL=
+MYSQL_USER=
+MYSQL_PASSWORD=
+REDIS_HOST=
+REDIS_PORT=6379
+MINIO_ENDPOINT=
+MINIO_ACCESS_KEY=
+MINIO_SECRET_KEY=
+MINIO_BUCKET=
+JWT_SIGNING_SECRET=
+CORS_ALLOWED_ORIGINS=
+MONITORING_SERVICE_KEY=
+INFERENCE_BASE_URL=
+INFERENCE_CALLBACK_TOKEN=
+INFERENCE_DISPATCHER_ENABLED=false
+MODEL_APPROVED=false
+MULTIVIEW_AUTO_COUNT_ENABLED=false
+VIDEO_AUTO_COUNT_ENABLED=false
+# Enable only after resource, model and minimum structured-data egress authorization are verified.
+ASSISTANT_ENABLED=false
+ASSISTANT_DATA_EGRESS_APPROVED=false
+# Full chat/completions endpoint, not an IDE share link or API base URL.
+ASSISTANT_MODEL_ENDPOINT=
+ASSISTANT_MODEL_NAME=
+ASSISTANT_MODEL_API_KEY=
+# One-time provisioning into an already existing dedicated competition organization.
+COMPETITION_VIEWER_PROVISION_ENABLED=false
+COMPETITION_VIEWER_USERNAME=
+COMPETITION_VIEWER_PASSWORD=
+COMPETITION_VIEWER_ORGANIZATION_CODE=
+COMPETITION_VIEWER_EXPIRES_AT=
+# Existing bootstrap mechanism, only when setting up a new isolated database.
+APP_BOOTSTRAP_ADMIN_USERNAME=
+APP_BOOTSTRAP_ADMIN_PASSWORD=
+APP_BOOTSTRAP_ADMIN_DISPLAY_NAME=
+APP_BOOTSTRAP_ORGANIZATION_CODE=
+APP_BOOTSTRAP_ORGANIZATION_NAME=

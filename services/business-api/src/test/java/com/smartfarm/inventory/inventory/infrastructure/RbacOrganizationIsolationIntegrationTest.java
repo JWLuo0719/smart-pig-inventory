@@ -32,6 +32,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
         "app.object-storage.secret-key=test-secret",
         "app.inference.dispatcher.enabled=false"})
 @Testcontainers(disabledWithoutDocker = true)
+@org.springframework.transaction.annotation.Transactional
 class RbacOrganizationIsolationIntegrationTest {
     @Container
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4")
@@ -62,6 +63,7 @@ class RbacOrganizationIsolationIntegrationTest {
         membership(primaryOrganization, "e2e-operator", "OPERATOR");
         membership(primaryOrganization, "e2e-reviewer", "REVIEWER");
         membership(primaryOrganization, "e2e-farm-admin", "FARM_ADMIN");
+        membership(primaryOrganization, "e2e-competition-viewer", "COMPETITION_VIEWER");
         membership(secondOrganization, "e2e-second-operator", "OPERATOR");
     }
 
@@ -119,6 +121,24 @@ class RbacOrganizationIsolationIntegrationTest {
                 List.of(new com.smartfarm.inventory.identity.domain.IdentityModels.Membership(organizationId, "E2E", "Synthetic", role))).value();
         Jwt jwt = jwtDecoder.decode(value);
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
+    }
+
+    @Test
+    void competitionViewerCanReadButCannotUseAnyWritePrivilege() {
+        authenticate("e2e-competition-viewer", primaryOrganization, "COMPETITION_VIEWER");
+        assertThatCode(() -> actor.assertCanView(primaryOrganization)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> actor.assertCanView(secondOrganization)).isInstanceOf(InventoryException.class);
+        assertThatThrownBy(() -> actor.assertCanConfirm(primaryOrganization)).isInstanceOf(InventoryException.class);
+        assertThatThrownBy(() -> actor.assertCanDeleteEvidence(primaryOrganization)).isInstanceOf(InventoryException.class);
+        assertThatThrownBy(() -> actor.assertCanOverrideDelete(primaryOrganization)).isInstanceOf(InventoryException.class);
+        assertThatThrownBy(() -> actor.assertCanCorrect(primaryOrganization)).isInstanceOf(InventoryException.class);
+        assertThatThrownBy(() -> actor.assertCanManageInference(primaryOrganization)).isInstanceOf(InventoryException.class);
+        assertThatThrownBy(() -> actor.assertCanManageMasterData(primaryOrganization)).isInstanceOf(InventoryException.class);
+        var uploads = new com.smartfarm.inventory.capture.infrastructure.SecurityUploadActor(true, jdbc);
+        assertThatThrownBy(() -> uploads.assertCanAccess(primaryOrganization))
+                .isInstanceOf(com.smartfarm.inventory.capture.application.UploadException.class);
+        jdbc.update("UPDATE organization_membership SET access_expires_at=DATE_SUB(CURRENT_TIMESTAMP(6), INTERVAL 1 SECOND) WHERE subject_id='e2e-competition-viewer'");
+        assertThatThrownBy(() -> actor.assertCanView(primaryOrganization)).isInstanceOf(InventoryException.class);
     }
 
     private UUID organization(String code) {

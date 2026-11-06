@@ -185,6 +185,15 @@ public class InventoryReviewService {
         return view(session);
     }
 
+    /** Explicit facts for assistant tools; never uses the legacy candidate/confirmed display fallback. */
+    @Transactional(readOnly = true)
+    public SessionInspectionSnapshot inspectSessionFacts(UUID sessionId) {
+        SessionRow session = repository.findSession(sessionId).orElseThrow(InventoryException::notFound);
+        actor.assertCanView(session.organizationId());
+        return new SessionInspectionSnapshot(session.id(), session.businessDate().toString(), session.status(),
+                session.confirmedCount(), session.candidateCount(), session.inferenceStatus());
+    }
+
     @Transactional(readOnly = true)
     public VersionPage versions(UUID sessionId, Integer beforeVersion, int limit) {
         if (limit < 1 || limit > 50 || (beforeVersion != null && beforeVersion < 1)) {
@@ -325,7 +334,7 @@ public class InventoryReviewService {
         UUID evidenceSession = repository.evidenceSessionForAsset(assetId).orElseThrow(InventoryException::notFound);
         repository.lockSession(evidenceSession).orElseThrow(InventoryException::notFound);
         MediaRow media = repository.lockMediaByAssetId(assetId).orElseThrow(InventoryException::notFound);
-        actor.assertCanView(media.organizationId());
+        actor.assertCanDeleteEvidence(media.organizationId());
         if (media.locked()) {
             throw InventoryException.conflict("Confirmed inventory evidence is locked and requires an administrator override");
         }
@@ -456,6 +465,9 @@ public class InventoryReviewService {
     public record AggregateInventoryReport(UUID penId, String from, String to, BigDecimal rawMean, Integer roundedCount,
             List<String> includedDates) {
     }
+
+    public record SessionInspectionSnapshot(UUID id, String businessDate, String status, Integer confirmedCount,
+            Integer candidateCount, String inferenceStatus) {}
 
     public record InventorySessionView(UUID id, UUID penId, String businessDate, String status, int version,
             UUID supersedesSessionId, UUID evidenceSessionId, Integer count, Integer rawModelCount,

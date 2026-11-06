@@ -32,7 +32,7 @@ class FlywayMigrationIntegrationTest {
             try (ResultSet migrations = statement.executeQuery(
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1")) {
                 migrations.next();
-                assertEquals(13, migrations.getInt(1));
+                assertEquals(14, migrations.getInt(1));
             }
             try (ResultSet userTable = statement.executeQuery(
                     "SELECT COUNT(*) FROM information_schema.tables "

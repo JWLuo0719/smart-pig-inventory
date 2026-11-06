@@ -5,6 +5,11 @@ import { isPermittedBackendRoute } from "./backend-route-policy.ts";
 
 test("permits every admin workflow route with its expected method", () => {
   const routes = [
+    ["POST", "assistant/tools/inspect-session"],
+    ["POST", "assistant/tools/get-day-overview"],
+    ["POST", "assistant/tools/get-pen-history"],
+    ["POST", "assistant/chat"],
+    ["GET", "assistant/status"],
     ["POST", "auth/login"],
     ["POST", "auth/refresh"],
     ["POST", "auth/logout"],
@@ -32,6 +37,13 @@ test("permits every admin workflow route with its expected method", () => {
 
 test("rejects wrong methods and route-shape bypasses", () => {
   const routes = [
+    ["GET", "assistant/tools/inspect-session"],
+    ["GET", "assistant/chat"],
+    ["POST", "assistant/status"],
+    ["POST", "assistant/chat/extra"],
+    ["POST", "assistant/tools/get-day-overview/extra"],
+    ["POST", "assistant/tools/inspect-session/extra"],
+    ["POST", "assistant/tools/confirm"],
     ["GET", "auth/login"],
     ["POST", "inventory-sessions/abc/versions"],
     ["GET", "inventory-sessions/abc/versions/extra"],
