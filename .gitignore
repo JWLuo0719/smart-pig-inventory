@@ -64,3 +64,4 @@ target/
 *.p12
 *.pfx
 key.properties
+key.pilot.properties

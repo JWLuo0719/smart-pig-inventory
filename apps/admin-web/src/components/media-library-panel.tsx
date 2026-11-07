@@ -63,8 +63,8 @@ export function MediaLibraryPanel({ api, loadThumbnail, sessionRevision, pens, o
     <h2 id="media-library-title">按栏日期媒体库</h2>
     <p>缩略图用于查找证据；核验数量与检测位置请打开原图。视频及不支持的图片格式显示占位。</p>
     <form className="report-export-controls" onSubmit={submit}>
-      <label>媒体业务日期<input type="date" required value={date} disabled={loading} onChange={(event) => setDate(event.target.value)} /></label>
-      <label>媒体栏舍<select value={penId} disabled={loading} onChange={(event) => setPenId(event.target.value)}><option value="">全部栏舍</option>{pens.map((pen) => <option key={pen.penId} value={pen.penId}>{pen.buildingCode} / {pen.penCode}</option>)}</select></label>
+      <label htmlFor="media-business-date">媒体业务日期<input id="media-business-date" type="date" required value={date} disabled={loading} onChange={(event) => setDate(event.target.value)} /></label>
+      <label htmlFor="media-pen">媒体栏舍<select id="media-pen" aria-label="媒体栏舍" value={penId} disabled={loading} onChange={(event) => setPenId(event.target.value)}><option value="">全部栏舍</option>{pens.map((pen) => <option key={pen.penId} value={pen.penId}>{pen.buildingCode} / {pen.penCode}</option>)}</select></label>
       <button className="primary-inline" disabled={loading} type="submit">{loading ? "正在查询…" : "查询媒体库"}</button>
     </form>
     {loading && <p role="status">正在读取媒体列表…</p>}

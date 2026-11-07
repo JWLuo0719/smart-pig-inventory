@@ -10,7 +10,10 @@ import '../../core/auth/authorized_retry.dart';
 import '../inventory/inventory_reports_screen.dart';
 import '../../core/network/inventory_api.dart';
 import '../../shared/widgets/network_status_banner.dart';
-import '../../shared/widgets/pen_plate.dart';
+import '../../core/theme/app_theme.dart';
+import '../../shared/widgets/field_header.dart';
+import 'pen_task_board.dart';
+import '../inventory/session_review_screen.dart';
 
 class TaskListScreen extends ConsumerStatefulWidget {
   const TaskListScreen({super.key});
@@ -37,6 +40,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
     final auth = ref.read(authControllerProvider).valueOrNull;
     if (auth == null || auth.isOffline) {
       setState(() {
+        _tasks = null;
         _loading = false;
         _error = '离线时无法刷新任务；已保存的采集草稿仍可继续处理。';
       });
@@ -44,6 +48,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
     }
     setState(() {
       _loading = true;
+      _tasks = null;
       _error = null;
     });
     try {
@@ -51,10 +56,18 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
           initialAuth: auth,
           reconnect: () =>
               ref.read(authControllerProvider.notifier).reconnect(),
-          request: (token) =>
-              InventoryRemoteApi(baseUrl: ref.read(apiBaseUrlProvider))
-                  .tasks(accessToken: token, businessDate: _businessDate));
-      if (mounted && generation == _generation) setState(() => _tasks = tasks);
+          request: (token) => ref
+              .read(inventoryRemoteApiProvider)
+              .tasks(accessToken: token, businessDate: _businessDate));
+      final current = ref.read(authControllerProvider).valueOrNull;
+      if (mounted &&
+          generation == _generation &&
+          current?.isOffline == false &&
+          current?.user.subjectId == auth.user.subjectId &&
+          current?.user.activeOrganizationId ==
+              auth.user.activeOrganizationId) {
+        setState(() => _tasks = tasks);
+      }
     } on DioException catch (error) {
       if (mounted && generation == _generation) {
         setState(() => _error = _safeError(error));
@@ -72,7 +85,8 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
       if (previous?.valueOrNull?.user.subjectId !=
               next.valueOrNull?.user.subjectId ||
           previous?.valueOrNull?.user.activeOrganizationId !=
-              next.valueOrNull?.user.activeOrganizationId) {
+              next.valueOrNull?.user.activeOrganizationId ||
+          previous?.valueOrNull?.isOffline != next.valueOrNull?.isOffline) {
         _load();
       }
     });
@@ -84,9 +98,22 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+        padding: AppSpacing.page,
+        physics: const AlwaysScrollableScrollPhysics(),
         children: <Widget>[
-          Text('盘点任务', style: Theme.of(context).textTheme.headlineSmall),
+          FieldHeader(
+              title: '栏舍任务',
+              subtitle: '按日查看 · 按栏处理',
+              onQueue: () => context.push('/outbox')),
+          const SizedBox(height: 14),
+          FieldScope(
+              label: ref
+                      .watch(authControllerProvider)
+                      .valueOrNull
+                      ?.user
+                      .activeOrganizationName ??
+                  '当前组织',
+              detail: date),
           Wrap(spacing: 8, children: [
             TextButton(
                 onPressed: _loading
@@ -124,31 +151,21 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
             )
           else if (_error != null)
             _TaskError(message: _error!, onRetry: _load)
-          else if (_tasks!.isEmpty)
+          else if (_tasks == null || _tasks!.isEmpty)
             const Padding(
               padding: EdgeInsets.only(top: 48),
               child: Center(child: Text('所选日期没有启用栏舍任务。')),
             )
           else
-            ..._tasks!.map(_taskCard),
+            PenTaskBoard(
+                tasks: _tasks!,
+                onOpen: (task) => task.sessionId == null
+                    ? _startTask(task)
+                    : context.push('/inventory-sessions/${task.sessionId}')),
         ],
       ),
     );
   }
-
-  Widget _taskCard(RemoteInventoryTask task) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: PenPlate(
-          building: '${task.buildingCode} ${task.buildingName}',
-          pen: task.penCode,
-          state: _state(task.status),
-          count: task.status == 'confirmed' ? task.confirmedCount : null,
-          detail: _detail(task),
-          onTap: task.sessionId == null
-              ? () => _startTask(task)
-              : () => context.push('/inventory-sessions/${task.sessionId}'),
-        ),
-      );
 
   Future<void> _startTask(RemoteInventoryTask task) async {
     final auth = ref.read(authControllerProvider).valueOrNull;
@@ -185,24 +202,6 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
     }
     if (mounted) _load();
   }
-
-  PenWorkState _state(String status) => switch (status) {
-        'pending' => PenWorkState.notStarted,
-        'submitted' => PenWorkState.queued,
-        'processing' => PenWorkState.processing,
-        'review_required' => PenWorkState.review,
-        'confirmed' => PenWorkState.confirmed,
-        _ => PenWorkState.failed,
-      };
-
-  String _detail(RemoteInventoryTask task) => switch (task.status) {
-        'pending' => '尚未采集，点击查看本栏任务',
-        'submitted' => '上传已提交，等待推理任务领取',
-        'processing' => '服务器正在处理原始证据',
-        'review_required' => '需要人工复核，原图仍安全保留',
-        'confirmed' => '确认结果已锁定引用原图',
-        _ => '任务状态异常，请刷新后查看',
-      };
 
   String _safeError(DioException error) => switch (error.response?.statusCode) {
         401 => '登录状态已失效，请重新登录。',

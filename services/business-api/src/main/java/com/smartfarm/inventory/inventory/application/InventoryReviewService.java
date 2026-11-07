@@ -1,5 +1,6 @@
 package com.smartfarm.inventory.inventory.application;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.smartfarm.inventory.capture.infrastructure.StagedObjectStorage;
 import com.smartfarm.inventory.inventory.infrastructure.JdbcInventoryReviewRepository;
 import com.smartfarm.inventory.inventory.domain.InventoryAggregationPolicy;
@@ -469,6 +470,7 @@ public class InventoryReviewService {
     public record SessionInspectionSnapshot(UUID id, String businessDate, String status, Integer confirmedCount,
             Integer candidateCount, String inferenceStatus) {}
 
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     public record InventorySessionView(UUID id, UUID penId, String businessDate, String status, int version,
             UUID supersedesSessionId, UUID evidenceSessionId, Integer count, Integer rawModelCount,
             String inferenceSource, ModelIdentity model, List<DetectionView> detections,

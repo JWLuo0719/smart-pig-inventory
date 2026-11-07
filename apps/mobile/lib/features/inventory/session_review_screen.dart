@@ -1,3 +1,7 @@
+import '../master_data/data/drift_master_data_repository.dart';
+import '../master_data/domain/master_data_changes.dart';
+import '../assistant/assistant_screen.dart';
+import '../../shared/widgets/field_header.dart';
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'inventory_revision.dart';
@@ -287,13 +291,24 @@ class _SessionReviewScreenState extends ConsumerState<SessionReviewScreen>
     return Scaffold(
       appBar: AppBar(title: const Text('盘点复核'), actions: [
         IconButton(
+            tooltip: '询问本次盘点',
+            onPressed: _session == null
+                ? null
+                : () => Navigator.of(context).push(MaterialPageRoute<void>(
+                    builder: (_) => AssistantScreen(
+                        penId: _session!.penId,
+                        sessionId: _session!.id,
+                        businessDate: DateTime.tryParse(_session!.businessDate),
+                        scopeLabel: '当前盘点记录'))),
+            icon: const Icon(Icons.auto_awesome_outlined)),
+        IconButton(
             tooltip: '刷新结果',
             onPressed: _submitting ? null : () => _load(restart: true),
             icon: const Icon(Icons.refresh))
       ]),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : _error != null
+          : _error != null && _session == null
               ? _ErrorState(
                   message: _error!, onRetry: () => _load(restart: true))
               : _session == null
@@ -305,10 +320,18 @@ class _SessionReviewScreenState extends ConsumerState<SessionReviewScreen>
   Widget _body(BuildContext context, RemoteInventorySession session) {
     final bool editable = session.requiresReview && _canConfirm;
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: AppSpacing.page,
       children: <Widget>[
         if (_lastRead != null) Text('最近读取：${_lastRead!.toLocal()}'),
-        if (_error != null) Text(_error!),
+        if (_error != null)
+          Semantics(
+            liveRegion: true,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text('刷新未完成，以下为上次读取的结果。$_error 请刷新成功后再确认。',
+                  style: const TextStyle(color: AppColors.alert)),
+            ),
+          ),
         Text('业务日期 ${session.businessDate} · 版本 v${session.version}',
             style: Theme.of(context).textTheme.titleMedium),
         if (session.supersedesSessionId != null) ...<Widget>[
@@ -317,24 +340,70 @@ class _SessionReviewScreenState extends ConsumerState<SessionReviewScreen>
               style: Theme.of(context).textTheme.bodySmall),
         ],
         const SizedBox(height: 4),
-        Text('栏舍 ID ${session.penId}',
-            style: Theme.of(context).textTheme.bodySmall),
-        const SizedBox(height: 20),
+        StreamBuilder<List<PenChoice>>(
+          key: ValueKey(
+              '${ref.watch(authControllerProvider).valueOrNull?.user.activeOrganizationId}/${session.penId}'),
+          stream: ref.watch(masterDataRepositoryProvider).watchPens(ref
+                  .watch(authControllerProvider)
+                  .valueOrNull
+                  ?.user
+                  .activeOrganizationId ??
+              ''),
+          builder: (context, snapshot) {
+            final pen = snapshot.data
+                ?.where((row) => row.penId == session.penId)
+                .firstOrNull;
+            return FieldScope(
+                label: pen == null
+                    ? '栏舍 ${session.penId}'
+                    : '${pen.buildingCode} ${pen.buildingName} · ${pen.penCode} ${pen.penName}',
+                detail: ref
+                    .watch(authControllerProvider)
+                    .valueOrNull
+                    ?.user
+                    .activeOrganizationName);
+          },
+        ),
+        const SizedBox(height: 16),
         _StatusCard(session: session),
+        if (editable && session.rawModelCount != null) ...<Widget>[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => setState(() {
+                _countController.text = session.rawModelCount.toString();
+              }),
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              label: const Text('带入 AI 候选到确认数量'),
+            ),
+          ),
+        ],
         if (session.detections.isNotEmpty) ...<Widget>[
           const SizedBox(height: 16),
           AnnotatedEvidenceSection(
               sessionId: session.evidenceSessionId ?? session.id,
               detections: session.detections),
           const SizedBox(height: 12),
-          ...session.detections.map((d) => d.assetId).toSet().map((assetId) =>
-              DensityHeatmapCard(
-                  detections: session.detections
-                      .where((d) => d.assetId == assetId)
-                      .toList())),
+          if (session.detections.length > 1)
+            ExpansionTile(
+              title: const Text('辅助分析：密度热图'),
+              subtitle: const Text('用于定位遮挡和漏检，不能替代人工确认'),
+              children: session.detections
+                  .map((d) => d.assetId)
+                  .toSet()
+                  .map(
+                    (assetId) => DensityHeatmapCard(
+                        detections: session.detections
+                            .where((d) => d.assetId == assetId)
+                            .toList()),
+                  )
+                  .toList(),
+            ),
         ],
         ServerGalleryScreen(
             key: ValueKey('${session.id}-${session.status}'),
+            showHeader: false,
             sessionId: session.id),
         if (session.inferenceStatus == 'failed') ...<Widget>[
           const SizedBox(height: 16),
@@ -373,18 +442,6 @@ class _SessionReviewScreenState extends ConsumerState<SessionReviewScreen>
                   child: Text('• $warning'),
                 )),
         ],
-        if (session.rawModelCount != null &&
-            session.requiresReview) ...<Widget>[
-          const SizedBox(height: 16),
-          _AiSuggestionCard(
-            candidateCount: session.rawModelCount!,
-            onApply: editable
-                ? () => setState(() {
-                      _countController.text = session.rawModelCount.toString();
-                    })
-                : null,
-          ),
-        ],
         if (editable) ...<Widget>[
           const SizedBox(height: 22),
           Text('人工确认', style: Theme.of(context).textTheme.titleLarge),
@@ -409,7 +466,7 @@ class _SessionReviewScreenState extends ConsumerState<SessionReviewScreen>
           ),
           const SizedBox(height: 16),
           FilledButton(
-            onPressed: _submitting ? null : _confirm,
+            onPressed: _submitting || _error != null ? null : _confirm,
             child: Text(_submitting ? '正在确认…' : '确认并锁定证据'),
           ),
         ] else if (session.requiresReview) ...<Widget>[
@@ -480,50 +537,6 @@ class _StatusCard extends StatelessWidget {
                     style: Theme.of(context).textTheme.bodySmall),
               ],
             ]),
-      ),
-    );
-  }
-}
-
-class _AiSuggestionCard extends StatelessWidget {
-  const _AiSuggestionCard({required this.candidateCount, this.onApply});
-  final int candidateCount;
-  final VoidCallback? onApply;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      color: AppColors.barnBlue.withValues(alpha: 0.06),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(children: <Widget>[
-              const Text('🤖', style: TextStyle(fontSize: 17)),
-              const SizedBox(width: 8),
-              Expanded(
-                  child: Text('AI 建议数量：$candidateCount 头',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w800))),
-            ]),
-            const SizedBox(height: 6),
-            Text(
-                '这是服务端返回的候选，模型分数不代表准确率。'
-                '请对照标注核验后再确认；如与实际不符，直接修改数量即可。',
-                style: Theme.of(context).textTheme.bodySmall),
-            if (onApply != null) ...<Widget>[
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: onApply,
-                icon: const Icon(Icons.edit, size: 18),
-                label: Text('带入建议数量 $candidateCount'),
-              ),
-            ],
-          ],
-        ),
       ),
     );
   }

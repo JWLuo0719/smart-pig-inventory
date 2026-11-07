@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param()
+param([switch]$PilotBuild)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
@@ -12,6 +12,7 @@ foreach ($name in $names) { $saved[$name] = [Environment]::GetEnvironmentVariabl
 $results = [Collections.Generic.List[object]]::new()
 function Invoke-Gate {
     param([string]$Name, [string[]]$Definitions, [string]$ExpectedError = '', [string]$Task = ':app:validateReleaseConfiguration')
+    if ($PilotBuild) { $Definitions = @($Definitions) + 'PILOT_BUILD=true' }
     $encoded = @($Definitions | ForEach-Object { [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($_)) }) -join ','
     $log = Join-Path $output "$Name.log"
     & ./gradlew.bat $Task "-Pdart-defines=$encoded" --console=plain *> $log
@@ -38,6 +39,10 @@ try {
     Invoke-Gate 'missing-endpoint' @() 'exactly one explicit API_BASE_URL'
     Invoke-Gate 'http-rejected' @('API_BASE_URL=http://api.pig-inventory.invalid') 'stable HTTPS DNS URL'
     Invoke-Gate 'ip-rejected' @('API_BASE_URL=https://192.168.1.2') 'stable HTTPS DNS URL'
+    Invoke-Gate 'public-ip-default-rejected' @('API_BASE_URL=https://123.57.163.6') 'stable HTTPS DNS URL'
+    Invoke-Gate 'private-ip-opt-in-rejected' @('API_BASE_URL=https://192.168.1.2', 'ALLOW_HTTPS_IP=true') 'stable HTTPS DNS URL'
+    Invoke-Gate 'http-ip-opt-in-rejected' @('API_BASE_URL=http://123.57.163.6', 'ALLOW_HTTPS_IP=true') 'stable HTTPS DNS URL'
+    Invoke-Gate 'public-https-ip-opt-in' @('API_BASE_URL=https://123.57.163.6', 'ALLOW_HTTPS_IP=true')
     Invoke-Gate 'credentials-rejected' @('API_BASE_URL=https://user:pass@api.pig-inventory.invalid') 'stable HTTPS DNS URL'
     Invoke-Gate 'duplicate-endpoint-rejected' @('API_BASE_URL=https://a.invalid', 'API_BASE_URL=https://b.invalid') 'exactly one explicit API_BASE_URL'
     Invoke-Gate 'valid-local-signing-https' @('API_BASE_URL=https://api.pig-inventory.invalid')

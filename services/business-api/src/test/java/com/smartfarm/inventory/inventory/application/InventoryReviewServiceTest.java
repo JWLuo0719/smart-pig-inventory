@@ -45,6 +45,17 @@ class InventoryReviewServiceTest {
     }
 
     @Test
+    void sessionJsonPreservesUnknownCandidateAlongsideConfirmedZero() throws Exception {
+        when(repository.findSession(sessionId)).thenReturn(Optional.of(session("confirmed", null, 0, null)));
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper()
+                .setSerializationInclusion(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL);
+        var json = mapper.readTree(mapper.writeValueAsString(service.session(sessionId)));
+        assertThat(json.get("count").intValue()).isZero();
+        assertThat(json.has("rawModelCount")).isTrue();
+        assertThat(json.get("rawModelCount").isNull()).isTrue();
+    }
+
+    @Test
     void toolFactsReauthorizeAndDoNotUseTheDisplayFallback() {
         when(repository.findSession(sessionId)).thenReturn(Optional.of(session("confirmed", 7, null, null)));
         var facts = service.inspectSessionFacts(sessionId);

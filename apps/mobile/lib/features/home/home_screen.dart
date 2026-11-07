@@ -14,18 +14,25 @@ import '../../core/auth/auth_session.dart';
 import '../../core/auth/authorized_retry.dart';
 import '../../core/network/inventory_api.dart';
 import '../../core/theme/app_theme.dart';
+import '../../shared/widgets/insight_icon.dart';
+import 'cockpit_widgets.dart';
+import '../assistant/assistant_screen.dart';
 import '../inventory/session_review_screen.dart';
-import '../../shared/widgets/network_status_banner.dart';
+import '../profile/profile_screen.dart';
+import '../tasks/task_list_screen.dart';
 import '../local_activity/data/local_activity_repository.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({this.showToolbar = true, super.key});
+  final bool showToolbar;
 
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  String? _building;
+  bool _sunlight = false;
   int _generation = 0;
   int _assistantGeneration = 0;
   List<RemoteInventoryTask>? _tasks;
@@ -129,7 +136,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       _assistant = null;
     });
     final DateTime today = DateUtils.dateOnly(DateTime.now());
-    // The optional panel must never hold the task projection behind its request.
+    // The optional panel is independent of the task projection and stays collapsed.
     unawaited(_loadAssistant(auth, today, generation));
     try {
       final List<RemoteInventoryTask> tasks = await retryOnceAfterUnauthorized(
@@ -167,82 +174,243 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             snapshot.data ?? const <LocalCaptureActivity>[];
         final LocalCaptureActivity? latest = activities
             .where((row) =>
-                row.draftState != 'abandoned' && row.outboxState != 'abandoned')
+                row.draftState != 'abandoned' &&
+                (row.isPending || row.draftState == 'draft'))
             .firstOrNull;
         final List<RemoteInventoryTask> tasks =
             _tasks ?? const <RemoteInventoryTask>[];
-        final int confirmed = tasks
-            .where((RemoteInventoryTask row) => row.status == 'confirmed')
-            .length;
-        final int review = tasks
-            .where((RemoteInventoryTask row) => row.status == 'review_required')
-            .length;
-        final int pendingUploads = activities
-            .where((LocalCaptureActivity row) => row.isPending)
-            .length;
-
-        return RefreshIndicator(
+        final buildings = <String, String>{
+          for (final task in tasks)
+            task.buildingCode: '${task.buildingCode} ${task.buildingName}',
+        };
+        final building = buildings.containsKey(_building)
+            ? _building
+            : buildings.keys.firstOrNull;
+        final scoped =
+            tasks.where((task) => task.buildingCode == building).toList();
+        final confirmed =
+            scoped.where((task) => task.status == 'confirmed').toList();
+        final heads = _tasks != null &&
+                confirmed.every((task) => task.confirmedCount != null)
+            ? confirmed.fold<int>(0, (sum, task) => sum + task.confirmedCount!)
+            : null;
+        final pending = snapshot.hasData && !snapshot.hasError
+            ? activities.where((row) => row.isPending).length
+            : null;
+        final body = RefreshIndicator(
           onRefresh: _loadTasks,
-          child: CustomScrollView(
+          child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            slivers: <Widget>[
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
-                sliver: SliverList.list(children: <Widget>[
-                  _Header(
-                    organizationCode: auth.user.activeOrganizationCode,
-                    organizationName: auth.user.activeOrganizationName,
-                  ),
-                  const SizedBox(height: 16),
-                  NetworkStatusBanner(offline: auth.isOffline),
-                  if (_error != null) ...<Widget>[
-                    const SizedBox(height: 12),
-                    _SafeNotice(message: _error!),
-                  ],
-                  const SizedBox(height: 16),
-                  _ContinueCard(activity: latest),
-                  if (_assistantLoading ||
-                      _assistantError != null ||
-                      _assistant != null) ...<Widget>[
-                    const SizedBox(height: 22),
-                    if (_assistantLoading)
-                      const Card(
-                          child: Padding(
-                              padding: EdgeInsets.all(16),
-                              child: Text('正在读取今日规则研判…')))
-                    else if (_assistantError != null)
-                      Card(
-                          child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(_assistantError!),
-                                    TextButton(
-                                        onPressed: _retryAssistant,
-                                        child: const Text('重新读取研判')),
-                                  ])))
-                    else
-                      _AssistantPanel(brief: _assistant!),
-                  ],
-                  const SizedBox(height: 22),
-                  const _SectionTitle(title: '今日进度', action: '以服务器为准'),
-                  const SizedBox(height: 10),
-                  _ProgressCard(
-                    known: _tasks != null,
-                    completed: confirmed,
-                    total: tasks.length,
-                    pendingUploads: pendingUploads,
-                    reviewRequired: review,
-                  ),
-                  const SizedBox(height: 28),
-                ]),
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 18),
+            children: [
+              Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                  decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      border: Border.all(color: cockpitLine),
+                      borderRadius: BorderRadius.circular(8)),
+                  child: Row(children: [
+                    const Icon(Icons.location_on_outlined,
+                        size: 15, color: cockpitMuted),
+                    const SizedBox(width: 6),
+                    Expanded(
+                        child: Text(auth.user.activeOrganizationName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 11, color: Color(0xFF475569)))),
+                    const Icon(Icons.chevron_right,
+                        size: 15, color: cockpitMuted),
+                    const SizedBox(width: 6),
+                    Flexible(
+                        child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                      value: building,
+                      isExpanded: true,
+                      isDense: true,
+                      hint: const Text('栋舍待获取', style: TextStyle(fontSize: 11)),
+                      icon: const Icon(Icons.expand_more, size: 16),
+                      items: buildings.entries
+                          .map((entry) => DropdownMenuItem(
+                              value: entry.key,
+                              child: Text(entry.value,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700))))
+                          .toList(),
+                      onChanged: (value) => setState(() => _building = value),
+                    ))),
+                  ])),
+              const SizedBox(height: 12),
+              if (auth.isOffline)
+                const Padding(
+                    padding: EdgeInsets.only(bottom: 10),
+                    child: Text('离线保存 · 联网后上传',
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFFB45309),
+                            fontWeight: FontWeight.w700))),
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                _SafeNotice(message: _error!),
+              ],
+              const SizedBox(height: 12),
+              CockpitSummary(
+                  scope: _Header._todayLabel(),
+                  heads: heads,
+                  confirmed: _tasks == null ? null : confirmed.length,
+                  total: _tasks == null ? null : scoped.length,
+                  review: _tasks == null
+                      ? null
+                      : scoped
+                          .where((task) => task.status == 'review_required')
+                          .length,
+                  onAssistant: _openAssistant,
+                  onReport: _openReports,
+                  onHistory: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                          builder: (_) => Scaffold(
+                              appBar: AppBar(title: const Text('历史任务')),
+                              body: const TaskListScreen()))),
+                  onModules: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                          builder: (_) => Scaffold(
+                              appBar: AppBar(title: const Text('更多能力')),
+                              body: ListView(
+                                  padding: const EdgeInsets.all(12),
+                                  children: const [CockpitModules()]))))),
+              const SizedBox(height: 12),
+              if (_tasks != null)
+                CockpitMatrix(
+                    key:
+                        ValueKey('${auth.user.activeOrganizationId}/$building'),
+                    tasks: scoped,
+                    onOpen: _openTask)
+              else if (_error == null)
+                const Card(
+                    child: Padding(
+                        padding: EdgeInsets.all(20),
+                        child: Text('正在读取今日栏舍任务…'))),
+              const SizedBox(height: 10),
+              ExpansionTile(
+                tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+                title: const Text('协同研判',
+                    style:
+                        TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+                children: [
+                  if (_assistantLoading)
+                    const Padding(
+                        padding: EdgeInsets.all(14), child: Text('正在读取今日规则研判…'))
+                  else if (_assistantError != null)
+                    Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(_assistantError!,
+                                  style: const TextStyle(fontSize: 12)),
+                              TextButton(
+                                  onPressed: _retryAssistant,
+                                  child: const Text('重新读取研判')),
+                            ]))
+                  else if (_assistant != null)
+                    _AssistantPanel(brief: _assistant!),
+                ],
               ),
+              if (latest != null) _ContinueCard(activity: latest),
             ],
           ),
         );
+        if (!widget.showToolbar) return body;
+        return Column(children: [
+          CockpitToolbar(
+              name: auth.user.displayName,
+              offline: auth.isOffline,
+              pending: pending,
+              onQueue: () => context.push('/outbox'),
+              onProfile: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                      builder: (_) => const Scaffold(
+                          body: SafeArea(child: ProfileScreen())))),
+              onSunlight: () => setState(() => _sunlight = !_sunlight),
+              sunlight: _sunlight),
+          Expanded(
+              child: ColorFiltered(
+                  colorFilter: ColorFilter.matrix(_sunlight
+                      ? const [
+                          1.15,
+                          0,
+                          0,
+                          0,
+                          -18,
+                          0,
+                          1.15,
+                          0,
+                          0,
+                          -18,
+                          0,
+                          0,
+                          1.15,
+                          0,
+                          -18,
+                          0,
+                          0,
+                          0,
+                          1,
+                          0
+                        ]
+                      : const [
+                          1,
+                          0,
+                          0,
+                          0,
+                          0,
+                          0,
+                          1,
+                          0,
+                          0,
+                          0,
+                          0,
+                          0,
+                          1,
+                          0,
+                          0,
+                          0,
+                          0,
+                          0,
+                          1,
+                          0
+                        ]),
+                  child: body)),
+        ]);
       },
     );
+  }
+
+  void _openAssistant() => Navigator.of(context)
+      .push(MaterialPageRoute<void>(builder: (_) => const AssistantScreen()));
+
+  void _openReports() => Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const InventoryReportsScreen()));
+
+  void _openTask(RemoteInventoryTask task) {
+    final auth = ref.read(authControllerProvider).valueOrNull;
+    if (auth == null) return;
+    if (task.sessionId != null) {
+      context.push('/inventory-sessions/${task.sessionId}');
+    } else {
+      context.push('/capture',
+          extra: CaptureTarget(
+            organizationId: auth.user.activeOrganizationId,
+            penId: task.penId,
+            label:
+                '${task.buildingCode} ${task.buildingName} · ${task.penCode} ${task.penName}',
+            businessDate: DateUtils.dateOnly(DateTime.now()),
+          ));
+    }
   }
 
   String _safeError(DioException error) => switch (error.response?.statusCode) {
@@ -252,40 +420,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       };
 }
 
-class _Header extends StatelessWidget {
-  const _Header(
-      {required this.organizationCode, required this.organizationName});
-  final String organizationCode;
-  final String organizationName;
-
-  @override
-  Widget build(BuildContext context) => Row(children: <Widget>[
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text('${_todayLabel()} · $organizationCode · $organizationName',
-                  style: Theme.of(context).textTheme.bodySmall),
-              const SizedBox(height: 3),
-              Text('今日盘点与复核', style: Theme.of(context).textTheme.headlineSmall),
-            ],
-          ),
-        ),
-        Semantics(
-          image: true,
-          label: '智慧猪场场主标志',
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Image.asset(
-              'assets/branding/smart-pig-farm-owner-logo-v1.png',
-              width: 42,
-              height: 42,
-              fit: BoxFit.contain,
-            ),
-          ),
-        ),
-      ]);
-
+class _Header {
   static String _todayLabel() {
     final DateTime now = DateTime.now();
     const List<String> weekdays = <String>[
@@ -308,94 +443,51 @@ class _ContinueCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final LocalCaptureActivity? value = activity;
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-          color: AppColors.barnBlue, borderRadius: BorderRadius.circular(16)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          const Text('本机最近作业',
-              style: TextStyle(
-                  color: Color(0xFFB9CFDC),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700)),
-          const SizedBox(height: 5),
-          Text(
-            value == null
-                ? '今天还没有采集记录'
-                : '${value.buildingLabel} · ${value.penLabel}',
-            style: const TextStyle(
-                color: Colors.white, fontSize: 19, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value == null
-                ? '选择栏舍拍照，几分钟完成一栏盘点'
-                : '${value.mediaCount} 张原始证据 · ${_activityState(value)}',
-            style: const TextStyle(color: Color(0xFFD9E5EB), fontSize: 12),
-          ),
-          const SizedBox(height: 15),
-          FilledButton.icon(
-            onPressed: () async {
-              final auth = ref.read(authControllerProvider).valueOrNull;
-              if (auth == null) return;
-              if (value == null) {
-                context.push('/pens');
-                return;
-              }
-              // Read the actual draft again; recent activity may have changed while the card was visible.
-              final db = ref.read(appDatabaseProvider);
-              final draft = await (db.select(db.captureDrafts)
-                    ..where((d) =>
-                        d.id.equals(value.draftId) &
-                        d.organizationId
-                            .equals(auth.user.activeOrganizationId)))
-                  .getSingleOrNull();
-              if (!context.mounted ||
-                  draft == null ||
-                  ref
-                          .read(authControllerProvider)
-                          .valueOrNull
-                          ?.user
-                          .subjectId !=
-                      auth.user.subjectId ||
-                  ref
-                          .read(authControllerProvider)
-                          .valueOrNull
-                          ?.user
-                          .activeOrganizationId !=
-                      auth.user.activeOrganizationId) {
-                return;
-              }
-              if (value.sessionId != null) {
-                context.push('/inventory-sessions/${value.sessionId}');
-              } else if (value.outboxState != null) {
-                context.push('/outbox');
-              } else if (draft.state == 'draft') {
-                context.push('/capture',
-                    extra: CaptureTarget(
-                        organizationId: draft.organizationId,
-                        penId: draft.penId,
-                        label: '${value.buildingLabel} · ${value.penLabel}',
-                        businessDate: draft.businessDate,
-                        draftId: draft.id));
-              }
-            },
-            style: FilledButton.styleFrom(
-                backgroundColor: AppColors.straw,
-                foregroundColor: AppColors.ink),
-            icon: const Icon(Icons.arrow_forward),
-            label: Text(value == null
-                ? '选择栏舍'
-                : value.sessionId != null
-                    ? '查看服务器结果'
-                    : value.outboxState != null
-                        ? '查看上传作业'
-                        : '继续本份草稿'),
-          ),
-        ],
-      ),
+    if (value == null) return const SizedBox.shrink();
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      leading: const Icon(Icons.history_outlined, color: cockpitInk),
+      title: Text('继续作业 · ${value.buildingLabel} · ${value.penLabel}',
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+      subtitle: Text('${value.mediaCount} 份证据 · ${_activityState(value)}',
+          style: const TextStyle(fontSize: 12)),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () async {
+        final auth = ref.read(authControllerProvider).valueOrNull;
+        if (auth == null) return;
+        // Read the actual draft again; recent activity may have changed while the card was visible.
+        final db = ref.read(appDatabaseProvider);
+        final draft = await (db.select(db.captureDrafts)
+              ..where((d) =>
+                  d.id.equals(value.draftId) &
+                  d.organizationId.equals(auth.user.activeOrganizationId)))
+            .getSingleOrNull();
+        if (!context.mounted ||
+            draft == null ||
+            ref.read(authControllerProvider).valueOrNull?.user.subjectId !=
+                auth.user.subjectId ||
+            ref
+                    .read(authControllerProvider)
+                    .valueOrNull
+                    ?.user
+                    .activeOrganizationId !=
+                auth.user.activeOrganizationId) {
+          return;
+        }
+        if (value.sessionId != null) {
+          context.push('/inventory-sessions/${value.sessionId}');
+        } else if (value.outboxState != null) {
+          context.push('/outbox');
+        } else if (draft.state == 'draft') {
+          context.push('/capture',
+              extra: CaptureTarget(
+                  organizationId: draft.organizationId,
+                  penId: draft.penId,
+                  label: '${value.buildingLabel} · ${value.penLabel}',
+                  businessDate: draft.businessDate,
+                  draftId: draft.id));
+        }
+      },
     );
   }
 
@@ -409,109 +501,24 @@ class _ContinueCard extends ConsumerWidget {
       };
 }
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.title, required this.action});
-  final String title;
-  final String action;
-
-  @override
-  Widget build(BuildContext context) => Row(children: <Widget>[
-        Expanded(
-            child: Text(title, style: Theme.of(context).textTheme.titleLarge)),
-        Text(action, style: Theme.of(context).textTheme.bodySmall),
-      ]);
-}
-
-class _ProgressCard extends StatelessWidget {
-  const _ProgressCard({
-    required this.known,
-    required this.completed,
-    required this.total,
-    required this.pendingUploads,
-    required this.reviewRequired,
-  });
-  final int completed;
-  final bool known;
-  final int total;
-  final int pendingUploads;
-  final int reviewRequired;
-
-  @override
-  Widget build(BuildContext context) {
-    final double? progress = !known
-        ? null
-        : total == 0
-            ? 0
-            : completed / total;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(children: <Widget>[
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 9,
-              color: AppColors.herdTeal,
-              backgroundColor: const Color(0xFFE4ECEF),
-            ),
-          ),
-          const SizedBox(height: 15),
-          _ProgressRow(
-              label: '已确认任务',
-              value: known ? '$completed / $total' : '—',
-              note: '复核确认后才计入存栏'),
-          const Divider(height: 22),
-          _ProgressRow(
-              label: '本机待上传', value: '$pendingUploads', note: '断网先拍，联网自动补传'),
-          const Divider(height: 22),
-          _ProgressRow(
-              label: '等待复核',
-              value: known ? '$reviewRequired' : '—',
-              note: '确认数量后锁定证据'),
-        ]),
-      ),
-    );
-  }
-}
-
-class _ProgressRow extends StatelessWidget {
-  const _ProgressRow(
-      {required this.label, required this.value, required this.note});
-  final String label;
-  final String value;
-  final String note;
-
-  @override
-  Widget build(BuildContext context) => Row(children: <Widget>[
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 3),
-              Text(note, style: Theme.of(context).textTheme.bodySmall),
-            ],
-          ),
-        ),
-        Text(value,
-            style: const TextStyle(
-                fontWeight: FontWeight.w800, color: AppColors.barnBlue)),
-      ]);
-}
-
 class _SafeNotice extends StatelessWidget {
   const _SafeNotice({required this.message});
   final String message;
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(AppSpacing.sm),
         decoration: BoxDecoration(
           color: AppColors.review.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AppRadius.control),
         ),
-        child: Text(message),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Icon(Icons.info_outline, size: 17, color: AppColors.review),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+              child:
+                  Text(message, style: Theme.of(context).textTheme.bodyMedium)),
+        ]),
       );
 }
 
@@ -523,29 +530,30 @@ class _AssistantPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) => Card(
         clipBehavior: Clip.antiAlias,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Row(children: <Widget>[
-                const Text('🤖', style: TextStyle(fontSize: 18)),
-                const SizedBox(width: 8),
                 Expanded(
                     child: Text('今日规则研判',
                         style: Theme.of(context)
                             .textTheme
                             .titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w800))),
+                            ?.copyWith(
+                                fontWeight: FontWeight.w800, fontSize: 13))),
+                const ModelBadge(label: '规则'),
+                const SizedBox(width: AppSpacing.xs),
                 Text(brief.businessDate.substring(5),
                     style: Theme.of(context).textTheme.bodySmall),
               ]),
-              const SizedBox(height: 6),
+              const SizedBox(height: AppSpacing.xxs),
               Text(brief.brief,
                   style: Theme.of(context)
                       .textTheme
                       .bodySmall
                       ?.copyWith(color: Theme.of(context).colorScheme.outline)),
-              const Divider(height: 18),
+              const Divider(height: AppSpacing.lg),
               ...brief.insights.map((RemoteAssistantInsight insight) =>
                   _insightTile(context, ref, insight)),
             ],
@@ -559,24 +567,38 @@ class _AssistantPanel extends ConsumerWidget {
     final bool tappable = insight.sessionId != null ||
         ['capture', 'report', 'master_data'].contains(kind);
     return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 2),
-      leading: _severityIcon(insight.severity),
+      contentPadding: EdgeInsets.zero,
+      minLeadingWidth: 32,
+      leading: SeverityIcon(insight.severity),
       title: Text(insight.title,
-          maxLines: 1,
+          maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
       subtitle: Padding(
-        padding: const EdgeInsets.only(top: 2),
+        padding: const EdgeInsets.only(top: AppSpacing.xxs),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(insight.detail, style: const TextStyle(fontSize: 12.5)),
+          Text(insight.detail,
+              style: const TextStyle(fontSize: 12, height: 1.45)),
           if (insight.basis != null)
-            ExpansionTile(title: const Text('查看数据依据'), children: [
-              Text('来源：${switch (insight.basis!['valueSource']) {
-                'confirmed' => '人工确认',
-                'candidate' => '服务端候选',
-                _ => '未知'
-              }}；基线：${insight.basis!['baselineValue'] ?? '未知'}；样本${insight.basis!['sampleCount']}次；${insight.basis!['from'] ?? '—'} 至 ${insight.basis!['to'] ?? '—'}')
-            ]),
+            Theme(
+                data: Theme.of(context)
+                    .copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    childrenPadding:
+                        const EdgeInsets.only(bottom: AppSpacing.xs),
+                    visualDensity: VisualDensity.compact,
+                    title: Text('查看数据依据',
+                        style: Theme.of(context).textTheme.bodySmall),
+                    children: [
+                      Text(
+                          '来源：${switch (insight.basis!['valueSource']) {
+                            'confirmed' => '人工确认',
+                            'candidate' => '服务端候选',
+                            _ => '未知'
+                          }}；基线：${insight.basis!['baselineValue'] ?? '未知'}；样本${insight.basis!['sampleCount']}次；${insight.basis!['from'] ?? '—'} 至 ${insight.basis!['to'] ?? '—'}',
+                          style: Theme.of(context).textTheme.bodySmall)
+                    ])),
         ]),
       ),
       trailing: tappable ? const Icon(Icons.chevron_right, size: 20) : null,
@@ -632,11 +654,4 @@ class _AssistantPanel extends ConsumerWidget {
             },
     );
   }
-
-  static Widget _severityIcon(String severity) => switch (severity) {
-        'action' => const Text('⚠️', style: TextStyle(fontSize: 18)),
-        'success' => const Text('✅', style: TextStyle(fontSize: 18)),
-        'warning' => const Text('⚠️', style: TextStyle(fontSize: 18)),
-        _ => const Text('💡', style: TextStyle(fontSize: 18)),
-      };
 }

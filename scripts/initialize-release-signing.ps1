@@ -1,11 +1,11 @@
 [CmdletBinding()]
-param()
+param([switch]$PilotBuild)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$config = Join-Path $repositoryRoot 'apps/mobile/android/key.properties'
-$signingDirectory = Join-Path $env:LOCALAPPDATA 'PigInventory/signing'
-$keystore = Join-Path $signingDirectory 'inventory-candidate.p12'
+$config = Join-Path $repositoryRoot $(if ($PilotBuild) { 'apps/mobile/android/key.pilot.properties' } else { 'apps/mobile/android/key.properties' })
+$signingDirectory = Join-Path $env:LOCALAPPDATA $(if ($PilotBuild) { 'PigInventory/pilot-signing' } else { 'PigInventory/signing' })
+$keystore = Join-Path $signingDirectory $(if ($PilotBuild) { 'inventory-pilot.p12' } else { 'inventory-candidate.p12' })
 if ((Test-Path -LiteralPath $config) -or (Test-Path -LiteralPath $keystore)) {
     throw 'Signing material already exists. Refusing to overwrite or rotate it.'
 }

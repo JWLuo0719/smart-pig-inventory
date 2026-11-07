@@ -181,10 +181,22 @@ def build_report(
     }
 
 
+def split_directories(dataset_root: Path, split: str) -> tuple[Path, Path]:
+    layouts = (
+        (dataset_root / split / "images", dataset_root / split / "labels"),
+        (dataset_root / "images" / split, dataset_root / "labels" / split),
+    )
+    available = [(images, labels) for images, labels in layouts if images.is_dir()]
+    if len(available) != 1:
+        raise ValueError(f"expected one unambiguous image directory for split: {split}")
+    images, labels = available[0]
+    if not labels.is_dir():
+        raise ValueError(f"missing label directory for split: {split}")
+    return images, labels
+
+
 def discover_images(dataset_root: Path, split: str) -> list[Path]:
-    image_directory = dataset_root / split / "images"
-    if not image_directory.is_dir():
-        raise ValueError(f"missing image directory for split: {split}")
+    image_directory, _ = split_directories(dataset_root, split)
     return sorted(
         (path for path in image_directory.rglob("*") if path.is_file() and path.suffix.lower() in IMAGE_SUFFIXES),
         key=lambda path: path.as_posix(),
@@ -203,8 +215,7 @@ def evaluate_images(
     iou_threshold: float,
     device: str,
 ) -> list[ImageEvaluation]:
-    image_directory = dataset_root / split / "images"
-    label_directory = dataset_root / split / "labels"
+    image_directory, label_directory = split_directories(dataset_root, split)
     records: list[ImageEvaluation] = []
     paths = list(image_paths)
     for index, image_path in enumerate(paths, start=1):

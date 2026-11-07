@@ -1,6 +1,8 @@
 fastapi==0.115.11
 uvicorn==0.34.0
 celery[redis]==5.4.0
+# Celery 5.4's Redis extra requires redis-py <6; Kombu 5.7 requires >=6.1.
+kombu==5.4.2
 pydantic==2.10.6
 httpx==0.28.1
 pytest==8.3.5

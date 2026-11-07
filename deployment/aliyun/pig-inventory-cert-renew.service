@@ -1,0 +1,8 @@
+[Unit]
+Description=Renew the pig inventory short-lived public IP certificate
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/pig-inventory-certbot/bin/certbot renew --cert-name pig-inventory-ip --quiet --deploy-hook "/usr/bin/docker exec pig-inventory-demo-public-gateway-1 nginx -s reload"

@@ -49,7 +49,7 @@ class _PenPickerScreenState extends ConsumerState<PenPickerScreen> {
           if (auth.isOffline)
             Container(
               width: double.infinity,
-              margin: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+              margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: const Color(0xFFFFF4D8),
@@ -59,7 +59,7 @@ class _PenPickerScreenState extends ConsumerState<PenPickerScreen> {
               child: const Text('当前离线：仅显示上次同步的栏舍，不能同步。'),
             ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 10),
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
             child: TextField(
               onChanged: (String value) => setState(() => _query = value),
               decoration: InputDecoration(
@@ -92,7 +92,7 @@ class _PenPickerScreenState extends ConsumerState<PenPickerScreen> {
                   return const Center(child: Text('暂无已同步栏舍。连接网络后点击右上角同步。'));
                 }
                 return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
+                  padding: AppSpacing.page,
                   itemCount: pens.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (BuildContext context, int index) => _PenChoice(
@@ -157,8 +157,8 @@ class _PenChoice extends StatelessWidget {
               const EdgeInsets.symmetric(horizontal: 15, vertical: 7),
           onTap: onTap,
           leading: Container(
-            width: 42,
-            height: 46,
+            width: 38,
+            height: 38,
             alignment: Alignment.center,
             decoration: const BoxDecoration(
               color: AppColors.barnBlue,
@@ -171,8 +171,7 @@ class _PenChoice extends StatelessWidget {
                     color: Colors.white, fontWeight: FontWeight.w800)),
           ),
           title: Text(
-              '${choice.buildingCode} ${choice.buildingName} · ${choice.penCode} ${choice.penName}',
-              style: const TextStyle(fontWeight: FontWeight.w700)),
+              '${choice.buildingCode} ${choice.buildingName} · ${choice.penCode} ${choice.penName}'),
           subtitle: Text(choice.enabled ? '可创建采集草稿' : '已禁用：可恢复已有草稿，但不能新建'),
           trailing: const Icon(Icons.chevron_right),
         ),

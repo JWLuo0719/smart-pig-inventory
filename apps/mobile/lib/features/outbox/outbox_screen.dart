@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/auth/auth_controller.dart';
+import '../../core/theme/app_theme.dart';
 import 'application/upload_package_synchronizer.dart';
 import 'data/drift_outbox_repository.dart';
 
@@ -52,7 +53,7 @@ class _OutboxScreenState extends ConsumerState<OutboxScreen> {
           final rows = snapshot.data!;
           if (rows.isEmpty) return const Center(child: Text('当前组织没有待上传的采集包'));
           return ListView(
-              padding: const EdgeInsets.all(16),
+              padding: AppSpacing.page,
               children: rows.map((item) {
                 final row = item.entry;
                 final leased =
@@ -60,27 +61,47 @@ class _OutboxScreenState extends ConsumerState<OutboxScreen> {
                 return Card(
                     margin: const EdgeInsets.only(bottom: 12),
                     child: Padding(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(12),
                         child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(item.penLabel,
-                                  style:
-                                      Theme.of(context).textTheme.titleMedium),
-                              Text(
-                                  '${item.businessDate.toIso8601String().substring(0, 10)} · ${item.captureKind == 'video' ? '视频证据' : item.captureKind == 'single' ? '单图' : '左中右三图'}'),
-                              const SizedBox(height: 8),
-                              if (item.thumbnail != null)
-                                Image.file(File(item.thumbnail!),
-                                    cacheWidth: 240,
-                                    height: 90,
-                                    errorBuilder: (_, __, ___) =>
-                                        const Text('本机预览暂不可用，原记录保留')),
-                              Semantics(
-                                  liveRegion: true,
-                                  child: Text(_stateLabel(row.state))),
-                              Text(
-                                  '已上传 ${item.uploadedAssets} / ${item.totalAssets} 份文件'),
+                              Row(children: [
+                                Expanded(
+                                    child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                      Text(item.penLabel,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium),
+                                      Text(
+                                          '${item.businessDate.toIso8601String().substring(0, 10)} · ${item.captureKind == 'video' ? '视频证据' : item.captureKind == 'single' ? '单图' : '左中右三图'}'),
+                                      const SizedBox(height: 6),
+                                      Semantics(
+                                          liveRegion: true,
+                                          child: Text(_stateLabel(row.state),
+                                              style: const TextStyle(
+                                                  fontWeight:
+                                                      FontWeight.w700))),
+                                      Text(
+                                          '已上传 ${item.uploadedAssets} / ${item.totalAssets} 份文件'),
+                                    ])),
+                                if (item.thumbnail != null)
+                                  ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Image.file(File(item.thumbnail!),
+                                          cacheWidth: 240,
+                                          width: 86,
+                                          height: 86,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) =>
+                                              const SizedBox(
+                                                  width: 86,
+                                                  height: 86,
+                                                  child: Icon(Icons
+                                                      .broken_image_outlined)))),
+                              ]),
                               if (row.error != null) Text(row.error!),
                               if (row.nextAttemptAt != null)
                                 Text('下次尝试：${row.nextAttemptAt!.toLocal()}'),

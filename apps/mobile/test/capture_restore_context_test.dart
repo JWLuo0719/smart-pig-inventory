@@ -85,6 +85,8 @@ void main() {
       'fresh portrait left image opens ROI with its actual aspect ratio',
       (tester) async {
     await pump(tester);
+    await tester.tap(find.byKey(const Key('capture-modes')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byType(SwitchListTile).first);
     await tester.pump();
     await tester.ensureVisible(find.text('拍摄左侧并保存'));

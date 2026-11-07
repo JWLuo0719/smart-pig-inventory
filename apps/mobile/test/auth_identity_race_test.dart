@@ -1,3 +1,4 @@
+import 'package:smart_pig_inventory/core/network/device_network_status.dart';
 import 'dart:async';
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -60,6 +61,7 @@ void main() {
     final sessions = _Sessions();
     final api = _Api();
     final container = ProviderContainer(overrides: [
+      deviceNetworkStatusProvider.overrideWithValue(() async => null),
       appDatabaseProvider.overrideWithValue(db),
       authSessionRepositoryProvider.overrideWithValue(sessions),
       authApiProvider.overrideWithValue(api)

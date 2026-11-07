@@ -1,5 +1,6 @@
 from pathlib import Path
 import runpy
+from types import SimpleNamespace
 
 import pytest
 
@@ -70,3 +71,32 @@ def test_threshold_parser_deduplicates_and_validates() -> None:
     assert parse_thresholds("0.6,0.25,0.6") == (0.25, 0.6)
     with pytest.raises(ValueError, match="between 0 and 1"):
         parse_thresholds("1.1")
+
+
+@pytest.mark.parametrize("layout", ["split_first", "type_first"])
+def test_evaluation_reads_matching_labels_in_both_yolo_layouts(tmp_path: Path, layout: str) -> None:
+    images = tmp_path / ("val/images" if layout == "split_first" else "images/val")
+    labels = tmp_path / ("val/labels" if layout == "split_first" else "labels/val")
+    (images / "nested").mkdir(parents=True)
+    (labels / "nested").mkdir(parents=True)
+    image = images / "nested/sample.JPG"
+    image.write_bytes(b"model stub does not decode the image")
+    (labels / "nested/sample.txt").write_text("0 0.5 0.5 0.2 0.2\n", encoding="utf-8")
+    (images / "ignored.txt").write_text("ignored", encoding="utf-8")
+    paths = MODULE["discover_images"](tmp_path, "val")
+    assert paths == [image]
+    model = SimpleNamespace(predict=lambda **kwargs: [SimpleNamespace(boxes=None, speed={})])
+    records = MODULE["evaluate_images"](model, paths, dataset_root=tmp_path, split="val",
+        class_id=0, image_size=640, minimum_confidence=0.25, iou_threshold=0.7, device="cpu")
+    assert records[0].image == "nested/sample.JPG"
+    assert records[0].expected_count == 1
+    assert records[0].confidences == ()
+
+
+def test_evaluation_rejects_ambiguous_layout_or_missing_labels(tmp_path: Path) -> None:
+    (tmp_path / "images/val").mkdir(parents=True)
+    with pytest.raises(ValueError, match="missing label"):
+        MODULE["discover_images"](tmp_path, "val")
+    (tmp_path / "val/images").mkdir(parents=True)
+    with pytest.raises(ValueError, match="unambiguous"):
+        MODULE["discover_images"](tmp_path, "val")

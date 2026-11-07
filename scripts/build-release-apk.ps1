@@ -3,6 +3,8 @@ param(
     [Parameter(Mandatory = $true)][string]$ApiBaseUrl,
     [Parameter(Mandatory = $true)][ValidatePattern('^[A-Fa-f0-9]{64}$')][string]$ExpectedCertificateSha256,
     [switch]$BuildOnly,
+    [switch]$PilotBuild,
+    [switch]$AllowHttpsIp,
     [string]$LanCaCertificate
 )
 
@@ -13,13 +15,24 @@ $mobileDirectory = Join-Path $repositoryRoot 'apps/mobile'
 
 try {
     $uri = [Uri]$ApiBaseUrl
+    $publicIp = $false
+    if ($uri.HostNameType -eq [UriHostNameType]::IPv4) {
+        $octets = [Net.IPAddress]::Parse($uri.Host).GetAddressBytes()
+        $publicIp = $octets[0] -notin @(0,10,127) -and $octets[0] -lt 224 -and
+            -not ($octets[0] -eq 169 -and $octets[1] -eq 254) -and
+            -not ($octets[0] -eq 172 -and $octets[1] -ge 16 -and $octets[1] -le 31) -and
+            -not ($octets[0] -eq 192 -and $octets[1] -eq 168) -and
+            -not ($octets[0] -eq 100 -and $octets[1] -ge 64 -and $octets[1] -le 127)
+    }
     if (-not $uri.IsAbsoluteUri -or $uri.Scheme -ne 'https' -or
-        $uri.HostNameType -ne [UriHostNameType]::Dns -or $uri.IsLoopback -or
+        ($uri.HostNameType -ne [UriHostNameType]::Dns -and -not ($AllowHttpsIp -and $publicIp)) -or $uri.IsLoopback -or
         $uri.Host.EndsWith('.localhost') -or $uri.UserInfo -or $uri.Query -or $uri.Fragment) {
-        throw 'Release requires a stable HTTPS DNS URL without credentials, query, fragment or IP literals.'
+        throw 'Release requires HTTPS DNS, or -AllowHttpsIp with a public IPv4 and a trusted IP SAN certificate.'
     }
     $ApiBaseUrl = $ApiBaseUrl.TrimEnd('/')
     $extraDefines = @()
+    if ($AllowHttpsIp) { $extraDefines += '--dart-define=ALLOW_HTTPS_IP=true' }
+    if ($PilotBuild) { $extraDefines += '--dart-define=PILOT_BUILD=true' }
     if ($LanCaCertificate) {
         if ($uri.Host -ne 'pig-inventory.local') { throw 'LAN CA is restricted to pig-inventory.local.' }
         $caBytes = [IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $LanCaCertificate).Path)
@@ -74,7 +87,7 @@ try {
     $package = [regex]::Match(($badging -join "`n"), "package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'")
     $version = [regex]::Match((Get-Content (Join-Path $mobileDirectory 'pubspec.yaml') -Raw), '(?m)^version:\s*([^+\s]+)\+(\d+)\s*$')
     if (-not $package.Success -or -not $version.Success -or
-        $package.Groups[1].Value -ne 'com.smartfarm.smart_pig_inventory' -or
+        $package.Groups[1].Value -ne $(if ($PilotBuild) { 'com.smartfarm.smart_pig_inventory.pilot' } else { 'com.smartfarm.smart_pig_inventory' }) -or
         $package.Groups[2].Value -ne $version.Groups[2].Value -or
         $package.Groups[3].Value -ne $version.Groups[1].Value -or
         ($badging -join "`n") -match 'application-debuggable') { throw 'Release package/version/debuggable verification failed.' }
@@ -89,6 +102,7 @@ try {
     $signature | Set-Content -LiteralPath (Join-Path $outputDirectory 'signature.txt')
     [ordered]@{
         status = 'signed-build-verified'; buildOnly = [bool]$BuildOnly
+        pilotBuild = [bool]$PilotBuild; allowHttpsIp = [bool]$AllowHttpsIp
         lanAcceptance = [bool]$LanCaCertificate
         lanCaFileSha256 = $(if ($LanCaCertificate) { (Get-FileHash -LiteralPath $LanCaCertificate -Algorithm SHA256).Hash.ToLowerInvariant() } else { $null })
         apiHealthChecked = -not [bool]$BuildOnly; apiBaseUrl = $ApiBaseUrl

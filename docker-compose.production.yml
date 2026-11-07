@@ -6,6 +6,7 @@ services:
   redis:
     restart: unless-stopped
   minio:
+    ports: !reset []
     restart: unless-stopped
   inference-api:
     image: ${RELEASE_INFERENCE_IMAGE:?set a verified immutable inference image}

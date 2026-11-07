@@ -6,6 +6,7 @@ import '../../core/theme/app_theme.dart';
 import '../local_activity/data/local_activity_repository.dart';
 import 'server_gallery_screen.dart';
 import 'local_evidence_screen.dart';
+import '../../shared/widgets/field_header.dart';
 
 class GalleryScreen extends ConsumerWidget {
   const GalleryScreen({super.key});
@@ -20,7 +21,17 @@ class GalleryScreen extends ConsumerWidget {
     return DefaultTabController(
         length: 2,
         child: Column(children: [
-          const TabBar(tabs: [Tab(text: '服务器照片'), Tab(text: '本机草稿')]),
+          Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              child: FieldHeader(
+                  title: '栏舍证据库',
+                  subtitle: ref
+                          .watch(authControllerProvider)
+                          .valueOrNull
+                          ?.user
+                          .activeOrganizationName ??
+                      '当前组织')),
+          const TabBar(tabs: [Tab(text: '服务器证据'), Tab(text: '本机草稿')]),
           Expanded(
               child: TabBarView(children: [
             ServerGalleryScreen(key: ValueKey(organization)),
@@ -47,13 +58,8 @@ class LocalGalleryScreen extends ConsumerWidget {
         final List<LocalCaptureActivity> rows =
             snapshot.data ?? const <LocalCaptureActivity>[];
         return ListView(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 28),
           children: <Widget>[
-            Text('本机证据图库', style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: 4),
-            Text('按最近更新时间查看原始证据和真实上传状态；服务器确认数量只在结果页显示。',
-                style: Theme.of(context).textTheme.bodyMedium),
-            const SizedBox(height: 18),
             if (snapshot.connectionState == ConnectionState.waiting)
               const Padding(
                 padding: EdgeInsets.only(top: 40),

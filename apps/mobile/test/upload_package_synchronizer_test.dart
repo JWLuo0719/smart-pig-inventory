@@ -282,6 +282,40 @@ void main() {
     expect(outbox.error, contains('同一张照片不能重复上传'));
   });
 
+  for (final status in [408, 429]) {
+    test('HTTP $status keeps evidence and schedules an automatic retry',
+        () async {
+      final gateway = _FakeUploadGateway(error: status);
+      final repository = DriftOutboxRepository(database);
+      final outcome = await UploadPackageSynchronizer(
+        api: gateway,
+        repository: repository,
+        reconnect: () async => _auth(now),
+        clock: () => now,
+        random: _FixedRandom(),
+      ).syncNext(_auth(now), leaseOwner: 'worker');
+      expect(outcome, UploadSyncOutcome.retryScheduled);
+      final entry = await database.select(database.outboxEntries).getSingle();
+      expect(entry.state, 'retry_wait');
+      expect(entry.leaseOwner, isNull);
+      expect(entry.leaseExpiresAt, isNull);
+      expect(
+          entry.nextAttemptAt?.toUtc(), now.add(const Duration(seconds: 30)));
+      final asset =
+          await database.select(database.localMediaAssets).getSingle();
+      expect(await File(asset.materializedPath).exists(), isTrue);
+      now = now.add(const Duration(seconds: 31));
+      expect(
+          await UploadPackageSynchronizer(
+            api: _FakeUploadGateway(),
+            repository: repository,
+            reconnect: () async => _auth(now),
+            clock: () => now,
+          ).syncNext(_auth(now), leaseOwner: 'retry-worker'),
+          UploadSyncOutcome.synced);
+    });
+  }
+
   test('clears the creating lease after a socket failure', () async {
     final synchronizer = UploadPackageSynchronizer(
       api: _FakeUploadGateway(socketFailure: true),

@@ -283,7 +283,7 @@ async (page) => {
     }
     check(requested.length === (username === 'e2e-operator' ? 0 : 1), 'Do not request known unauthorized panels');
     check(await page.locator('#master-data').getByRole('button', { name: '新增栋舍', exact: true }).count() === 0, 'Non-admins must not see master-data write controls');
-    const roleLogin = await page.request.post(`${api}/auth/login`, { data: { username, password: config.password } });
+    const roleLogin = await page.request.post(`${api}/auth/login`, { headers: { 'X-Idempotency-Key': 'a630941b-9528-43f0-a680-81bec82ebeb4' }, data: { username, password: config.password } });
     check(roleLogin.ok(), 'Synthetic role login must succeed for authorization readback');
     const roleToken = (await roleLogin.json()).accessToken;
     const deniedVersions = await page.request.get(`${api}/inventory-sessions/${source.id}/versions`, { headers: { Authorization: `Bearer ${roleToken}` } });

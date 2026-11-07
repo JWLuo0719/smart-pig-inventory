@@ -1,6 +1,8 @@
 package com.smartfarm.smart_pig_inventory
 
 import android.graphics.BitmapFactory
+import android.content.Context
+import android.net.ConnectivityManager
 import android.webkit.MimeTypeMap
 import androidx.exifinterface.media.ExifInterface
 import io.flutter.embedding.android.FlutterActivity
@@ -11,6 +13,22 @@ import java.io.File
 class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "com.smartfarm.inventory/network-status"
+        ).setMethodCallHandler { call, result ->
+            if (call.method != "hasActiveNetwork") {
+                result.notImplemented()
+            } else {
+                try {
+                    val connectivity = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+                    result.success(connectivity?.let { it.activeNetwork != null })
+                } catch (_: SecurityException) {
+                    // Unknown must use normal HTTPS verification, not offline permission.
+                    result.success(null)
+                }
+            }
+        }
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "com.smartfarm.inventory/image-metadata"

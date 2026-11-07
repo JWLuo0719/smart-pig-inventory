@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/auth/auth_controller.dart';
 import '../../core/theme/app_theme.dart';
 import '../local_activity/data/local_activity_repository.dart';
+import '../../shared/widgets/field_header.dart';
 import '../master_data/data/drift_master_data_repository.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -24,10 +25,10 @@ class ProfileScreen extends ConsumerWidget {
         final LocalActivityStats? stats =
             snapshot.hasError ? null : snapshot.data;
         return ListView(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+          padding: AppSpacing.page,
           children: <Widget>[
-            Text('我的', style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: 16),
+            const FieldHeader(title: '我的作业空间', subtitle: '账号、同步与本机证据'),
+            const SizedBox(height: 12),
             if (snapshot.hasError) const Text('本机作业统计暂不可读取，请重新打开页面重试'),
             Card(
               child: ListTile(
@@ -42,7 +43,7 @@ class ProfileScreen extends ConsumerWidget {
                     '${auth.user.activeOrganizationCode} · ${auth.user.activeOrganizationName}'),
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             Card(
               child: Column(children: <Widget>[
                 ListTile(
@@ -89,6 +90,11 @@ class ProfileScreen extends ConsumerWidget {
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.push('/outbox'),
                 ),
+                const Divider(height: 1),
+                const ListTile(
+                    leading: Icon(Icons.info_outline),
+                    title: Text('现场作业版 0.2.4'),
+                    subtitle: Text('工作台 · 栏舍任务 · 证据与复核')),
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.logout),

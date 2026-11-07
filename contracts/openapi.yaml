@@ -172,7 +172,11 @@ paths:
       operationId: getCapabilities
       responses:
         '200':
-          description: 能力快照
+          description: >-
+            能力快照。counting_available 仅表示候选检测服务当前就绪，不表示自动确认数量。
+            研究模型始终 automatic_counting=false、manual_review_required=true；
+            就绪查询失败、模型身份不匹配或 Provider 不可用时 detection_available 和
+            counting_available 均为 false，并返回不含内部地址的 reason_code。
           content:
             application/json:
               schema: {$ref: '#/components/schemas/ApiEnvelope'}

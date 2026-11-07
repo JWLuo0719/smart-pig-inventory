@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../network/socket_failure.dart';
+import '../network/device_network_status.dart';
 import '../storage/database_provider.dart';
 import 'auth_api.dart';
 import 'auth_context_repository.dart';
@@ -161,6 +163,12 @@ class AuthController extends AsyncNotifier<AuthState?> {
   Future<AuthState?> _restore() async {
     final AuthSession? session = await _sessions.read();
     if (session == null) return null;
+    // A process restart has no in-memory network state. An explicit negative
+    // from Android can restore the bounded offline session without depending
+    // on which transport/TLS exception a doomed online request would produce.
+    if (await ref.read(deviceNetworkStatusProvider)() == false) {
+      return _offlineFallback(session);
+    }
     try {
       return await _verify(session);
     } on DioException catch (error) {
@@ -210,8 +218,12 @@ class AuthController extends AsyncNotifier<AuthState?> {
   bool _isNetworkFailure(DioException error) => switch (error.type) {
         DioExceptionType.connectionError ||
         DioExceptionType.connectionTimeout ||
+        DioExceptionType.sendTimeout ||
         DioExceptionType.receiveTimeout =>
           true,
+        // Dio may wrap a socket failure after opening the connection as
+        // unknown. Do not admit TLS failures, bad responses or parse errors.
+        DioExceptionType.unknown => isSocketFailure(error.error),
         _ => false,
       };
 }

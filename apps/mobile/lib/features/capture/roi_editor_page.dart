@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'domain/roi.dart';
 
-/// 在已拍照片上标注"不计入本栏"的排除区（相邻栏舍、料槽、走道等）。
+/// 在已拍照片上标注"不计入本栏"的排除区（明确邻栏或走道）。
 ///
 /// 交互：在照片上拖出一个矩形即新增一个排除区；最多 [maxExclusions] 个；
 /// 下方列表给出每个排除区的归一化坐标并可单独删除。
@@ -144,8 +144,7 @@ class _RoiEditorPageState extends State<RoiEditorPage> {
         children: <Widget>[
           const Padding(
             padding: EdgeInsets.all(12),
-            child: Text('在照片上按住并拖出一个矩形，即把相邻栏舍、料槽或走道划为排除区；'
-                '压在这类区域里的猪不会计入本栏数量。'),
+            child: Text('仅把明确属于邻栏或走道的区域划为排除区；料槽造成遮挡时请换角度补拍，不能排除本栏猪只。'),
           ),
           Flexible(
             child: Padding(

@@ -21,8 +21,10 @@ final serverGalleryApiProvider = Provider<InventoryBrowseApi>(
 );
 
 class ServerGalleryScreen extends ConsumerStatefulWidget {
-  const ServerGalleryScreen({this.sessionId, super.key});
+  const ServerGalleryScreen(
+      {this.sessionId, this.showHeader = true, super.key});
   final String? sessionId;
+  final bool showHeader;
   @override
   ConsumerState<ServerGalleryScreen> createState() =>
       _ServerGalleryScreenState();
@@ -236,8 +238,12 @@ class _ServerGalleryScreenState extends ConsumerState<ServerGalleryScreen> {
             : const NeverScrollableScrollPhysics(),
         padding: const EdgeInsets.all(20),
         children: [
-          Text('栏舍照片库', style: Theme.of(context).textTheme.headlineSmall),
-          const Text('按日期查询服务器证据；已确认照片锁定，只能由管理员在后台处理。'),
+          if (widget.showHeader) ...[
+            Text('栏舍照片库', style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 4),
+            const Text('按日期查询服务器证据；已确认照片锁定，只能由管理员在后台处理。'),
+            const SizedBox(height: 12),
+          ],
           if (widget.sessionId == null)
             TextButton(
                 onPressed: _loading || _busy ? null : _pickDate,

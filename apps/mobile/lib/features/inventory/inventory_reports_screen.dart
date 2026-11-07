@@ -140,8 +140,8 @@ class _InventoryReportsScreenState
     final locale = MaterialLocalizations.of(context);
     return Scaffold(
         appBar: AppBar(title: const Text('日报与综合盘点')),
-        body: ListView(padding: const EdgeInsets.all(20), children: [
-          const Text('只统计人工已确认数量；未确认结果不计入平均。'),
+        body: ListView(padding: AppSpacing.page, children: [
+          const Text('仅统计人工已确认数量；候选结果不计入周期平均。'),
           OutlinedButton(
               onPressed: _loading ? null : _range,
               child: Text(

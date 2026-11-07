@@ -98,6 +98,8 @@ void main() {
         child: const MaterialApp(home: Scaffold(body: HomeScreen()))));
     await tester.pump();
     await tester.pump();
+    await tester.tap(find.text('协同研判'));
+    await tester.pump(const Duration(milliseconds: 250));
     return container;
   }
 
@@ -125,6 +127,8 @@ void main() {
     }));
     expect(find.textContaining('规则研判暂时不可用'), findsOneWidget);
     expect(find.text('1 / 1'), findsOneWidget);
+    await tester.ensureVisible(find.text('重新读取研判'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('重新读取研判'));
     await tester.pump();
     await tester.pump();

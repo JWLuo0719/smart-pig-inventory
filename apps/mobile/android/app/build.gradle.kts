@@ -14,6 +14,10 @@ dependencies {
     implementation("androidx.exifinterface:exifinterface:1.3.7")
 }
 
+val buildDefinitions = (project.findProperty("dart-defines") as? String).orEmpty()
+    .split(',').filter { it.isNotEmpty() }.map { String(Base64.getDecoder().decode(it), Charsets.UTF_8) }
+val pilotBuild = buildDefinitions.contains("PILOT_BUILD=true")
+
 // Environment injection is atomic: never mix a partial CI identity with local secrets.
 val releaseFields = mapOf(
     "storeFile" to "ANDROID_RELEASE_STORE_FILE",
@@ -23,7 +27,7 @@ val releaseFields = mapOf(
 )
 val useReleaseEnvironment = releaseFields.values.any { System.getenv(it) != null }
 val releaseProperties = Properties().apply {
-    val source = rootProject.file("key.properties")
+    val source = rootProject.file(if (pilotBuild) "key.pilot.properties" else "key.properties")
     if (!useReleaseEnvironment && source.isFile) source.inputStream().use { load(it) }
 }
 fun releaseValue(name: String): String? =
@@ -54,10 +58,7 @@ val validateReleaseConfiguration = tasks.register("validateReleaseConfiguration"
         check(LdapName(cert.subjectX500Principal.name).rdns.none {
             it.type.equals("CN", true) && it.value.toString().equals("Android Debug", true)
         }) { "Android Debug certificates are forbidden for Release." }
-        val allDefinitions = (project.findProperty("dart-defines") as? String).orEmpty()
-            .split(',').filter { it.isNotEmpty() }.map {
-                String(Base64.getDecoder().decode(it), Charsets.UTF_8)
-            }
+        val allDefinitions = buildDefinitions
         val definitions = allDefinitions.filter { it.startsWith("API_BASE_URL=") }
         check(definitions.size == 1) { "Release requires exactly one explicit API_BASE_URL dart-define." }
         val endpoint = URI(definitions.single().substringAfter('='))
@@ -69,11 +70,19 @@ val validateReleaseConfiguration = tasks.register("validateReleaseConfiguration"
         } else {
             check(lanCertificates.isEmpty()) { "LAN certificate is restricted to pig-inventory.local." }
         }
+        val ipv4Parts = endpoint.host.orEmpty().split('.').mapNotNull { it.toIntOrNull() }
+        val publicIpv4 = ipv4Parts.size == 4 && ipv4Parts.all { it in 0..255 } &&
+            ipv4Parts[0] !in setOf(0, 10, 127) && ipv4Parts[0] < 224 &&
+            !(ipv4Parts[0] == 169 && ipv4Parts[1] == 254) &&
+            !(ipv4Parts[0] == 172 && ipv4Parts[1] in 16..31) &&
+            !(ipv4Parts[0] == 192 && ipv4Parts[1] == 168) &&
+            !(ipv4Parts[0] == 100 && ipv4Parts[1] in 64..127)
+        val allowIp = allDefinitions.count { it == "ALLOW_HTTPS_IP=true" } == 1 && publicIpv4
         check(endpoint.scheme == "https" && !endpoint.host.isNullOrBlank() &&
             endpoint.userInfo == null && endpoint.rawQuery == null && endpoint.rawFragment == null &&
             endpoint.host != "localhost" && !endpoint.host.endsWith(".localhost") &&
-            !endpoint.host.matches(Regex("[0-9.]+")) && !endpoint.host.contains(':')) {
-            "Release API_BASE_URL must be a stable HTTPS DNS URL without credentials, query, fragment or IP literals."
+            (!endpoint.host.matches(Regex("[0-9.]+")) || allowIp) && !endpoint.host.contains(':')) {
+            "Release API_BASE_URL must be a stable HTTPS DNS URL or an explicitly enabled public HTTPS IPv4 without credentials, query or fragment."
         }
     }
 }
@@ -93,6 +102,8 @@ android {
 
     defaultConfig {
         applicationId = "com.smartfarm.smart_pig_inventory"
+        if (pilotBuild) applicationIdSuffix = ".pilot"
+        manifestPlaceholders["appLabel"] = if (pilotBuild) "智慧猪场场主·试用" else "智慧猪场场主"
         // Version values are sourced from pubspec.yaml through Flutter.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion

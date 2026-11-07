@@ -229,7 +229,7 @@ class UploadPackageSynchronizer {
           now: _clock(), organizationId: work.draft.organizationId);
       return;
     }
-    if (status != null && status >= 400 && status < 500) {
+    if (_permanentRejection(status)) {
       await _repository.block(work.entry.packageId,
           organizationId: work.draft.organizationId,
           now: _clock(),
@@ -246,7 +246,8 @@ class UploadPackageSynchronizer {
     );
   }
 
-  /// 4xx 拒绝不会再重试，把农场员能自己处理的错误码翻成可行动的提示；
+  /// 永久 4xx 拒绝不再重试；408 / 429 属于暂时性失败，保留自动重试。
+  /// 把农场员能自己处理的错误码翻成可行动的提示；
   /// 其余保持通用文案。problem+json 在 Dio 里可能以 Map 或原始字符串到达。
   String _rejectionMessage(DioException error) {
     Object? data = error.response?.data;
@@ -270,12 +271,18 @@ class UploadPackageSynchronizer {
     if (error.response?.statusCode == 401) {
       return UploadSyncOutcome.waitingForAuthentication;
     }
-    if (error.response?.statusCode case final int status
-        when status >= 400 && status < 500) {
+    if (_permanentRejection(error.response?.statusCode)) {
       return UploadSyncOutcome.blocked;
     }
     return UploadSyncOutcome.retryScheduled;
   }
+
+  bool _permanentRejection(int? status) =>
+      status != null &&
+      status >= 400 &&
+      status < 500 &&
+      status != 408 &&
+      status != 429;
 
   Duration _retryDelay(int attempt) {
     final int cappedExponent = min(attempt, 8);

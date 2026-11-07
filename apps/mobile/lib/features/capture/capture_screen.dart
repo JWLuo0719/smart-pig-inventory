@@ -1,3 +1,4 @@
+import '../../shared/widgets/field_header.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -657,42 +658,57 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
     final bool? offline =
         ref.watch(authControllerProvider).valueOrNull?.isOffline;
     return Scaffold(
-      appBar: AppBar(title: Text(widget.target.label)),
+      appBar: AppBar(title: const Text('现场采集')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 6, 20, 28),
+        padding: AppSpacing.page,
         children: <Widget>[
+          FieldScope(
+              label: widget.target.label,
+              detail:
+                  '${auth.user.activeOrganizationName} · ${widget.target.businessDate.toIso8601String().substring(0, 10)}'),
+          const SizedBox(height: 12),
           NetworkStatusBanner(offline: offline),
-          const SizedBox(height: 14),
-          Card(
-            child: SwitchListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
-              value: _threeView,
-              onChanged:
-                  savedDraft == null && !_saving && !_restoring && !_video
-                      ? (bool value) => setState(() => _threeView = value)
-                      : null,
-              title: const Text('左 / 中 / 右三图模式',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: Text(
-                savedDraft == null
-                    ? '三张图会保存为同一采集组，未验证去重前不会自动相加。'
-                    : '已开始采集后不能切换模式，以保护已保存证据。',
+          const SizedBox(height: 12),
+          ExpansionTile(
+            key: const Key('capture-modes'),
+            initiallyExpanded: _threeView || _video,
+            title: const Text('更多采集方式'),
+            subtitle: Text(_video
+                ? '视频证据'
+                : _threeView
+                    ? '左 / 中 / 右三图'
+                    : '当前：单图采集'),
+            children: [
+              SwitchListTile(
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
+                value: _threeView,
+                onChanged:
+                    savedDraft == null && !_saving && !_restoring && !_video
+                        ? (bool value) => setState(() => _threeView = value)
+                        : null,
+                title: const Text('左 / 中 / 右三图模式',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: Text(
+                  savedDraft == null
+                      ? '三张图会保存为同一采集组，未验证去重前不会自动相加。'
+                      : '已开始采集后不能切换模式，以保护已保存证据。',
+                ),
               ),
-            ),
+              SwitchListTile(
+                title: const Text('视频证据模式'),
+                subtitle: const Text('MP4，最多 2 分钟 / 30 MB；上传后人工复核，不生成自动计数。'),
+                value: _video,
+                onChanged: savedDraft == null && !_saving && !_restoring
+                    ? (value) => setState(() {
+                          _video = value;
+                          if (value) _threeView = false;
+                        })
+                    : null,
+              ),
+            ],
           ),
-          const SizedBox(height: 18),
-          SwitchListTile(
-            title: const Text('视频证据模式'),
-            subtitle: const Text('MP4，最多 2 分钟 / 30 MB；上传后人工复核，不生成自动计数。'),
-            value: _video,
-            onChanged: savedDraft == null && !_saving && !_restoring
-                ? (value) => setState(() {
-                      _video = value;
-                      if (value) _threeView = false;
-                    })
-                : null,
-          ),
+          const SizedBox(height: 12),
           Text(
               _video
                   ? '视频采集'
@@ -772,55 +788,38 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
             _CaptureError(message: _error!),
           ],
           const SizedBox(height: 18),
-          FilledButton.icon(
-            onPressed:
-                _canAddPhoto ? () => _pickAndSave(ImageSource.camera) : null,
-            icon: _saving
-                ? const SizedBox.square(
-                    dimension: 20,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
-                  )
-                : const Icon(Icons.camera_alt_outlined),
-            label: Text(
-              _saving
-                  ? '正在安全保存媒体…'
-                  : _threeViewComplete
-                      ? '三张图片已安全保存'
-                      : _video
-                          ? '录制视频并保存'
-                          : '拍摄$_nextPositionLabel并保存',
+          if (_canAddPhoto || _saving)
+            FilledButton.icon(
+              onPressed:
+                  _canAddPhoto ? () => _pickAndSave(ImageSource.camera) : null,
+              icon: _saving
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.camera_alt_outlined),
+              label: Text(
+                _saving
+                    ? '正在安全保存媒体…'
+                    : _threeViewComplete
+                        ? '三张图片已安全保存'
+                        : _video
+                            ? '录制视频并保存'
+                            : '拍摄$_nextPositionLabel并保存',
+              ),
             ),
-          ),
           const SizedBox(height: 10),
-          OutlinedButton.icon(
-            onPressed:
-                _canAddPhoto ? () => _pickAndSave(ImageSource.gallery) : null,
-            icon: const Icon(Icons.photo_library_outlined),
-            label: const Text('从图库导入'),
-          ),
-          const SizedBox(height: 18),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.line),
+          if (_canAddPhoto)
+            OutlinedButton.icon(
+              onPressed:
+                  _canAddPhoto ? () => _pickAndSave(ImageSource.gallery) : null,
+              icon: const Icon(Icons.photo_library_outlined),
+              label: const Text('从图库导入'),
             ),
-            child: const Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Icon(Icons.shield_outlined,
-                    color: AppColors.barnBlue, size: 20),
-                SizedBox(width: 9),
-                Expanded(
-                  child: Text(
-                    '照片会复制到本机持久目录并计算 SHA-256。服务器 Commit 成功前不会清理原图，也不会显示推测数量。',
-                  ),
-                ),
-              ],
-            ),
-          ),
+          const SizedBox(height: 12),
+          const Text('原图先保存到本机，联网后上传。请拍全本栏；邻栏入镜可标注排除，遮挡时补拍。',
+              style: TextStyle(fontSize: 12, color: AppColors.muted)),
         ],
       ),
     );
@@ -892,15 +891,23 @@ class _SavedEvidenceList extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(status),
                 const SizedBox(height: 12),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: evidence
-                      .map((item) => _EvidenceThumbnail(
-                            item: item,
-                            onAnnotate: onAnnotate,
-                          ))
-                      .toList(growable: false),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final width = constraints.maxWidth >= 360
+                        ? (constraints.maxWidth - 10) / 2
+                        : constraints.maxWidth;
+                    return Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: evidence
+                          .map((item) => _EvidenceThumbnail(
+                                item: item,
+                                width: width,
+                                onAnnotate: onAnnotate,
+                              ))
+                          .toList(growable: false),
+                    );
+                  },
                 ),
               ]),
         ),
@@ -910,10 +917,15 @@ class _SavedEvidenceList extends StatelessWidget {
 }
 
 class _EvidenceThumbnail extends StatelessWidget {
-  const _EvidenceThumbnail({required this.item, required this.onAnnotate});
+  const _EvidenceThumbnail({
+    required this.item,
+    required this.onAnnotate,
+    required this.width,
+  });
 
   final _LocalEvidence item;
   final Future<void> Function(_LocalEvidence item) onAnnotate;
+  final double width;
 
   String get _label {
     return evidencePositionLabel(item.position);
@@ -968,26 +980,26 @@ class _EvidenceThumbnail extends StatelessWidget {
           ),
           borderRadius: BorderRadius.circular(8),
           child: SizedBox(
-            width: 92,
+            width: width,
             child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: item.position == 'video'
-                        ? const SizedBox(
-                            width: 92,
-                            height: 92,
+                        ? SizedBox(
+                            width: width,
+                            height: width * .66,
                             child: Icon(Icons.play_circle_outline, size: 48))
                         : Image.file(
                             item.file,
-                            width: 92,
-                            height: 92,
+                            width: width,
+                            height: width * .66,
                             cacheWidth: 240,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const SizedBox(
-                              width: 92,
-                              height: 92,
+                            errorBuilder: (_, __, ___) => SizedBox(
+                              width: width,
+                              height: width * .66,
                               child: Icon(Icons.broken_image_outlined),
                             ),
                           ),

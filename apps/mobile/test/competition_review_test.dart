@@ -1,6 +1,12 @@
+import 'package:smart_pig_inventory/features/master_data/data/drift_master_data_repository.dart';
+import 'package:smart_pig_inventory/features/master_data/domain/master_data_changes.dart';
+import 'package:drift/native.dart';
+import 'package:smart_pig_inventory/core/storage/app_database.dart';
+import 'package:smart_pig_inventory/core/storage/database_provider.dart';
 import 'package:smart_pig_inventory/core/network/inventory_browse_api.dart';
 import 'package:smart_pig_inventory/features/gallery/server_gallery_screen.dart';
 import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,6 +17,14 @@ import 'package:smart_pig_inventory/features/inventory/annotated_evidence.dart';
 import 'package:smart_pig_inventory/features/inventory/inventory_revision.dart';
 import 'package:smart_pig_inventory/features/inventory/session_review_screen.dart';
 import 'support/competition_auth.dart';
+
+class _MasterData extends DriftMasterDataRepository {
+  _MasterData(super.database);
+  @override
+  Stream<List<PenChoice>> watchPens(String organizationId,
+          {String query = ''}) =>
+      Stream.value(const []);
+}
 
 class _Auth extends AuthController {
   @override
@@ -57,6 +71,9 @@ class _Gallery extends InventoryBrowseApi {
 }
 
 void main() {
+  late AppDatabase database;
+  setUp(() => database = AppDatabase(NativeDatabase.memory()));
+  tearDown(() => database.close());
   testWidgets(
       'changing identity immediately hides the old result while new read is pending',
       (tester) async {
@@ -77,6 +94,8 @@ void main() {
       });
     });
     final container = ProviderContainer(overrides: [
+      appDatabaseProvider.overrideWithValue(database),
+      masterDataRepositoryProvider.overrideWithValue(_MasterData(database)),
       authControllerProvider.overrideWith(CompetitionAuthController.new),
       serverGalleryApiProvider.overrideWithValue(_Gallery()),
       inventoryRemoteApiProvider.overrideWithValue(api),
@@ -111,6 +130,78 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     container.dispose();
   });
+  testWidgets(
+      'failed refresh preserves review input and requires a successful retry',
+      (tester) async {
+    var failRead = false;
+    var confirms = 0;
+    RemoteInventorySession result() => RemoteInventorySession.fromJson({
+          'id': 'session',
+          'penId': 'pen',
+          'businessDate': '2026-11-07',
+          'status': 'review_required',
+          'version': 1,
+          'rawModelCount': 24,
+          'detections': [],
+          'warnings': [],
+        });
+    final api = _Api(() {
+      if (failRead) {
+        throw DioException(
+            requestOptions: RequestOptions(path: '/session'),
+            type: DioExceptionType.connectionError);
+      }
+      return result();
+    }, onConfirm: () async {
+      confirms++;
+      return result();
+    });
+    final container = ProviderContainer(overrides: [
+      appDatabaseProvider.overrideWithValue(database),
+      masterDataRepositoryProvider.overrideWithValue(_MasterData(database)),
+      authControllerProvider.overrideWith(_Auth.new),
+      serverGalleryApiProvider.overrideWithValue(_Gallery()),
+      inventoryRemoteApiProvider.overrideWithValue(api),
+    ]);
+    await tester.runAsync(() => container.read(authControllerProvider.future));
+    await tester.binding.setSurfaceSize(const Size(600, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+            home: SessionReviewScreen(sessionId: 'session'))));
+    await tester.pump();
+    await tester.pump();
+    await tester.ensureVisible(find.byType(TextField).first);
+    await tester.enterText(find.byType(TextField).first, '23');
+    await tester.enterText(find.byType(TextField).last, '人工逐只核验后确认数量');
+    failRead = true;
+    await tester.tap(find.byTooltip('刷新结果'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.textContaining('以下为上次读取的结果'), findsOneWidget);
+    expect(
+        tester.widget<TextField>(find.byType(TextField).first).controller!.text,
+        '23');
+    expect(
+        tester.widget<TextField>(find.byType(TextField).last).controller!.text,
+        '人工逐只核验后确认数量');
+    final submit = find.widgetWithText(FilledButton, '确认并锁定证据');
+    expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+    expect(confirms, 0);
+    failRead = false;
+    await tester.tap(find.byTooltip('刷新结果'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.textContaining('以下为上次读取的结果'), findsNothing);
+    expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
+    expect(
+        tester.widget<TextField>(find.byType(TextField).first).controller!.text,
+        '23');
+    await tester.pumpWidget(const SizedBox());
+    container.dispose();
+  });
+
   test('status labels preserve every server state and image letterboxing', () {
     for (final state in [
       'submitted',
@@ -148,6 +239,8 @@ void main() {
       });
     });
     final container = ProviderContainer(overrides: [
+      appDatabaseProvider.overrideWithValue(database),
+      masterDataRepositoryProvider.overrideWithValue(_MasterData(database)),
       authControllerProvider.overrideWith(_Auth.new),
       serverGalleryApiProvider.overrideWithValue(_Gallery()),
       inventoryRemoteApiProvider.overrideWithValue(api),
@@ -225,6 +318,8 @@ void main() {
       return result('confirmed');
     });
     final container = ProviderContainer(overrides: [
+      appDatabaseProvider.overrideWithValue(database),
+      masterDataRepositoryProvider.overrideWithValue(_MasterData(database)),
       authControllerProvider.overrideWith(_Auth.new),
       serverGalleryApiProvider.overrideWithValue(_Gallery()),
       inventoryRemoteApiProvider.overrideWithValue(api)

@@ -1,0 +1,86 @@
+limit_req_zone $binary_remote_addr zone=pilot_login:1m rate=6r/m;
+server {
+    listen 80;
+    server_name ${PUBLIC_IP};
+    location /.well-known/acme-challenge/ { root /var/www/acme; }
+    location / { return 308 https://${PUBLIC_IP}$request_uri; }
+}
+server {
+    listen 443 ssl;
+    server_name ${PUBLIC_IP};
+    ssl_certificate /etc/letsencrypt/live/pig-inventory-ip/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/pig-inventory-ip/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:pilot_tls:1m;
+    client_max_body_size 30m;
+    resolver 127.0.0.11 ipv6=off valid=10s;
+    set $gateway gateway;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_read_timeout 120s;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy no-referrer always;
+    add_header X-Frame-Options SAMEORIGIN always;
+
+    location ~ ^/api/(backend|v1)/auth/login$ {
+        limit_req zone=pilot_login burst=8 nodelay;
+        limit_req_status 429;
+        proxy_pass http://$gateway:80;
+    }
+    location = /actuator/health { proxy_pass http://$gateway:80; }
+    location = /downloads/inventory-pilot-20261107.apk {
+        alias /srv/pilot-downloads/inventory-pilot-20261107.apk;
+        default_type application/vnd.android.package-archive;
+        add_header Content-Disposition 'attachment; filename="inventory-pilot-20261107.apk"';
+        add_header X-Content-Type-Options nosniff;
+    }
+    location = /downloads/inventory-pilot-20261107.apk.sha256 {
+        alias /srv/pilot-downloads/inventory-pilot-20261107.apk.sha256;
+        default_type text/plain;
+    }
+    location = /downloads/inventory-pilot-20261107-field-ui-v24.apk {
+        alias /srv/pilot-downloads/inventory-pilot-20261107-field-ui-v24.apk;
+        default_type application/vnd.android.package-archive;
+        add_header Content-Disposition 'attachment; filename="inventory-pilot-20261107-field-ui-v24.apk"';
+        add_header X-Content-Type-Options nosniff;
+    }
+    location = /downloads/inventory-pilot-20261107-field-ui-v24.apk.sha256 {
+        alias /srv/pilot-downloads/inventory-pilot-20261107-field-ui-v24.apk.sha256;
+        default_type text/plain;
+    }
+    location = /downloads/inventory-pilot-20261107-ui-v25.apk {
+        alias /srv/pilot-downloads/inventory-pilot-20261107-ui-v25.apk;
+        default_type application/vnd.android.package-archive;
+        add_header Content-Disposition 'attachment; filename="inventory-pilot-20261107-ui-v25.apk"';
+        add_header X-Content-Type-Options nosniff;
+    }
+    location = /downloads/inventory-pilot-20261107-ui-v25.apk.sha256 {
+        alias /srv/pilot-downloads/inventory-pilot-20261107-ui-v25.apk.sha256;
+        default_type text/plain;
+    }
+    location /downloads/ { return 404; }
+    location = /downloads/inventory-pilot-20261107-offline-v22.apk {
+        alias /srv/pilot-downloads/inventory-pilot-20261107-offline-v22.apk;
+        default_type application/vnd.android.package-archive;
+        add_header Content-Disposition 'attachment; filename="inventory-pilot-20261107-offline-v22.apk"';
+        add_header X-Content-Type-Options nosniff;
+    }
+    location = /downloads/inventory-pilot-20261107-offline-v22.apk.sha256 {
+        alias /srv/pilot-downloads/inventory-pilot-20261107-offline-v22.apk.sha256;
+        default_type text/plain;
+    }
+    location /actuator/ { return 404; }
+    location = /downloads/inventory-pilot-20261107-diagnostic-v23.apk {
+        alias /srv/pilot-downloads/inventory-pilot-20261107-diagnostic-v23.apk;
+        default_type application/vnd.android.package-archive;
+        add_header Content-Disposition 'attachment; filename="inventory-pilot-20261107-diagnostic-v23.apk"';
+        add_header X-Content-Type-Options nosniff;
+    }
+    location = /downloads/inventory-pilot-20261107-diagnostic-v23.apk.sha256 {
+        alias /srv/pilot-downloads/inventory-pilot-20261107-diagnostic-v23.apk.sha256;
+        default_type text/plain;
+    }
+    location / { proxy_pass http://$gateway:80; }
+}

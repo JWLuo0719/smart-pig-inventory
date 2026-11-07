@@ -1,0 +1,31 @@
+# Opt-in HTTPS edge for a fixed public IPv4 with a publicly trusted IP SAN certificate.
+# Apply after the production and resource overlays. Infrastructure remains private.
+services:
+  public-gateway:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    mem_limit: 64m
+    environment:
+      PUBLIC_IP: ${PUBLIC_IP:?set the fixed public IPv4}
+      NGINX_ENVSUBST_FILTER: '^PUBLIC_IP$'
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./infra/nginx/public-ip.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ${TLS_DIRECTORY:?set the protected certificate directory}:/etc/letsencrypt:ro
+      - ${ACME_WEBROOT:?set the ACME webroot}:/var/www/acme:ro
+      - ./artifacts/pilot-downloads:/srv/pilot-downloads:ro
+    depends_on:
+      gateway:
+        condition: service_started
+    healthcheck:
+      test: ['CMD', 'nginx', '-t']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'

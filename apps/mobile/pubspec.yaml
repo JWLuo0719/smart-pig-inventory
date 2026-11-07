@@ -1,8 +1,7 @@
 name: smart_pig_inventory
 description: Offline-first mobile client for smart pig farm inventory.
 publish_to: none
-version: 0.1.0+21
-
+version: 0.2.4+28
 environment:
   sdk: ^3.6.0
 
@@ -38,3 +37,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/branding/smart-pig-farm-owner-logo-v1.png
+
